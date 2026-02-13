@@ -1,6 +1,6 @@
 # OpenPort Core
 
-OpenPort Core is an open standard + reference toolkit for exposing web-app data and actions to LLM agents without scraping web pages.
+OpenPort Core is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
 
 ## Why this project
 
@@ -13,11 +13,15 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 
 OpenPort Core provides these primitives so product teams can add AI access safely.
 
-## Authors
+## Project Stewardship
 
-OpenPort Core is authored and maintained by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenPort Core is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
 
-The project is developed with a security-first, governance-first approach for production-grade AI integrations.
+Stewardship principles:
+
+- security-first defaults over convenience-first defaults
+- auditable operations over implicit side effects
+- reusable standards over product-specific shortcuts
 
 ## What is included
 

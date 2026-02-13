@@ -1,5 +1,11 @@
 # Vision And Scope
 
+## Stewardship
+
+OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+
+The project direction prioritizes operational safety, tenant isolation, and practical adoption across production web systems.
+
 ## Goal
 
 Define a standardized AI access layer for web applications so agents can read data and perform controlled actions without web UI crawling.
