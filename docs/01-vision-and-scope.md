@@ -45,7 +45,7 @@ Define a standardized AI access layer for web applications so agents can read da
 ## Chosen direction
 
 - Product name: `OpenPort`
-- First repository: `openport-core`
+- First repository: `openport`
 - Follow-up repos (optional):
   - `openport-nest`
   - `openport-examples`

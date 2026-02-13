@@ -1,6 +1,6 @@
-# OpenPort Core
+# OpenPort
 
-OpenPort Core is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
+OpenPort is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
 
 ## Why this project
 
@@ -11,11 +11,11 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 - safe write path (`draft -> human approval -> execute`)
 - complete auditability
 
-OpenPort Core provides these primitives so product teams can add AI access safely.
+OpenPort provides these primitives so product teams can add AI access safely.
 
 ## Project Stewardship
 
-OpenPort Core is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
 
 Stewardship principles:
 
@@ -41,7 +41,7 @@ Stewardship principles:
 
 Project name: **OpenPort**
 
-Repository slug: **openport-core**
+Repository slug: **openport**
 
 Rationale: clear intent (open interface + data/action port), short, and broad enough for multi-product adoption.
 
@@ -61,6 +61,45 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 1. Read `docs/02-figena-extraction-boundary.md` and classify every candidate module as `OPEN`, `ADAPTER`, or `PRIVATE`.
 2. Apply `docs/06-release-gate.md` before every public push.
 3. Publish only schema/contracts and replace all tenant/auth/audit implementations with adapter interfaces.
+
+## Reference runtime
+
+This repository now includes a runnable reference runtime under `src/`:
+
+- tool manifest discovery
+- policy and scope checks
+- draft-first action pipeline
+- high-risk preflight + idempotency controls
+- in-memory audit sink
+- in-memory domain adapter (ledgers/transactions)
+
+### Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+The server starts on `http://127.0.0.1:8080`.
+
+Startup logs print a bootstrap agent token created for the demo integration.
+
+### Main endpoints
+
+- `GET /api/agent/v1/manifest`
+- `GET /api/agent/v1/ledgers`
+- `GET /api/agent/v1/transactions`
+- `POST /api/agent/v1/preflight`
+- `POST /api/agent/v1/actions`
+- `GET /api/agent/v1/drafts/:id`
+- `GET /api/agent-admin/v1/apps` (requires `x-admin-user`)
+
+### Test and build
+
+```bash
+npm run build
+npm test
+```
 
 ## License
 
