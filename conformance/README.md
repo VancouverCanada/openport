@@ -1,0 +1,36 @@
+# Conformance Kit
+
+OpenPort provides a baseline conformance profile and executable runner so implementations can prove they satisfy core protocol behavior.
+
+Stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
+
+## Included assets
+
+- `profile/openport-v1-profile.json`
+- `scripts/run-conformance.mjs`
+
+## Run locally against the reference runtime
+
+```bash
+npm run build
+npm run conformance:local
+```
+
+## Run against a remote OpenPort implementation
+
+Set environment variables:
+
+- `OPENPORT_BASE_URL`
+- `OPENPORT_AGENT_TOKEN`
+
+Then run:
+
+```bash
+npm run conformance:remote
+```
+
+## Scope notes
+
+- This profile checks core endpoint behavior and envelope consistency.
+- It is intentionally minimal and safe for public CI usage.
+- Product-specific authorization logic should add extra profile checks in downstream repos.

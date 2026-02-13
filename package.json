@@ -14,7 +14,11 @@
     "start": "node dist/reference-server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "safety": "bash scripts/safety-check.sh"
+    "conformance:local": "node scripts/run-conformance.mjs --local",
+    "conformance:remote": "node scripts/run-conformance.mjs --remote",
+    "safety": "bash scripts/safety-check.sh",
+    "gate": "bash scripts/release-gate.sh",
+    "release:prepare": "bash scripts/prepare-release.sh"
   },
   "keywords": [
     "openport",

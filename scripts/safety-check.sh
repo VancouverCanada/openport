@@ -11,13 +11,22 @@ if find . -type f \( -name ".env" -o -name ".env.*" \) | grep -q .; then
 fi
 
 echo "[2/4] Checking for common secret patterns"
-if grep -RInE "(AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY|xox[baprs]-|ghp_[A-Za-z0-9]{36,})" . --exclude-dir=.git --exclude='*.png' --exclude='*.jpg' --exclude='*.svg'; then
+if grep -RInE "(AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY|xox[baprs]-|ghp_[A-Za-z0-9]{36,})" . \
+  --exclude-dir=.git \
+  --exclude-dir=node_modules \
+  --exclude-dir=dist \
+  --exclude='*.png' \
+  --exclude='*.jpg' \
+  --exclude='*.svg'; then
   echo "Potential secret detected."
   exit 1
 fi
 
 echo "[3/4] Checking for forbidden private markers"
-if grep -RInE "(service\\.figena\\.local|DIRECT_DATABASE_URL=|DATABASE_URL=postgres)" . --exclude-dir=.git --exclude='safety-check.sh'; then
+if grep -RInE "(figena|fidelock|service\\.[A-Za-z0-9-]+\\.local|DIRECT_DATABASE_URL=|DATABASE_URL=postgres)" \
+  src docs spec templates test conformance README.md CHANGELOG.md ROADMAP.md SUPPORT.md .github \
+  --exclude-dir=node_modules \
+  --exclude-dir=dist; then
   echo "Potential private environment detail found."
   exit 1
 fi

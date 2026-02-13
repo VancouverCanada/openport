@@ -1,4 +1,5 @@
 import type { ErrorCode } from './error-codes.js'
+import { ZodError } from 'zod'
 
 export class OpenPortError extends Error {
   statusCode: number
@@ -23,6 +24,24 @@ export function toErrorResponse(error: unknown): { statusCode: number; payload: 
         code: error.code,
         message: error.message,
         ...(error.details ? { details: error.details } : {})
+      }
+    }
+  }
+
+  if (error instanceof ZodError) {
+    return {
+      statusCode: 400,
+      payload: {
+        ok: false,
+        code: 'common.validation',
+        message: 'Validation failed',
+        details: {
+          issues: error.issues.map((issue) => ({
+            code: issue.code,
+            path: issue.path,
+            message: issue.message
+          }))
+        }
       }
     }
   }

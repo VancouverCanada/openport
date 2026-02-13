@@ -8,6 +8,8 @@ OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
 - update docs for contract changes
 - no product-private logic in core modules
 - pass `scripts/safety-check.sh`
+- pass `npm run gate`
+- pass `npm run conformance:local`
 
 ## Design rule
 

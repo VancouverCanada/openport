@@ -1,0 +1,31 @@
+{
+  "id": "openport-v1-core",
+  "name": "OpenPort v1 Core Conformance Profile",
+  "stewards": [
+    "Accentrust Inc.",
+    "Sebastian Zhu"
+  ],
+  "requiredEndpoints": [
+    { "method": "GET", "path": "/api/agent/v1/manifest" },
+    { "method": "GET", "path": "/api/agent/v1/ledgers" },
+    { "method": "GET", "path": "/api/agent/v1/transactions" },
+    { "method": "POST", "path": "/api/agent/v1/preflight" },
+    { "method": "POST", "path": "/api/agent/v1/actions" },
+    { "method": "GET", "path": "/api/agent/v1/drafts/{id}" }
+  ],
+  "envelope": {
+    "success": {
+      "ok": true,
+      "requiredFields": ["ok", "code", "data"]
+    },
+    "error": {
+      "ok": false,
+      "requiredFields": ["ok", "code", "message"]
+    }
+  },
+  "securityMinimums": [
+    "unauthenticated manifest request returns 401",
+    "authenticated manifest request returns 200",
+    "agent token can access only within granted policy boundaries"
+  ]
+}
