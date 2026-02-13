@@ -1,0 +1,36 @@
+{
+  "app": {
+    "id": "app_demo",
+    "name": "Demo Integration",
+    "scope": "workspace",
+    "orgId": "org_abc"
+  },
+  "tools": [
+    {
+      "name": "transaction.list",
+      "description": "List transactions with filters",
+      "requiredScopes": ["transaction.read"],
+      "risk": "low",
+      "requiresConfirmation": false,
+      "http": {
+        "method": "GET",
+        "path": "/api/agent/v1/transactions"
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["ledgerId"],
+        "properties": {
+          "ledgerId": { "type": "string" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array" }
+        }
+      }
+    }
+  ]
+}
