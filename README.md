@@ -95,6 +95,20 @@ OPENPORT_DOMAIN_ADAPTER=postgres OPENPORT_DATABASE_URL='postgres://user:pass@hos
 
 The Postgres adapter expects `ledgers` and `transactions` tables with fields used by `src/adapters/postgres-domain-adapter.ts`.
 
+For product embedding with an existing Prisma client, use Prisma adapter mode:
+
+```ts
+import { createOpenPortRuntime } from 'openport'
+import { prisma } from './prisma-client'
+
+const runtime = createOpenPortRuntime({
+  domainAdapter: 'prisma',
+  prismaClient: prisma as any
+})
+```
+
+Prisma mode is intended for library embedding, not the standalone demo server.
+
 ### Main endpoints
 
 - `GET /api/agent/v1/manifest`
