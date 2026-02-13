@@ -13,6 +13,12 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 
 OpenPort Core provides these primitives so product teams can add AI access safely.
 
+## Authors
+
+OpenPort Core is authored and maintained by **Accentrust Inc.** and **Sebastian Zhu**.
+
+The project is developed with a security-first, governance-first approach for production-grade AI integrations.
+
 ## What is included
 
 - API contract draft for `agent/v1`
@@ -44,6 +50,7 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 - docs/05-migration-plan.md
 - docs/06-release-gate.md
 - spec/openport-v1.openapi.yaml
+- AUTHORS.md
 
 ## Quick start (governance-first)
 

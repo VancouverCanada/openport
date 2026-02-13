@@ -1,5 +1,7 @@
 # Contributing
 
+OpenPort Core is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+
 ## PR requirements
 
 - tests for new behavior

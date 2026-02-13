@@ -6,7 +6,7 @@ Before `v1.0.0`, only the latest minor release is supported.
 
 ## Reporting a vulnerability
 
-Please report security issues privately to the maintainers.
+Please report security issues privately to the maintainers at **Accentrust Inc.** and **Sebastian Zhu**.
 
 Include:
 
