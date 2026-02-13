@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { AgentRequestContext } from './types.js'
-import { createOpenPortRuntime, type OpenPortRuntime } from './runtime.js'
+import { createOpenPortRuntime, type OpenPortRuntime, type OpenPortRuntimeOptions } from './runtime.js'
 import { toErrorResponse } from './errors.js'
 
 function success<T>(code: string, data: T): { ok: true; code: string; data: T } {
@@ -48,6 +48,12 @@ const preflightBodySchema = z.object({
 
 export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): FastifyInstance {
   const app = Fastify({ logger: false })
+
+  app.addHook('onClose', async () => {
+    if (typeof runtime.domain.close === 'function') {
+      await runtime.domain.close()
+    }
+  })
 
   app.setErrorHandler((error, _request, reply) => {
     const parsed = toErrorResponse(error)
@@ -261,8 +267,8 @@ async function handle(reply: FastifyReply, fn: () => Promise<unknown> | unknown)
   return reply.send(value)
 }
 
-export async function buildDemoApp(): Promise<{ app: FastifyInstance; runtime: OpenPortRuntime; bootstrap: Record<string, unknown> }> {
-  const runtime = createOpenPortRuntime()
+export async function buildDemoApp(options: OpenPortRuntimeOptions = {}): Promise<{ app: FastifyInstance; runtime: OpenPortRuntime; bootstrap: Record<string, unknown> }> {
+  const runtime = createOpenPortRuntime(options)
   const app = buildApp(runtime)
 
   const bootstrap = runtime.admin.createApp('admin_demo', {

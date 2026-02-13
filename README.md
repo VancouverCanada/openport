@@ -84,6 +84,17 @@ The server starts on `http://127.0.0.1:8080`.
 
 Startup logs print a bootstrap agent token created for the demo integration.
 
+### Adapter mode
+
+Default mode is in-memory.  
+To run the domain adapter against Postgres:
+
+```bash
+OPENPORT_DOMAIN_ADAPTER=postgres OPENPORT_DATABASE_URL='postgres://user:pass@host:5432/db' npm run dev
+```
+
+The Postgres adapter expects `ledgers` and `transactions` tables with fields used by `src/adapters/postgres-domain-adapter.ts`.
+
 ### Main endpoints
 
 - `GET /api/agent/v1/manifest`
@@ -100,6 +111,8 @@ Startup logs print a bootstrap agent token created for the demo integration.
 npm run build
 npm test
 ```
+
+Contract checks include OpenAPI validation and route coverage against `spec/openport-v1.openapi.yaml`.
 
 ## License
 

@@ -165,6 +165,7 @@ export type DomainAdapter = {
   softDeleteTransaction: (actorUserId: string, transactionId: string) => Promise<{ id: string; deleted: true }>
   hardDeleteTransaction: (actorUserId: string, transactionId: string) => Promise<{ id: string; deleted: true; hard: true }>
   getTransactionById: (actorUserId: string, transactionId: string) => Promise<Transaction | null>
+  close?: () => Promise<void>
 }
 
 export type AgentManifestTool = {
