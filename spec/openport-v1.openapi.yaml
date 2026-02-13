@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: OpenPort Agent API
+  version: 0.1.0
+  description: Standardized AI gateway API for web applications.
+servers:
+  - url: https://api.example.com
+security:
+  - bearerAuth: []
+paths:
+  /api/agent/v1/manifest:
+    get:
+      summary: List discoverable tools for the current integration
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessManifest'
+  /api/agent/v1/ledgers:
+    get:
+      summary: List accessible ledgers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessLedgers'
+  /api/agent/v1/transactions:
+    get:
+      summary: List transactions
+      parameters:
+        - in: query
+          name: ledgerId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessTransactions'
+  /api/agent/v1/preflight:
+    post:
+      summary: Pre-compute impact and return a preflight hash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessPreflight'
+  /api/agent/v1/actions:
+    post:
+      summary: Create a draft or execute action based on policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessActionResult'
+  /api/agent/v1/drafts/{id}:
+    get:
+      summary: Get draft status and latest execution
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessDraft'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: AgentToken
+  schemas:
+    EnvelopeBase:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        code:
+          type: string
+      required: [ok, code]
+    ErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: false
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+          required: [message]
+    Tool:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        requiredScopes:
+          type: array
+          items:
+            type: string
+        risk:
+          type: string
+          enum: [low, medium, high]
+        requiresConfirmation:
+          type: boolean
+      required: [name, description, requiredScopes, risk, requiresConfirmation]
+    SuccessManifest:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              properties:
+                app:
+                  type: object
+                tools:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Tool'
+    SuccessLedgers:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+    SuccessTransactions:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                total:
+                  type: integer
+                page:
+                  type: integer
+                pageSize:
+                  type: integer
+                hasMore:
+                  type: boolean
+    PreflightRequest:
+      type: object
+      properties:
+        action:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+      required: [action, payload]
+    SuccessPreflight:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              properties:
+                action:
+                  type: string
+                risk:
+                  type: string
+                impact:
+                  type: object
+                  additionalProperties: true
+                impactHash:
+                  type: string
+    CreateActionRequest:
+      type: object
+      properties:
+        action:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        execute:
+          type: boolean
+        forceDraft:
+          type: boolean
+        requestId:
+          type: string
+        idempotencyKey:
+          type: string
+        justification:
+          type: string
+        preflightHash:
+          type: string
+      required: [action, payload]
+    SuccessActionResult:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              additionalProperties: true
+    SuccessDraft:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          properties:
+            ok:
+              const: true
+            data:
+              type: object
+              additionalProperties: true
