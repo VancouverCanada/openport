@@ -33,3 +33,9 @@ No release is allowed unless every item is true.
 - [ ] SECURITY.md is present and accurate
 - [ ] CODEOWNERS configured
 - [ ] License confirmed
+
+## Automation requirement
+
+- [ ] `npm run gate` passes locally (Node 22)
+- [ ] `npm run conformance:local` passes locally
+- [ ] `.github/workflows/ci.yml` passes on pull request

@@ -2,6 +2,8 @@
 
 OpenPort is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
 
+OpenPort is repository-isolated and does not require any direct connection to private product codebases.
+
 ## Why this project
 
 Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a stable machine interface:
@@ -48,17 +50,28 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 ## Documents
 
 - docs/01-vision-and-scope.md
-- docs/02-figena-extraction-boundary.md
+- docs/02-extraction-boundary.md
 - docs/03-architecture.md
 - docs/04-security-threat-model.md
 - docs/05-migration-plan.md
 - docs/06-release-gate.md
+- docs/07-implementation-blueprint.md
+- docs/08-v0.1.0-release-checklist.md
+- docs/09-tag-and-release-strategy.md
+- docs/10-public-adapter-template.md
+- docs/11-security-hardening.md
+- docs/12-llm-openclaw-integration.md
+- docs/releases/v0.1.0.md
+- conformance/README.md
+- ROADMAP.md
+- SUPPORT.md
 - spec/openport-v1.openapi.yaml
+- CHANGELOG.md
 - AUTHORS.md
 
 ## Quick start (governance-first)
 
-1. Read `docs/02-figena-extraction-boundary.md` and classify every candidate module as `OPEN`, `ADAPTER`, or `PRIVATE`.
+1. Read `docs/02-extraction-boundary.md` and classify every candidate module as `OPEN`, `ADAPTER`, or `PRIVATE`.
 2. Apply `docs/06-release-gate.md` before every public push.
 3. Publish only schema/contracts and replace all tenant/auth/audit implementations with adapter interfaces.
 
@@ -124,9 +137,25 @@ Prisma mode is intended for library embedding, not the standalone demo server.
 ```bash
 npm run build
 npm test
+npm run gate
+npm run conformance:local
 ```
 
 Contract checks include OpenAPI validation and route coverage against `spec/openport-v1.openapi.yaml`.
+
+## Public adapter template
+
+Public repository template for custom adapters:
+
+- `templates/openport-adapter-public-template`
+
+## Release helper
+
+Prepare a release candidate with gate checks and exact release commands:
+
+```bash
+npm run release:prepare -- v0.1.0
+```
 
 ## License
 

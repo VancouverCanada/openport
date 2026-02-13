@@ -1,8 +1,8 @@
-# Migration Plan (Figena -> OpenPort)
+# Migration Plan (Source Product -> OpenPort)
 
 ## Phase 0: Inventory and boundary lock
 
-- list all Figena AI gateway files and classify as OPEN/ADAPTER/PRIVATE
+- list all source-product AI gateway files and classify as OPEN/ADAPTER/PRIVATE
 - define no-export list (schemas, env names, service details)
 
 Exit criteria:
@@ -24,13 +24,13 @@ Exit criteria:
 Exit criteria:
 - end-to-end demo with mock adapters
 
-## Phase 3: Figena adapter (private)
+## Phase 3: Private product adapter
 
-- wire OpenPort interfaces to Figena auth/tenant/domain services
+- wire OpenPort interfaces to private auth/tenant/domain services
 - keep adapter in private repository
 
 Exit criteria:
-- parity with current Figena integration behavior
+- parity with current production integration behavior
 
 ## Phase 4: Hardening
 

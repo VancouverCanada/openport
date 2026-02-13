@@ -1,0 +1,30 @@
+{
+  "name": "@openport/adapter-public-template",
+  "version": "0.1.0",
+  "description": "Public-safe template for implementing an OpenPort DomainAdapter",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "openport": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vitest": "^3.2.4"
+  },
+  "keywords": [
+    "openport",
+    "adapter",
+    "template",
+    "typescript"
+  ],
+  "author": "Accentrust Inc. and Sebastian Zhu",
+  "license": "MIT"
+}

@@ -1,16 +1,16 @@
-# Figena Extraction Boundary
+# Extraction Boundary
 
-This document defines exactly what can and cannot be extracted from Figena into OpenPort.
+This document defines what can and cannot be extracted from any private product into OpenPort.
 
 ## Investigation summary (source modules)
 
-Main references reviewed in Figena:
+Main references to review in the source product:
 
-- `backend/src/agent/*`
-- `backend/src/finance/finance-agent-tools.provider.ts`
-- `backend/src/orgs/orgs-agent-tools.provider.ts`
-- `backend/prisma/schema.prisma` (agent-related models)
-- `Docs/Feature/ai-agent-api-gateway.md`
+- agent gateway routes and handlers
+- policy/permission checks for agent calls
+- draft and approval pipelines
+- audit logging and export behavior
+- related data models used by the agent layer
 
 ## Classification rules
 
@@ -43,7 +43,7 @@ Use this label per file/module:
 - Internal user/org schemas and account lifecycle logic
 - Service-account creation details and internal email conventions
 - Existing production audit payload formats containing business context
-- Product-specific DTOs and business rules tied to Figena data model
+- Product-specific DTOs and business rules tied to the source product
 - Environment variable names or infrastructure topology details
 
 ## Clean-room extraction protocol
