@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_NAME="${1:-openport-core}"
+REPO_NAME="${1:-openport}"
 VISIBILITY="${2:-public}"
 
 if ! command -v gh >/dev/null 2>&1; then
