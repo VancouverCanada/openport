@@ -5,7 +5,7 @@ function bearer(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` }
 }
 
-describe('openport reference runtime', () => {
+describe('openmcp reference runtime', () => {
   it('exposes manifest for authenticated agent', async () => {
     const { app, bootstrap } = await buildDemoApp()
     const token = String((bootstrap as any).token)

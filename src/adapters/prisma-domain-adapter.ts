@@ -1,9 +1,9 @@
 import { ErrorCodes } from '../error-codes.js'
-import { OpenPortError } from '../errors.js'
+import { OpenMCPError } from '../errors.js'
 import type { DomainAdapter, Ledger, ListTransactionsInput, Transaction } from '../types.js'
 import { clampInt, nowIso, randomId } from '../utils.js'
 
-export type OpenPortPrismaClient = {
+export type OpenMCPPrismaClient = {
   ledgers: {
     findMany: (args: Record<string, unknown>) => Promise<Array<Record<string, unknown>>>
   }
@@ -66,13 +66,13 @@ function parseDate(value?: string): Date | undefined {
   if (!value) return undefined
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date value')
+    throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date value')
   }
   return date
 }
 
 export class PrismaDomainAdapter implements DomainAdapter {
-  constructor(private readonly prisma: OpenPortPrismaClient) {}
+  constructor(private readonly prisma: OpenMCPPrismaClient) {}
 
   async close(): Promise<void> {
     if (typeof this.prisma.$disconnect === 'function') {
@@ -155,7 +155,7 @@ export class PrismaDomainAdapter implements DomainAdapter {
     const notes = payload.notes ? String(payload.notes) : null
 
     if (!ledgerId || !kind || !title || !Number.isFinite(amountHome)) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
     }
 
     const row = await this.prisma.transactions.create({
@@ -193,7 +193,7 @@ export class PrismaDomainAdapter implements DomainAdapter {
   async updateTransaction(_: string, transactionId: string, payload: Record<string, unknown>): Promise<Transaction> {
     const existing = await this.getTransactionById('', transactionId)
     if (!existing || existing.is_deleted) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     const date = payload.date ? parseDate(String(payload.date)) : undefined
@@ -201,7 +201,7 @@ export class PrismaDomainAdapter implements DomainAdapter {
       ? Number(payload.amount_home ?? payload.amountHome)
       : undefined
     if (amount !== undefined && !Number.isFinite(amount)) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
     }
 
     const row = await this.prisma.transactions.update({
@@ -244,7 +244,7 @@ export class PrismaDomainAdapter implements DomainAdapter {
     })
 
     if (!result.count) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     return { id: transactionId, deleted: true }
@@ -256,7 +256,7 @@ export class PrismaDomainAdapter implements DomainAdapter {
       select: { id: true }
     })
     if (!existing) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     await this.prisma.transactions.delete({ where: { id: transactionId } })

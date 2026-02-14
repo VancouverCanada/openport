@@ -1,13 +1,13 @@
-# OpenPort Adapter Public Template
+# OpenMCP Adapter Public Template
 
-This template is a public-safe starter repository for building a custom OpenPort `DomainAdapter`.
+This template is a public-safe starter repository for building a custom OpenMCP `DomainAdapter`.
 
 Template stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
 
 ## Design goals
 
 - strict isolation from any product-internal codebase
-- only implement OpenPort adapter interfaces
+- only implement OpenMCP adapter interfaces
 - no private schema, hostnames, credentials, or organization-specific logic
 
 ## What this template provides

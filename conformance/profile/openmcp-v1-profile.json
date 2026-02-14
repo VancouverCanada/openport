@@ -1,6 +1,6 @@
 {
-  "id": "openport-v1-core",
-  "name": "OpenPort v1 Core Conformance Profile",
+  "id": "openmcp-v1-core",
+  "name": "OpenMCP v1 Core Conformance Profile",
   "stewards": [
     "Accentrust Inc.",
     "Sebastian Zhu"

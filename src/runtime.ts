@@ -3,16 +3,16 @@ import { AdminEngine } from './admin-engine.js'
 import { AgentEngine } from './agent-engine.js'
 import { AgentAuthService } from './auth.js'
 import { InMemoryDomainAdapter } from './domain.js'
-import { OpenPortError } from './errors.js'
+import { OpenMCPError } from './errors.js'
 import { ErrorCodes } from './error-codes.js'
 import { RateLimiter } from './rate-limit.js'
 import { InMemoryStore } from './store.js'
 import { AgentToolRegistry } from './tool-registry.js'
 import type { DomainAdapter } from './types.js'
 import { PostgresDomainAdapter } from './adapters/postgres-domain-adapter.js'
-import { PrismaDomainAdapter, type OpenPortPrismaClient } from './adapters/prisma-domain-adapter.js'
+import { PrismaDomainAdapter, type OpenMCPPrismaClient } from './adapters/prisma-domain-adapter.js'
 
-export type OpenPortRuntime = {
+export type OpenMCPRuntime = {
   store: InMemoryStore
   domain: DomainAdapter
   tools: AgentToolRegistry
@@ -22,29 +22,29 @@ export type OpenPortRuntime = {
   admin: AdminEngine
 }
 
-export type OpenPortRuntimeOptions = {
+export type OpenMCPRuntimeOptions = {
   domain?: DomainAdapter
   domainAdapter?: 'memory' | 'postgres' | 'prisma'
   postgresConnectionString?: string
-  prismaClient?: OpenPortPrismaClient
+  prismaClient?: OpenMCPPrismaClient
 }
 
-function createDomainAdapter(options: OpenPortRuntimeOptions): DomainAdapter {
+function createDomainAdapter(options: OpenMCPRuntimeOptions): DomainAdapter {
   if (options.domain) return options.domain
 
-  const modeEnv = process.env.OPENPORT_DOMAIN_ADAPTER
+  const modeEnv = process.env.OPENMCP_DOMAIN_ADAPTER
   const mode = options.domainAdapter || (modeEnv === 'postgres' || modeEnv === 'prisma' ? modeEnv : 'memory')
   if (mode === 'postgres') {
-    const connectionString = options.postgresConnectionString || process.env.OPENPORT_DATABASE_URL
+    const connectionString = options.postgresConnectionString || process.env.OPENMCP_DATABASE_URL
     if (!connectionString) {
-      throw new OpenPortError(500, ErrorCodes.COMMON_VALIDATION, 'OPENPORT_DATABASE_URL is required when using postgres adapter')
+      throw new OpenMCPError(500, ErrorCodes.COMMON_VALIDATION, 'OPENMCP_DATABASE_URL is required when using postgres adapter')
     }
     return new PostgresDomainAdapter({ connectionString })
   }
 
   if (mode === 'prisma') {
     if (!options.prismaClient) {
-      throw new OpenPortError(500, ErrorCodes.COMMON_VALIDATION, 'prismaClient is required when using prisma adapter')
+      throw new OpenMCPError(500, ErrorCodes.COMMON_VALIDATION, 'prismaClient is required when using prisma adapter')
     }
     return new PrismaDomainAdapter(options.prismaClient)
   }
@@ -52,7 +52,7 @@ function createDomainAdapter(options: OpenPortRuntimeOptions): DomainAdapter {
   return new InMemoryDomainAdapter()
 }
 
-export function createOpenPortRuntime(options: OpenPortRuntimeOptions = {}): OpenPortRuntime {
+export function createOpenMCPRuntime(options: OpenMCPRuntimeOptions = {}): OpenMCPRuntime {
   const store = new InMemoryStore()
   const domain = createDomainAdapter(options)
   const tools = new AgentToolRegistry(domain)

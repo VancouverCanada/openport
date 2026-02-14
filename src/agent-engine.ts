@@ -1,5 +1,5 @@
 import { ErrorCodes } from './error-codes.js'
-import { OpenPortError } from './errors.js'
+import { OpenMCPError } from './errors.js'
 import { AuditService } from './audit.js'
 import { ensureLedgerAllowed, ensureScope, ensureWorkspaceBoundary, getDataPolicy, resolveDateRange } from './policy.js'
 import { InMemoryStore } from './store.js'
@@ -87,13 +87,13 @@ export class AgentEngine {
     ensureScope(ctx, ['transaction.read'])
     const ledgerId = query.ledgerId?.trim()
     if (!ledgerId) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
     }
 
     const ledgers = await this.domain.listLedgers(ctx.actorUserId)
     const ledger = ledgers.find((item) => item.id === ledgerId)
     if (!ledger) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
     }
 
     ensureWorkspaceBoundary(ctx, { ledgerOrgId: ledger.organization_id, orgId: null })
@@ -150,7 +150,7 @@ export class AgentEngine {
   async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown> }): Promise<Record<string, unknown>> {
     const tool = this.tools.getActionTool(input.action)
     if (!tool) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
 
@@ -184,7 +184,7 @@ export class AgentEngine {
   async createAction(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown>; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string }): Promise<Record<string, unknown>> {
     const tool = this.tools.getActionTool(input.action)
     if (!tool) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
 
@@ -308,7 +308,7 @@ export class AgentEngine {
   async getDraft(ctx: AgentRequestContext, draftId: string): Promise<Record<string, unknown>> {
     const draft = this.store.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
 
     const latestExecution = this.store.getLatestExecutionForDraft(draft.id)
@@ -321,16 +321,16 @@ export class AgentEngine {
   async executeDraft(ctx: AgentRequestContext, draftId: string, opts: { confirmedByUserId: string | null }): Promise<{ draftStatus: string; execution: Record<string, unknown> }> {
     const draft = this.store.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
 
     if (draft.status === 'canceled') {
-      throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft was canceled')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft was canceled')
     }
 
     const tool = this.tools.getActionTool(draft.action_type)
     if (!tool) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
 
     ensureScope(ctx, tool.requiredScopes)
