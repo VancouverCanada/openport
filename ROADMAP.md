@@ -1,4 +1,4 @@
-# OpenPort Roadmap
+# OpenMCP Roadmap
 
 Stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
 

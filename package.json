@@ -1,7 +1,7 @@
 {
-  "name": "openport",
+  "name": "openmcp",
   "version": "0.1.0",
-  "description": "OpenPort reference runtime for safe AI agent access to web application data and actions",
+  "description": "OpenMCP reference runtime for safe AI agent access to web application data and actions",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,7 @@
     "release:prepare": "bash scripts/prepare-release.sh"
   },
   "keywords": [
-    "openport",
+    "openmcp",
     "agent",
     "llm",
     "api",

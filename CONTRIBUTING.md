@@ -1,6 +1,6 @@
 # Contributing
 
-OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenMCP is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
 
 ## PR requirements
 

@@ -4,24 +4,24 @@ const PORT = Number(process.env.PORT || 8080)
 const HOST = process.env.HOST || '127.0.0.1'
 
 async function main(): Promise<void> {
-  const domainAdapter = process.env.OPENPORT_DOMAIN_ADAPTER === 'postgres' ? 'postgres' : 'memory'
+  const domainAdapter = process.env.OPENMCP_DOMAIN_ADAPTER === 'postgres' ? 'postgres' : 'memory'
   const { app, bootstrap } = await buildDemoApp({
     domainAdapter,
-    postgresConnectionString: process.env.OPENPORT_DATABASE_URL
+    postgresConnectionString: process.env.OPENMCP_DATABASE_URL
   })
 
   await app.listen({ host: HOST, port: PORT })
 
   // eslint-disable-next-line no-console
-  console.log('[openport] reference server started')
+  console.log('[openmcp] reference server started')
   // eslint-disable-next-line no-console
-  console.log(`[openport] listening on http://${HOST}:${PORT}`)
+  console.log(`[openmcp] listening on http://${HOST}:${PORT}`)
   // eslint-disable-next-line no-console
-  console.log(`[openport] domain adapter: ${domainAdapter}`)
+  console.log(`[openmcp] domain adapter: ${domainAdapter}`)
   // eslint-disable-next-line no-console
-  console.log('[openport] admin header: x-admin-user: admin_demo')
+  console.log('[openmcp] admin header: x-admin-user: admin_demo')
   // eslint-disable-next-line no-console
-  console.log('[openport] bootstrap credentials:', bootstrap)
+  console.log('[openmcp] bootstrap credentials:', bootstrap)
 }
 
 main().catch((error) => {

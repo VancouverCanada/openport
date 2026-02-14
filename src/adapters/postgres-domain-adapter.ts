@@ -1,6 +1,6 @@
 import { Pool } from 'pg'
 import { ErrorCodes } from '../error-codes.js'
-import { OpenPortError } from '../errors.js'
+import { OpenMCPError } from '../errors.js'
 import type { DomainAdapter, Ledger, ListTransactionsInput, Transaction } from '../types.js'
 import { clampInt, nowIso, randomId } from '../utils.js'
 
@@ -11,7 +11,7 @@ type PgConfig = {
 function ensureDate(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date value')
+    throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date value')
   }
   return date.toISOString()
 }
@@ -135,7 +135,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
     const notes = payload.notes ? String(payload.notes) : null
 
     if (!ledgerId || !kind || !title || !Number.isFinite(amountHome)) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
     }
 
     const id = randomId('txn')
@@ -150,7 +150,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
     const result = await this.pool.query(sql, [id, ledgerId, kind, title, amountHome, currencyHome, date, notes])
     const row = result.rows[0]
     if (!row) {
-      throw new OpenPortError(500, ErrorCodes.COMMON_VALIDATION, 'Failed to create transaction')
+      throw new OpenMCPError(500, ErrorCodes.COMMON_VALIDATION, 'Failed to create transaction')
     }
     return mapTransaction(row)
   }
@@ -158,7 +158,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
   async updateTransaction(_: string, transactionId: string, payload: Record<string, unknown>): Promise<Transaction> {
     const existing = await this.getTransactionById('', transactionId)
     if (!existing || existing.is_deleted) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     const ledgerId = payload.ledgerId || payload.ledger_id ? String(payload.ledgerId || payload.ledger_id) : existing.ledger_id
@@ -174,7 +174,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
     const notes = payload.notes !== undefined ? (payload.notes ? String(payload.notes) : null) : existing.notes
 
     if (!Number.isFinite(amountHome)) {
-      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
     }
 
     const sql = `
@@ -195,7 +195,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
     const result = await this.pool.query(sql, [transactionId, ledgerId, kind, title, amountHome, currencyHome, date, notes])
     const row = result.rows[0]
     if (!row) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     return mapTransaction(row)
@@ -210,7 +210,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
     `
     const result = await this.pool.query(sql, [transactionId])
     if (!result.rows[0]) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     return { id: transactionId, deleted: true }
@@ -219,7 +219,7 @@ export class PostgresDomainAdapter implements DomainAdapter {
   async hardDeleteTransaction(_: string, transactionId: string): Promise<{ id: string; deleted: true; hard: true }> {
     const result = await this.pool.query(`DELETE FROM transactions WHERE id = $1 RETURNING id`, [transactionId])
     if (!result.rows[0]) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     return { id: transactionId, deleted: true, hard: true }

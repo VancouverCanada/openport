@@ -1,6 +1,6 @@
 import { AuditService } from './audit.js'
 import { ErrorCodes } from './error-codes.js'
-import { OpenPortError } from './errors.js'
+import { OpenMCPError } from './errors.js'
 import { InMemoryStore } from './store.js'
 import { AgentEngine } from './agent-engine.js'
 import { AgentToolRegistry } from './tool-registry.js'
@@ -56,7 +56,7 @@ export class AdminEngine {
   createApp(userId: string, dto: { scope: 'personal' | 'workspace'; name: string; description?: string; org_id?: string; user_id?: string; service_user_id?: string; scopes?: string[] }): Record<string, unknown> {
     const scope = dto.scope
     const name = dto.name?.trim()
-    if (!name) throw new OpenPortError(400, ErrorCodes.COMMON_VALIDATION, 'name required')
+    if (!name) throw new OpenMCPError(400, ErrorCodes.COMMON_VALIDATION, 'name required')
 
     const userIdForApp = scope === 'personal' ? (dto.user_id || userId) : null
     const serviceUserId = scope === 'workspace' ? (dto.service_user_id || `svc_${dto.org_id || 'workspace'}`) : null
@@ -106,7 +106,7 @@ export class AdminEngine {
   createKey(userId: string, appId: string, dto: { name?: string; expiresAt?: string | null }): Record<string, unknown> {
     const app = this.store.getApp(appId)
     if (!app || app.status !== 'active') {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
     }
 
     const token = generateToken()
@@ -143,7 +143,7 @@ export class AdminEngine {
 
   revokeApp(userId: string, appId: string): Record<string, unknown> {
     const app = this.store.getApp(appId)
-    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (!app) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
 
     const updated = this.store.saveApp({
       id: app.id,
@@ -177,10 +177,10 @@ export class AdminEngine {
 
   revokeKey(userId: string, keyId: string): Record<string, unknown> {
     const key = this.store.keys.get(keyId)
-    if (!key) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent key not found')
+    if (!key) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent key not found')
 
     const updated = this.store.updateKey(keyId, { revoked_at: nowIso() })
-    if (!updated) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent key not found')
+    if (!updated) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent key not found')
 
     const app = this.store.getApp(updated.app_id)
 
@@ -198,7 +198,7 @@ export class AdminEngine {
 
   updatePolicy(userId: string, appId: string, policy: AgentPolicy): Record<string, unknown> {
     const app = this.store.getApp(appId)
-    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (!app) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
 
     const updated = this.store.saveApp({
       id: app.id,
@@ -229,7 +229,7 @@ export class AdminEngine {
 
   updateAutoExecute(userId: string, appId: string, autoExecute: AgentAutoExecute): Record<string, unknown> {
     const app = this.store.getApp(appId)
-    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (!app) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
 
     const normalized = parseAutoExecute(autoExecute, app.auto_execute)
     const updated = this.store.saveApp({
@@ -261,7 +261,7 @@ export class AdminEngine {
 
   listAppTools(appId: string): Record<string, unknown> {
     const app = this.store.getApp(appId)
-    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (!app) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
 
     const ctx: AgentRequestContext = {
       app,
@@ -315,7 +315,7 @@ export class AdminEngine {
 
   getDraft(draftId: string): Record<string, unknown> {
     const draft = this.store.getDraft(draftId)
-    if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+    if (!draft) throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
 
     return {
       draft,
@@ -325,15 +325,15 @@ export class AdminEngine {
 
   async approveDraft(userId: string, draftId: string, note?: string): Promise<Record<string, unknown>> {
     const draft = this.store.getDraft(draftId)
-    if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+    if (!draft) throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     if (draft.status !== 'draft') {
-      throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
     }
 
     const app = this.store.getApp(draft.app_id)
     const key = draft.key_id ? this.store.keys.get(draft.key_id) : null
     if (!app || !key) {
-      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app or key missing')
+      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app or key missing')
     }
 
     this.store.updateDraft(draft.id, {
@@ -368,9 +368,9 @@ export class AdminEngine {
 
   rejectDraft(userId: string, draftId: string, note?: string): Record<string, unknown> {
     const draft = this.store.getDraft(draftId)
-    if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+    if (!draft) throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     if (draft.status !== 'draft') {
-      throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
+      throw new OpenMCPError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
     }
 
     this.store.updateDraft(draft.id, {

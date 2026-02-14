@@ -1,4 +1,4 @@
-import type { DomainAdapter, Ledger, Transaction } from 'openport'
+import type { DomainAdapter, Ledger, Transaction } from 'openmcp'
 
 type ListTransactionsInput = Parameters<DomainAdapter['listTransactions']>[1]
 

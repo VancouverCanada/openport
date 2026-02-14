@@ -1,8 +1,8 @@
 # Public Adapter Template
 
-OpenPort includes a public-safe adapter repository template at:
+OpenMCP includes a public-safe adapter repository template at:
 
-- `templates/openport-adapter-public-template`
+- `templates/openmcp-adapter-public-template`
 
 ## Purpose
 
@@ -11,7 +11,7 @@ This template helps teams publish adapter code without exposing product-internal
 ## Required isolation rules
 
 - keep all product internals in separate private systems
-- expose only adapter mapping logic required by OpenPort interfaces
+- expose only adapter mapping logic required by OpenMCP interfaces
 - avoid private hostnames, IDs, schemas, and sample data in the public repository
 - keep secrets out of git and inject via runtime environment
 
