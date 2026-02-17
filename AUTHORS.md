@@ -1,8 +1,12 @@
 ## Authors
 
-- Accentrust Inc.
-- Sebastian Zhu
+- Accentrust
+- Genliang Zhu
+- Chu Wang
+- Ziyuan Wang
+- Zhida Li
 
 ## Maintainer
 
-- Sebastian Zhu (`@VancouverCanada`)
+- Genliang Zhu
+- Chu Wang

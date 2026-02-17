@@ -1,4 +1,8 @@
 import crypto from 'node:crypto'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const canonicalize: (value: unknown) => string | undefined = require('canonicalize')
 
 export function nowIso(): string {
   return new Date().toISOString()
@@ -10,6 +14,21 @@ export function randomId(prefix: string): string {
 
 export function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input, 'utf8').digest('hex')
+}
+
+// JSON Canonicalization Scheme (RFC 8785) via the canonicalize package.
+// This makes hashing stable across object key ordering and runtime specifics.
+export function jcs(value: unknown): string {
+  const out = canonicalize(value)
+  if (typeof out !== 'string') {
+    // Canonicalization is defined only for JSON values. Treat non-JSON inputs as programmer errors.
+    throw new TypeError('jcs canonicalization failed (non-JSON value?)')
+  }
+  return out
+}
+
+export function sha256JcsHex(value: unknown): string {
+  return sha256Hex(jcs(value))
 }
 
 export function base64Url(input: Buffer): string {
@@ -33,12 +52,20 @@ export function getClientIp(input: string): string {
 }
 
 export function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) return JSON.stringify(value)
+  // Deterministic JSON-like serialization with sorted object keys.
+  // Unlike JSON, `undefined` is not representable; we follow JSON.stringify:
+  // - top-level undefined becomes "null" to keep the output a string
+  // - object properties with undefined are omitted
+  // - array entries with undefined become null
+  if (value === undefined) return 'null'
+  if (value === null) return 'null'
   if (typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`
+    return `[${value.map((entry) => (entry === undefined ? 'null' : stableStringify(entry))).join(',')}]`
   }
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`
 }
 

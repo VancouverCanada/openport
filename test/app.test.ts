@@ -139,6 +139,37 @@ describe('openmcp reference runtime', () => {
     await app.close()
   })
 
+  it('produces stable preflight hashes under payload key reordering', async () => {
+    const { app, bootstrap } = await buildDemoApp()
+    const token = String((bootstrap as any).token)
+
+    const payloadA = { transactionId: 'txn_2', meta: { a: 1, b: 2 }, tags: ['x', 'y'] }
+    const payloadB = { tags: ['x', 'y'], meta: { b: 2, a: 1 }, transactionId: 'txn_2' }
+
+    const preflight1 = await app.inject({
+      method: 'POST',
+      url: '/api/agent/v1/preflight',
+      headers: bearer(token),
+      payload: { action: 'transaction.delete', payload: payloadA }
+    })
+    expect(preflight1.statusCode).toBe(200)
+
+    const preflight2 = await app.inject({
+      method: 'POST',
+      url: '/api/agent/v1/preflight',
+      headers: bearer(token),
+      payload: { action: 'transaction.delete', payload: payloadB }
+    })
+    expect(preflight2.statusCode).toBe(200)
+
+    const a = preflight1.json().data
+    const b = preflight2.json().data
+    expect(a.impactHash).toBe(b.impactHash)
+    expect(a.stateWitnessHash).toBe(b.stateWitnessHash)
+
+    await app.close()
+  })
+
   it('fails closed when state witness changes before approval', async () => {
     const { app, bootstrap, runtime } = await buildDemoApp()
     const token = String((bootstrap as any).token)

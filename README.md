@@ -18,7 +18,7 @@ OpenMCP provides these primitives so product teams can add AI access safely.
 
 ## Project Stewardship
 
-OpenMCP is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenMCP is stewarded by **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 Stewardship principles:
 
