@@ -1,6 +1,6 @@
 # Security Hardening Guide
 
-Stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
+Stewardship: **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 This guide defines the minimum hardening baseline before tagging stable releases.
 

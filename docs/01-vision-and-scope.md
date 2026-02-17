@@ -2,7 +2,7 @@
 
 ## Stewardship
 
-OpenMCP is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenMCP is stewarded by **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 The project direction prioritizes operational safety, tenant isolation, and practical adoption across production web systems.
 

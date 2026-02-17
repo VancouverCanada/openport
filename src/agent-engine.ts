@@ -5,7 +5,7 @@ import { ensureLedgerAllowed, ensureScope, ensureWorkspaceBoundary, getDataPolic
 import { InMemoryStore } from './store.js'
 import { AgentToolRegistry } from './tool-registry.js'
 import type { AgentDraft, AgentRequestContext, DomainAdapter } from './types.js'
-import { isExpired, sha256Hex, stableStringify } from './utils.js'
+import { isExpired, sha256JcsHex } from './utils.js'
 
 function normalizeAutoExecute(value: unknown): {
   writes: { enabled: boolean; expiresAt: string | null; allowedActions: string[] | null }
@@ -161,8 +161,8 @@ export class AgentEngine {
       ? await tool.computeStateWitness(ctx, input.payload, { domain: this.domain })
       : null
 
-    const impactHash = sha256Hex(stableStringify({ action: tool.name, payload: input.payload, impact }))
-    const stateWitnessHash = stateWitness ? sha256Hex(stableStringify(stateWitness)) : null
+    const impactHash = sha256JcsHex({ action: tool.name, payload: input.payload, impact })
+    const stateWitnessHash = stateWitness ? sha256JcsHex(stateWitness) : null
     const preflight = this.store.savePreflight({
       app_id: ctx.app.id,
       key_id: ctx.key.id,
@@ -261,13 +261,13 @@ export class AgentEngine {
       ? (tool.computeImpact ? await tool.computeImpact(ctx, payload, { domain: this.domain }) : { summary: 'High impact action' })
       : null
     const computedPreflightHash = impact
-      ? sha256Hex(stableStringify({ action: tool.name, payload, impact }))
+      ? sha256JcsHex({ action: tool.name, payload, impact })
       : null
     const computedStateWitness = tool.computeStateWitness
       ? await tool.computeStateWitness(ctx, payload, { domain: this.domain })
       : null
     const computedStateWitnessHash = computedStateWitness
-      ? sha256Hex(stableStringify(computedStateWitness))
+      ? sha256JcsHex(computedStateWitness)
       : null
     const expectedStateWitnessHash = stateWitnessHash?.trim() || null
 
@@ -417,7 +417,7 @@ export class AgentEngine {
       }
 
       const currentWitness = await tool.computeStateWitness(ctx, draft.payload, { domain: this.domain })
-      const currentWitnessHash = currentWitness ? sha256Hex(stableStringify(currentWitness)) : null
+      const currentWitnessHash = currentWitness ? sha256JcsHex(currentWitness) : null
       if (!currentWitnessHash || currentWitnessHash !== draft.preflight_state_witness_hash) {
         await this.audit.log({
           appId: ctx.app.id,
