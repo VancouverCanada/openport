@@ -12,6 +12,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Governance assets (`ROADMAP.md`, `SUPPORT.md`, issue templates, PR template).
 - Security hardening and LLM/OpenClaw integration guides.
 - Additional abuse and fuzz regression tests.
+- Optional State Witness / Preconditions profile with execute-time precondition revalidation and `agent.precondition_failed` fail-closed behavior.
 
 ## [0.1.0] - 2026-02-13
 

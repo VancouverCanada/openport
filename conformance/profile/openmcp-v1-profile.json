@@ -27,5 +27,11 @@
     "unauthenticated manifest request returns 401",
     "authenticated manifest request returns 200",
     "agent token can access only within granted policy boundaries"
+  ],
+  "optionalProfiles": [
+    {
+      "id": "openmcp-v1-state-witness",
+      "description": "For actions with state witnesses, execution revalidates server-observed state and fails closed on mismatch with agent.precondition_failed."
+    }
   ]
 }

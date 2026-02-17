@@ -90,6 +90,8 @@ export type AgentDraft = {
   justification: string | null
   preflight: Record<string, unknown> | null
   preflight_hash: string | null
+  preflight_state_witness: Record<string, unknown> | null
+  preflight_state_witness_hash: string | null
   policy_snapshot: Record<string, unknown> | null
   confirmed_by_user_id: string | null
   created_at: string
@@ -186,6 +188,7 @@ export type AgentManifestTool = {
 export type AgentActionTool = AgentManifestTool & {
   kind: 'action'
   computeImpact?: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }) => Promise<Record<string, unknown>>
+  computeStateWitness?: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }) => Promise<Record<string, unknown> | null>
   execute: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }, opts: { confirmedByUserId: string | null }) => Promise<Record<string, unknown>>
 }
 

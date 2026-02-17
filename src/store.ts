@@ -9,6 +9,8 @@ type PreflightRecord = {
   action_type: string
   payload: Record<string, unknown>
   impact_hash: string
+  state_witness: Record<string, unknown> | null
+  state_witness_hash: string | null
   created_at: string
   expires_at: string
 }
@@ -142,6 +144,8 @@ export class InMemoryStore {
       action_type: input.action_type,
       payload: input.payload,
       impact_hash: input.impact_hash,
+      state_witness: input.state_witness || null,
+      state_witness_hash: input.state_witness_hash || null,
       created_at: new Date(now).toISOString(),
       expires_at: new Date(now + ttl).toISOString()
     }

@@ -11,6 +11,7 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 - discoverable tools (`manifest`)
 - strict access control (`scope + policy`)
 - safe write path (`draft -> human approval -> execute`)
+- optional state preconditions (`stateWitnessHash`) for TOCTOU-resistant execution
 - complete auditability
 
 OpenMCP provides these primitives so product teams can add AI access safely.
@@ -84,6 +85,7 @@ This repository now includes a runnable reference runtime under `src/`:
 - policy and scope checks
 - draft-first action pipeline
 - high-risk preflight + idempotency controls
+- optional State Witness / Preconditions profile for execute-time revalidation
 - in-memory audit sink
 - in-memory domain adapter (ledgers/transactions)
 

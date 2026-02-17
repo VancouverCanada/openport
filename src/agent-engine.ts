@@ -157,15 +157,21 @@ export class AgentEngine {
     const impact = tool.computeImpact
       ? await tool.computeImpact(ctx, input.payload, { domain: this.domain })
       : { summary: tool.risk === 'high' ? 'High impact action' : 'Low impact action' }
+    const stateWitness = tool.computeStateWitness
+      ? await tool.computeStateWitness(ctx, input.payload, { domain: this.domain })
+      : null
 
     const impactHash = sha256Hex(stableStringify({ action: tool.name, payload: input.payload, impact }))
+    const stateWitnessHash = stateWitness ? sha256Hex(stableStringify(stateWitness)) : null
     const preflight = this.store.savePreflight({
       app_id: ctx.app.id,
       key_id: ctx.key.id,
       actor_user_id: ctx.actorUserId,
       action_type: tool.name,
       payload: input.payload,
-      impact_hash: impactHash
+      impact_hash: impactHash,
+      state_witness: stateWitness,
+      state_witness_hash: stateWitnessHash
     })
 
     await this.audit.log({
@@ -186,14 +192,18 @@ export class AgentEngine {
       requiresConfirmation: tool.requiresConfirmation,
       impact,
       impactHash,
+      stateWitness,
+      stateWitnessHash,
       preflightId: preflight.id
     }
   }
 
-  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string }): Promise<Record<string, unknown>> {
+  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string; stateWitnessHash?: string }): Promise<Record<string, unknown>> {
     let actionName = input.action
     let payload = input.payload
     let preflightHash = input.preflightHash
+    let stateWitnessHash = input.stateWitnessHash
+    let preflightStateWitness: Record<string, unknown> | null = null
 
     if (input.preflightId?.trim()) {
       const record = this.store.getPreflight(input.preflightId.trim())
@@ -205,6 +215,8 @@ export class AgentEngine {
       }
       if (payload === undefined) payload = record.payload
       if (!preflightHash?.trim()) preflightHash = record.impact_hash
+      if (!stateWitnessHash?.trim()) stateWitnessHash = record.state_witness_hash || undefined
+      preflightStateWitness = record.state_witness
     }
 
     if (!payload) {
@@ -251,6 +263,23 @@ export class AgentEngine {
     const computedPreflightHash = impact
       ? sha256Hex(stableStringify({ action: tool.name, payload, impact }))
       : null
+    const computedStateWitness = tool.computeStateWitness
+      ? await tool.computeStateWitness(ctx, payload, { domain: this.domain })
+      : null
+    const computedStateWitnessHash = computedStateWitness
+      ? sha256Hex(stableStringify(computedStateWitness))
+      : null
+    const expectedStateWitnessHash = stateWitnessHash?.trim() || null
+
+    if (expectedStateWitnessHash && computedStateWitnessHash && computedStateWitnessHash !== expectedStateWitnessHash) {
+      throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+        action: tool.name,
+        reason: 'state_witness_mismatch'
+      })
+    }
+
+    const draftStateWitness = preflightStateWitness || computedStateWitness
+    const draftStateWitnessHash = expectedStateWitnessHash || computedStateWitnessHash
 
     let canAutoExecute = false
     let autoExecuteDeniedCode: string | null = null
@@ -288,6 +317,8 @@ export class AgentEngine {
       justification: input.justification?.trim() || null,
       preflight: impact,
       preflight_hash: preflightHash?.trim() || computedPreflightHash || null,
+      preflight_state_witness: draftStateWitness,
+      preflight_state_witness_hash: draftStateWitnessHash,
       policy_snapshot: {
         requiredScopes: tool.requiredScopes,
         risk: tool.risk,
@@ -377,6 +408,37 @@ export class AgentEngine {
       }
     }
 
+    if (draft.preflight_state_witness_hash) {
+      if (!tool.computeStateWitness) {
+        throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+          action: tool.name,
+          reason: 'state_witness_unsupported'
+        })
+      }
+
+      const currentWitness = await tool.computeStateWitness(ctx, draft.payload, { domain: this.domain })
+      const currentWitnessHash = currentWitness ? sha256Hex(stableStringify(currentWitness)) : null
+      if (!currentWitnessHash || currentWitnessHash !== draft.preflight_state_witness_hash) {
+        await this.audit.log({
+          appId: ctx.app.id,
+          keyId: ctx.key.id,
+          actorUserId: ctx.actorUserId,
+          performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
+          action: 'agent.action.execute',
+          status: 'denied',
+          code: ErrorCodes.AGENT_PRECONDITION_FAILED,
+          ip: ctx.ip,
+          userAgent: ctx.userAgent,
+          draftId: draft.id,
+          details: { actionType: tool.name, reason: 'state_witness_mismatch' }
+        })
+        throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+          action: tool.name,
+          reason: 'state_witness_mismatch'
+        })
+      }
+    }
+
     try {
       const result = await tool.execute(ctx, draft.payload, { domain: this.domain }, { confirmedByUserId: opts.confirmedByUserId })
       const execution = this.store.saveExecution({
@@ -456,6 +518,8 @@ export class AgentEngine {
       requires_confirmation: draft.requires_confirmation,
       auto_execute_requested: draft.auto_execute_requested,
       justification: draft.justification,
+      preflight_hash: draft.preflight_hash,
+      preflight_state_witness_hash: draft.preflight_state_witness_hash,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
       confirmed_at: draft.confirmed_at,
