@@ -108,7 +108,11 @@ describe('openmcp reference runtime', () => {
     })
 
     expect(preflight.statusCode).toBe(200)
-    const preflightHash = preflight.json().data.impactHash
+    const preflightData = preflight.json().data
+    const preflightHash = preflightData.impactHash
+    const preflightId = preflightData.preflightId
+    expect(typeof preflightId).toBe('string')
+    expect(preflightId.length).toBeGreaterThan(6)
 
     const executed = await app.inject({
       method: 'POST',
@@ -116,7 +120,7 @@ describe('openmcp reference runtime', () => {
       headers: bearer(token),
       payload: {
         action: 'transaction.delete',
-        payload: { transactionId: 'txn_2' },
+        preflightId,
         execute: true,
         justification: 'cleanup old item',
         idempotencyKey: 'idem-delete-1',
@@ -128,6 +132,45 @@ describe('openmcp reference runtime', () => {
     const executedPayload = executed.json()
     expect(executedPayload.data.status).toBe('executed')
     expect(executedPayload.data.execution.status).toBe('success')
+
+    await app.close()
+  })
+
+  it('rejects preflightId reuse across keys', async () => {
+    const { app, bootstrap } = await buildDemoApp()
+    const token1 = String((bootstrap as any).token)
+    const appId = String((bootstrap as any).app.id)
+
+    const key2 = await app.inject({
+      method: 'POST',
+      url: `/api/agent-admin/v1/apps/${appId}/keys`,
+      headers: { 'x-admin-user': 'admin_demo' },
+      payload: { name: 'Key 2' }
+    })
+    expect(key2.statusCode).toBe(200)
+    const token2 = key2.json().data.token
+
+    const preflight = await app.inject({
+      method: 'POST',
+      url: '/api/agent/v1/preflight',
+      headers: bearer(token1),
+      payload: { action: 'transaction.delete', payload: { transactionId: 'txn_1' } }
+    })
+    expect(preflight.statusCode).toBe(200)
+    const preflightId = preflight.json().data.preflightId
+
+    const attempt = await app.inject({
+      method: 'POST',
+      url: '/api/agent/v1/actions',
+      headers: bearer(token2),
+      payload: {
+        action: 'transaction.delete',
+        preflightId,
+        execute: false
+      }
+    })
+    expect(attempt.statusCode).toBe(400)
+    expect(attempt.json().code).toBe('agent.preflight_not_found')
 
     await app.close()
   })

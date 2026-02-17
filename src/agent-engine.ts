@@ -159,6 +159,14 @@ export class AgentEngine {
       : { summary: tool.risk === 'high' ? 'High impact action' : 'Low impact action' }
 
     const impactHash = sha256Hex(stableStringify({ action: tool.name, payload: input.payload, impact }))
+    const preflight = this.store.savePreflight({
+      app_id: ctx.app.id,
+      key_id: ctx.key.id,
+      actor_user_id: ctx.actorUserId,
+      action_type: tool.name,
+      payload: input.payload,
+      impact_hash: impactHash
+    })
 
     await this.audit.log({
       appId: ctx.app.id,
@@ -177,12 +185,33 @@ export class AgentEngine {
       risk: tool.risk,
       requiresConfirmation: tool.requiresConfirmation,
       impact,
-      impactHash
+      impactHash,
+      preflightId: preflight.id
     }
   }
 
-  async createAction(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown>; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string }): Promise<Record<string, unknown>> {
-    const tool = this.tools.getActionTool(input.action)
+  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string }): Promise<Record<string, unknown>> {
+    let actionName = input.action
+    let payload = input.payload
+    let preflightHash = input.preflightHash
+
+    if (input.preflightId?.trim()) {
+      const record = this.store.getPreflight(input.preflightId.trim())
+      if (!record || record.app_id !== ctx.app.id || record.key_id !== ctx.key.id || record.actor_user_id !== ctx.actorUserId) {
+        throw new OpenMCPError(400, ErrorCodes.AGENT_PREFLIGHT_NOT_FOUND, 'Preflight not found')
+      }
+      if (record.action_type !== actionName) {
+        throw new OpenMCPError(400, ErrorCodes.AGENT_PREFLIGHT_MISMATCH, 'Preflight mismatch')
+      }
+      if (payload === undefined) payload = record.payload
+      if (!preflightHash?.trim()) preflightHash = record.impact_hash
+    }
+
+    if (!payload) {
+      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'payload required')
+    }
+
+    const tool = this.tools.getActionTool(actionName)
     if (!tool) {
       throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
@@ -217,10 +246,10 @@ export class AgentEngine {
     }
 
     const impact = tool.risk === 'high'
-      ? (tool.computeImpact ? await tool.computeImpact(ctx, input.payload, { domain: this.domain }) : { summary: 'High impact action' })
+      ? (tool.computeImpact ? await tool.computeImpact(ctx, payload, { domain: this.domain }) : { summary: 'High impact action' })
       : null
     const computedPreflightHash = impact
-      ? sha256Hex(stableStringify({ action: tool.name, payload: input.payload, impact }))
+      ? sha256Hex(stableStringify({ action: tool.name, payload, impact }))
       : null
 
     let canAutoExecute = false
@@ -234,8 +263,8 @@ export class AgentEngine {
         else if (!input.justification?.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_ACTION_INVALID
         else if (auto.highRisk.requireIdempotency && !input.idempotencyKey?.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_IDEMPOTENCY_REQUIRED
         else if (auto.highRisk.requirePreflight) {
-          if (!input.preflightHash?.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_REQUIRED
-          else if (computedPreflightHash !== input.preflightHash.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_MISMATCH
+          if (!preflightHash?.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_REQUIRED
+          else if (computedPreflightHash !== preflightHash.trim()) autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_MISMATCH
         }
       } else {
         if (!auto.writes.enabled) autoExecuteDeniedCode = ErrorCodes.AGENT_AUTO_EXECUTE_DISABLED
@@ -250,7 +279,7 @@ export class AgentEngine {
       key_id: ctx.key.id,
       actor_user_id: ctx.actorUserId,
       action_type: tool.name,
-      payload: input.payload,
+      payload,
       status: canAutoExecute ? 'confirmed' : 'draft',
       requires_confirmation: tool.requiresConfirmation,
       auto_execute_requested: wantsExecute,
@@ -258,7 +287,7 @@ export class AgentEngine {
       idempotency_key: input.idempotencyKey?.trim() || null,
       justification: input.justification?.trim() || null,
       preflight: impact,
-      preflight_hash: input.preflightHash?.trim() || computedPreflightHash || null,
+      preflight_hash: preflightHash?.trim() || computedPreflightHash || null,
       policy_snapshot: {
         requiredScopes: tool.requiredScopes,
         risk: tool.risk,
