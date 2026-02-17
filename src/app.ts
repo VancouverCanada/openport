@@ -32,13 +32,20 @@ const listTransactionsSchema = z.object({
 
 const actionBodySchema = z.object({
   action: z.string().min(1),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.unknown()).optional(),
+  preflightId: z.string().optional(),
   execute: z.boolean().optional(),
   forceDraft: z.boolean().optional(),
   requestId: z.string().optional(),
   idempotencyKey: z.string().optional(),
   justification: z.string().optional(),
   preflightHash: z.string().optional()
+}).superRefine((value, ctx) => {
+  const hasPayload = value.payload !== undefined
+  const hasPreflightId = Boolean(value.preflightId && value.preflightId.trim())
+  if (!hasPayload && !hasPreflightId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload or preflightId is required' })
+  }
 })
 
 const preflightBodySchema = z.object({

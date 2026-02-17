@@ -1,6 +1,6 @@
 # LLM And OpenClaw Integration Guide
 
-Stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
+Stewardship: **Accentrust** and **Genliang Zhu**.
 
 This guide shows how to connect LLM tools and OpenClaw-style agents to OpenMCP without browser automation.
 
@@ -42,6 +42,11 @@ curl -sS -X POST \
   "$OPENMCP_BASE_URL/api/agent/v1/preflight"
 ```
 
+The response includes:
+
+- `impactHash`: binds auto-execution to the evaluated impact.
+- `preflightId`: a short-lived handle the client can reuse to avoid resending the payload.
+
 ### 4. Create action request
 
 ```bash
@@ -52,10 +57,24 @@ curl -sS -X POST \
   "$OPENMCP_BASE_URL/api/agent/v1/actions"
 ```
 
+### 5. Execute using preflight handle (recommended for agent runtimes)
+
+For high-risk auto-execute, do not regenerate payload after preflight. Either reuse the exact same payload bytes, or pass
+the `preflightId` handle returned by `/preflight` so the server can reuse the cached payload and preflight hash.
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"transaction.delete","preflightId":"pfl_...","execute":true,"justification":"cleanup old item","idempotencyKey":"idem-delete-1","preflightHash":"..."}' \
+  "$OPENMCP_BASE_URL/api/agent/v1/actions"
+```
+
 ## Agent-side recommendations
 
 - cache manifest for short intervals and refresh on auth/policy errors
 - keep idempotency keys stable per write intent
+- treat `preflight` + `actions` as a single intent: do not generate a second payload after preflight
 - treat draft creation as non-final until explicit execution success
 - surface policy denial codes directly to operator
 

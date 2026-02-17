@@ -56,5 +56,6 @@ Admin side (human-managed):
   - explicit enablement
   - short TTL
   - preflight hash
+  - (optional) preflight handle (`preflightId`) to avoid resending payload
   - idempotency key
   - step-up confirmation

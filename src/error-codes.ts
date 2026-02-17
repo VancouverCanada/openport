@@ -11,6 +11,7 @@ export const ErrorCodes = {
   AGENT_DRAFT_ALREADY_FINAL: 'agent.draft_already_final',
   AGENT_PREFLIGHT_REQUIRED: 'agent.preflight_required',
   AGENT_PREFLIGHT_MISMATCH: 'agent.preflight_mismatch',
+  AGENT_PREFLIGHT_NOT_FOUND: 'agent.preflight_not_found',
   AGENT_IDEMPOTENCY_REQUIRED: 'agent.idempotency_required',
   AGENT_IDEMPOTENCY_REPLAY: 'agent.idempotency_replay',
   AGENT_AUTO_EXECUTE_DISABLED: 'agent.auto_execute_disabled',

@@ -1,5 +1,17 @@
 import type { AgentApp, AgentAutoExecute, AgentDraft, AgentExecution, AgentKey, AgentPolicy, DraftStatus, StepUpSession, StepUpToken } from './types.js'
-import { nowIso, randomId } from './utils.js'
+import { isExpired, nowIso, randomId } from './utils.js'
+
+type PreflightRecord = {
+  id: string
+  app_id: string
+  key_id: string
+  actor_user_id: string
+  action_type: string
+  payload: Record<string, unknown>
+  impact_hash: string
+  created_at: string
+  expires_at: string
+}
 
 export class InMemoryStore {
   readonly apps = new Map<string, AgentApp>()
@@ -9,6 +21,9 @@ export class InMemoryStore {
   readonly executions = new Map<string, AgentExecution>()
   readonly stepUpSessions = new Map<string, StepUpSession>()
   readonly stepUpTokens = new Map<string, StepUpToken>()
+  readonly preflights = new Map<string, PreflightRecord>()
+
+  private readonly preflightTtlMs = 10 * 60 * 1000
 
   listApps(): AgentApp[] {
     return [...this.apps.values()].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -114,6 +129,34 @@ export class InMemoryStore {
     }
     this.drafts.set(draft.id, draft)
     return draft
+  }
+
+  savePreflight(input: Omit<PreflightRecord, 'id' | 'created_at' | 'expires_at'> & { ttl_ms?: number }): PreflightRecord {
+    const now = Date.now()
+    const ttl = Number.isFinite(Number(input.ttl_ms)) ? Math.max(10_000, Math.trunc(Number(input.ttl_ms))) : this.preflightTtlMs
+    const record: PreflightRecord = {
+      id: randomId('pfl'),
+      app_id: input.app_id,
+      key_id: input.key_id,
+      actor_user_id: input.actor_user_id,
+      action_type: input.action_type,
+      payload: input.payload,
+      impact_hash: input.impact_hash,
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + ttl).toISOString()
+    }
+    this.preflights.set(record.id, record)
+    return record
+  }
+
+  getPreflight(preflightId: string): PreflightRecord | null {
+    const record = this.preflights.get(preflightId) || null
+    if (!record) return null
+    if (isExpired(record.expires_at)) {
+      this.preflights.delete(preflightId)
+      return null
+    }
+    return record
   }
 
   updateDraft(draftId: string, patch: Partial<AgentDraft>): AgentDraft | null {

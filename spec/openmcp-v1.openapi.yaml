@@ -240,6 +240,8 @@ components:
                   additionalProperties: true
                 impactHash:
                   type: string
+                preflightId:
+                  type: string
     CreateActionRequest:
       type: object
       properties:
@@ -248,6 +250,10 @@ components:
         payload:
           type: object
           additionalProperties: true
+          description: Payload for the action. Required unless preflightId is provided.
+        preflightId:
+          type: string
+          description: Preflight handle returned by POST /preflight. When provided, the server MAY reuse the cached payload and preflight hash.
         execute:
           type: boolean
         forceDraft:
@@ -260,7 +266,7 @@ components:
           type: string
         preflightHash:
           type: string
-      required: [action, payload]
+      required: [action]
     SuccessActionResult:
       allOf:
         - $ref: '#/components/schemas/EnvelopeBase'
