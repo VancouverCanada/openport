@@ -1,6 +1,6 @@
 # OpenPort
 
-OpenPort is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
+OpenPort Protocol (OPP; short: OpenPort) is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
 
 OpenPort is repository-isolated and does not require any direct connection to private product codebases.
 
@@ -14,7 +14,7 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 - optional state preconditions (`stateWitnessHash`) for TOCTOU-resistant execution
 - complete auditability
 
-OpenPort provides these primitives so product teams can add AI access safely.
+OpenPort Protocol provides these primitives so product teams can add AI access safely.
 
 ## Project Stewardship
 
@@ -42,7 +42,7 @@ Stewardship principles:
 
 ## Recommended name
 
-Project name: **OpenPort**
+Project name: **OpenPort Protocol** (short: **OpenPort**)
 
 Repository slug: **openport**
 
