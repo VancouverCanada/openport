@@ -1,15 +1,15 @@
-# OpenMCP As An MCP Security + Governance Profile
+# OpenPort As An MCP Security + Governance Profile
 
-Stewardship: **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
+Stewardship: **Accentrust** and the OpenPort authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 ## Positioning
 
-OpenMCP is best understood as an **MCP server profile**:
+OpenPort is best understood as an **MCP server profile**:
 
 - MCP provides the base paradigm: a server exposes machine-readable tools (name, description, input/output schemas) that clients can discover and call.
-- OpenMCP adds the missing production requirements: **authorization**, **risk-gated writes**, **auditability**, and **rate limiting**.
+- OpenPort adds the missing production requirements: **authorization**, **risk-gated writes**, **auditability**, and **rate limiting**.
 
-In other words: OpenMCP does not try to replace MCP's tool discovery. It defines a security and governance layer that makes MCP-style tool exposure safe in real systems.
+In other words: OpenPort does not try to replace MCP's tool discovery. It defines a security and governance layer that makes MCP-style tool exposure safe in real systems.
 
 ## Relationship to WebMCP
 
@@ -18,7 +18,7 @@ WebMCP can be viewed as an MCP-style server surface in the browser:
 - tools live in client-side scripts
 - agents discover tools and call them without DOM scraping
 
-OpenMCP focuses on **server-side automation** and central governance:
+OpenPort focuses on **server-side automation** and central governance:
 
 - cross-model, cross-runtime compatibility (workers, queues, scheduled jobs, automation platforms)
 - centralized revocation, quotas, and audit export
@@ -26,7 +26,7 @@ OpenMCP focuses on **server-side automation** and central governance:
 
 ## Core extensions (tool metadata)
 
-OpenMCP treats the following fields as first-class tool metadata, beyond basic MCP tool descriptors:
+OpenPort treats the following fields as first-class tool metadata, beyond basic MCP tool descriptors:
 
 - `risk`: `low | medium | high`
 - `requiredScopes`: string array
@@ -40,11 +40,11 @@ OpenMCP treats the following fields as first-class tool metadata, beyond basic M
   - `bucket`: string
   - `limitPerMinute`: number
 
-These fields can be carried inside MCP tool definitions (as extension fields) or returned by a manifest endpoint when integrating OpenMCP over HTTP.
+These fields can be carried inside MCP tool definitions (as extension fields) or returned by a manifest endpoint when integrating OpenPort over HTTP.
 
 ## Server-side invariants (must-haves)
 
-An implementation claiming OpenMCP compatibility MUST enforce:
+An implementation claiming OpenPort compatibility MUST enforce:
 
 - Deny-by-default: no scope implies no access.
 - Tenant/workspace boundary: every read/write must be bound to server-verified tenant context.
@@ -60,7 +60,7 @@ An implementation claiming OpenMCP compatibility MUST enforce:
 
 ## Conformance
 
-OpenMCP should ship as testable profiles:
+OpenPort should ship as testable profiles:
 
 1. `core`: endpoint presence + envelope consistency
 2. `authz`: scope and policy denials + revocation behavior

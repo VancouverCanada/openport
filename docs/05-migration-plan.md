@@ -1,4 +1,4 @@
-# Migration Plan (Source Product -> OpenMCP)
+# Migration Plan (Source Product -> OpenPort)
 
 ## Phase 0: Inventory and boundary lock
 
@@ -26,7 +26,7 @@ Exit criteria:
 
 ## Phase 3: Private product adapter
 
-- wire OpenMCP interfaces to private auth/tenant/domain services
+- wire OpenPort interfaces to private auth/tenant/domain services
 - keep adapter in private repository
 
 Exit criteria:

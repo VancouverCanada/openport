@@ -2,7 +2,7 @@
 
 ## Stewardship
 
-OpenMCP is stewarded by **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
+OpenPort is stewarded by **Accentrust** and the OpenPort authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 The project direction prioritizes operational safety, tenant isolation, and practical adoption across production web systems.
 
@@ -26,7 +26,7 @@ Define a standardized AI access layer for web applications so agents can read da
 
 ## Naming options
 
-1. OpenMCP (recommended)
+1. OpenPort (recommended)
 - Clear: "open access port" for data and actions
 - Neutral: can cover finance, CRM, recruiting, etc.
 
@@ -44,8 +44,8 @@ Define a standardized AI access layer for web applications so agents can read da
 
 ## Chosen direction
 
-- Product name: `OpenMCP`
-- First repository: `openmcp`
+- Product name: `OpenPort`
+- First repository: `openport`
 - Follow-up repos (optional):
-  - `openmcp-nest`
-  - `openmcp-examples`
+  - `openport-nest`
+  - `openport-examples`

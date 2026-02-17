@@ -1,5 +1,5 @@
 import { ErrorCodes } from './error-codes.js'
-import { OpenMCPError } from './errors.js'
+import { OpenPortError } from './errors.js'
 import type { AgentRequestContext } from './types.js'
 import { parseDate } from './utils.js'
 
@@ -38,7 +38,7 @@ export function getDataPolicy(ctx: Pick<AgentRequestContext, 'app'>): EffectiveD
 export function ensureScope(ctx: AgentRequestContext, requiredScopes: string[]): void {
   for (const scope of requiredScopes) {
     if (!ctx.app.scopes.includes(scope)) {
-      throw new OpenMCPError(403, ErrorCodes.AGENT_SCOPE_DENIED, 'Insufficient permissions')
+      throw new OpenPortError(403, ErrorCodes.AGENT_SCOPE_DENIED, 'Insufficient permissions')
     }
   }
 }
@@ -46,14 +46,14 @@ export function ensureScope(ctx: AgentRequestContext, requiredScopes: string[]):
 export function ensureLedgerAllowed(ctx: AgentRequestContext, ledgerId: string): void {
   const policy = getDataPolicy(ctx)
   if (policy.allowedLedgerIds && !policy.allowedLedgerIds.includes(ledgerId)) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Ledger not allowed for this integration')
+    throw new OpenPortError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Ledger not allowed for this integration')
   }
 }
 
 export function ensureOrgAllowed(ctx: AgentRequestContext, orgId: string): void {
   const policy = getDataPolicy(ctx)
   if (policy.allowedOrgIds && !policy.allowedOrgIds.includes(orgId)) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Organization not allowed for this integration')
+    throw new OpenPortError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Organization not allowed for this integration')
   }
 }
 
@@ -75,11 +75,11 @@ export function resolveDateRange(ctx: AgentRequestContext, input: { startDate?: 
   const effectiveStart = start || new Date(effectiveEnd.getTime() - policy.maxDays * 24 * 60 * 60 * 1000)
 
   if (effectiveStart.getTime() > effectiveEnd.getTime()) {
-    throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date range')
+    throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid date range')
   }
 
   if (effectiveEnd.getTime() - effectiveStart.getTime() > policy.maxDays * 24 * 60 * 60 * 1000) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Date range exceeds allowed window')
+    throw new OpenPortError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Date range exceeds allowed window')
   }
 
   return {
@@ -94,14 +94,14 @@ export function ensureWorkspaceBoundary(ctx: AgentRequestContext, input: { ledge
   if (ctx.app.scope !== 'workspace') return
   const appOrgId = ctx.app.org_id
   if (!appOrgId) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_FORBIDDEN, 'Agent app is misconfigured')
+    throw new OpenPortError(403, ErrorCodes.AGENT_FORBIDDEN, 'Agent app is misconfigured')
   }
 
   if (input.orgId && input.orgId !== appOrgId) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Organization not allowed for this integration')
+    throw new OpenPortError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Organization not allowed for this integration')
   }
 
   if (input.ledgerOrgId && input.ledgerOrgId !== appOrgId) {
-    throw new OpenMCPError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Ledger not allowed for this integration')
+    throw new OpenPortError(403, ErrorCodes.AGENT_POLICY_DENIED, 'Ledger not allowed for this integration')
   }
 }

@@ -1,4 +1,4 @@
-import { OpenMCPError } from './errors.js'
+import { OpenPortError } from './errors.js'
 import { ErrorCodes } from './error-codes.js'
 import { ensureLedgerAllowed, ensureScope, ensureWorkspaceBoundary, getDataPolicy, resolveDateRange } from './policy.js'
 import type { AgentActionTool, AgentManifestTool, AgentRequestContext, DomainAdapter, Ledger } from './types.js'
@@ -20,7 +20,7 @@ async function buildTransactionStateWitness(
 ): Promise<Record<string, unknown>> {
   const transactionId = resolveTransactionId(payload)
   if (!transactionId) {
-    throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+    throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
   }
 
   const existing = await domain.getTransactionById(ctx.actorUserId, transactionId)
@@ -116,7 +116,7 @@ export class AgentToolRegistry {
         execute: async (ctx, payload) => {
           const ledgerId = String(payload.ledgerId || payload.ledger_id || '').trim()
           if (!ledgerId) {
-            throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
+            throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
           }
 
           ensureLedgerAllowed(ctx, ledgerId)
@@ -140,12 +140,12 @@ export class AgentToolRegistry {
         execute: async (ctx, payload) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
-            throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+            throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
 
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
           if (!existing) {
-            throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+            throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
           }
 
           ensureLedgerAllowed(ctx, existing.ledger_id)
@@ -169,9 +169,9 @@ export class AgentToolRegistry {
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
         computeImpact: async (ctx, payload) => {
           const transactionId = resolveTransactionId(payload)
-          if (!transactionId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+          if (!transactionId) throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
-          if (!existing) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+          if (!existing) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
 
           return {
             summary: 'Delete 1 transaction',
@@ -188,11 +188,11 @@ export class AgentToolRegistry {
         execute: async (ctx, payload) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
-            throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+            throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
           if (!existing) {
-            throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+            throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
           }
 
           ensureLedgerAllowed(ctx, existing.ledger_id)
@@ -216,9 +216,9 @@ export class AgentToolRegistry {
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
         computeImpact: async (ctx, payload) => {
           const transactionId = resolveTransactionId(payload)
-          if (!transactionId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+          if (!transactionId) throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
-          if (!existing) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+          if (!existing) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
           return {
             summary: 'Hard delete 1 transaction',
             transaction: {
@@ -234,12 +234,12 @@ export class AgentToolRegistry {
         execute: async (ctx, payload) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
-            throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+            throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
 
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
           if (!existing) {
-            throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+            throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
           }
 
           ensureLedgerAllowed(ctx, existing.ledger_id)
@@ -263,7 +263,7 @@ export class AgentToolRegistry {
         outputSchema: { type: 'object', properties: { export: { type: 'object' } } },
         computeImpact: async (ctx, payload) => {
           const ledgerId = String(payload.ledgerId || payload.ledger_id || '').trim()
-          if (!ledgerId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
+          if (!ledgerId) throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
 
           ensureLedgerAllowed(ctx, ledgerId)
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)
@@ -286,7 +286,7 @@ export class AgentToolRegistry {
         },
         execute: async (ctx, payload) => {
           const ledgerId = String(payload.ledgerId || payload.ledger_id || '').trim()
-          if (!ledgerId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
+          if (!ledgerId) throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
 
           ensureLedgerAllowed(ctx, ledgerId)
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)

@@ -1,8 +1,8 @@
-# OpenMCP
+# OpenPort
 
-OpenMCP is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
+OpenPort is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
 
-OpenMCP is repository-isolated and does not require any direct connection to private product codebases.
+OpenPort is repository-isolated and does not require any direct connection to private product codebases.
 
 ## Why this project
 
@@ -14,11 +14,11 @@ Modern AI tools (LLM apps, automation agents, OpenClaw-style runtimes) need a st
 - optional state preconditions (`stateWitnessHash`) for TOCTOU-resistant execution
 - complete auditability
 
-OpenMCP provides these primitives so product teams can add AI access safely.
+OpenPort provides these primitives so product teams can add AI access safely.
 
 ## Project Stewardship
 
-OpenMCP is stewarded by **Accentrust** and the OpenMCP authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
+OpenPort is stewarded by **Accentrust** and the OpenPort authors (**Genliang Zhu**, **Chu Wang**, **Ziyuan Wang**, **Zhida Li**).
 
 Stewardship principles:
 
@@ -42,9 +42,9 @@ Stewardship principles:
 
 ## Recommended name
 
-Project name: **OpenMCP**
+Project name: **OpenPort**
 
-Repository slug: **openmcp**
+Repository slug: **openport**
 
 Rationale: clear intent (open interface + data/action port), short, and broad enough for multi-product adoption.
 
@@ -62,12 +62,12 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 - docs/10-public-adapter-template.md
 - docs/11-security-hardening.md
 - docs/12-llm-openclaw-integration.md
-- docs/13-openmcp-mcp-profile.md
+- docs/13-openport-mcp-profile.md
 - docs/releases/v0.1.0.md
 - conformance/README.md
 - ROADMAP.md
 - SUPPORT.md
-- spec/openmcp-v1.openapi.yaml
+- spec/openport-v1.openapi.yaml
 - CHANGELOG.md
 - AUTHORS.md
 
@@ -106,7 +106,7 @@ Default mode is in-memory.
 To run the domain adapter against Postgres:
 
 ```bash
-OPENMCP_DOMAIN_ADAPTER=postgres OPENMCP_DATABASE_URL='postgres://user:pass@host:5432/db' npm run dev
+OPENPORT_DOMAIN_ADAPTER=postgres OPENPORT_DATABASE_URL='postgres://user:pass@host:5432/db' npm run dev
 ```
 
 The Postgres adapter expects `ledgers` and `transactions` tables with fields used by `src/adapters/postgres-domain-adapter.ts`.
@@ -114,10 +114,10 @@ The Postgres adapter expects `ledgers` and `transactions` tables with fields use
 For product embedding with an existing Prisma client, use Prisma adapter mode:
 
 ```ts
-import { createOpenMCPRuntime } from 'openmcp'
+import { createOpenPortRuntime } from 'openport'
 import { prisma } from './prisma-client'
 
-const runtime = createOpenMCPRuntime({
+const runtime = createOpenPortRuntime({
   domainAdapter: 'prisma',
   prismaClient: prisma as any
 })
@@ -144,13 +144,13 @@ npm run gate
 npm run conformance:local
 ```
 
-Contract checks include OpenAPI validation and route coverage against `spec/openmcp-v1.openapi.yaml`.
+Contract checks include OpenAPI validation and route coverage against `spec/openport-v1.openapi.yaml`.
 
 ## Public adapter template
 
 Public repository template for custom adapters:
 
-- `templates/openmcp-adapter-public-template`
+- `templates/openport-adapter-public-template`
 
 ## Release helper
 

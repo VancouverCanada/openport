@@ -2,7 +2,7 @@
 
 ## Core idea
 
-OpenMCP separates stable protocol from private implementation.
+OpenPort separates stable protocol from private implementation.
 
 - Protocol layer is open-source.
 - Product identity/data execution remains private through adapters.

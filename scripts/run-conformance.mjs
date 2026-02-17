@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, '..')
-const profilePath = path.join(root, 'conformance/profile/openmcp-v1-profile.json')
+const profilePath = path.join(root, 'conformance/profile/openport-v1-profile.json')
 
 const args = new Set(process.argv.slice(2))
 const mode = args.has('--remote') ? 'remote' : 'local'
@@ -57,10 +57,10 @@ async function buildClient() {
     }
   }
 
-  const baseUrl = String(process.env.OPENMCP_BASE_URL || '').trim().replace(/\/$/, '')
-  const token = String(process.env.OPENMCP_AGENT_TOKEN || '').trim()
-  if (!baseUrl) throw new Error('OPENMCP_BASE_URL is required in --remote mode')
-  if (!token) throw new Error('OPENMCP_AGENT_TOKEN is required in --remote mode')
+  const baseUrl = String(process.env.OPENPORT_BASE_URL || '').trim().replace(/\/$/, '')
+  const token = String(process.env.OPENPORT_AGENT_TOKEN || '').trim()
+  if (!baseUrl) throw new Error('OPENPORT_BASE_URL is required in --remote mode')
+  if (!token) throw new Error('OPENPORT_AGENT_TOKEN is required in --remote mode')
 
   return {
     token,

@@ -2,11 +2,11 @@
 
 Stewardship: **Accentrust** and **Genliang Zhu**.
 
-This guide shows how to connect LLM tools and OpenClaw-style agents to OpenMCP without browser automation.
+This guide shows how to connect LLM tools and OpenClaw-style agents to OpenPort without browser automation.
 
 ## Integration pattern
 
-1. Obtain an OpenMCP agent token from admin flow.
+1. Obtain an OpenPort agent token from admin flow.
 2. Read `GET /api/agent/v1/manifest` to discover allowed tools.
 3. Use read endpoints for retrieval workloads.
 4. For write operations:
@@ -20,26 +20,26 @@ This guide shows how to connect LLM tools and OpenClaw-style agents to OpenMCP w
 
 ```bash
 curl -sS \
-  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
-  "$OPENMCP_BASE_URL/api/agent/v1/manifest"
+  -H "Authorization: Bearer $OPENPORT_AGENT_TOKEN" \
+  "$OPENPORT_BASE_URL/api/agent/v1/manifest"
 ```
 
 ### 2. Read data
 
 ```bash
 curl -sS \
-  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
-  "$OPENMCP_BASE_URL/api/agent/v1/transactions?ledgerId=ledger_main"
+  -H "Authorization: Bearer $OPENPORT_AGENT_TOKEN" \
+  "$OPENPORT_BASE_URL/api/agent/v1/transactions?ledgerId=ledger_main"
 ```
 
 ### 3. Preflight high-risk action
 
 ```bash
 curl -sS -X POST \
-  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
+  -H "Authorization: Bearer $OPENPORT_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"transaction.delete","payload":{"transactionId":"txn_1"}}' \
-  "$OPENMCP_BASE_URL/api/agent/v1/preflight"
+  "$OPENPORT_BASE_URL/api/agent/v1/preflight"
 ```
 
 The response includes:
@@ -52,10 +52,10 @@ The response includes:
 
 ```bash
 curl -sS -X POST \
-  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
+  -H "Authorization: Bearer $OPENPORT_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"transaction.create","payload":{"ledgerId":"ledger_main","kind":"expense","title":"AI run","amount_home":15,"currency_home":"USD","date":"2026-02-13T00:00:00.000Z"}}' \
-  "$OPENMCP_BASE_URL/api/agent/v1/actions"
+  "$OPENPORT_BASE_URL/api/agent/v1/actions"
 ```
 
 ### 5. Execute using preflight handle (recommended for agent runtimes)
@@ -65,10 +65,10 @@ the `preflightId` handle returned by `/preflight` so the server can reuse the ca
 
 ```bash
 curl -sS -X POST \
-  -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
+  -H "Authorization: Bearer $OPENPORT_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"transaction.delete","preflightId":"pfl_...","execute":true,"justification":"cleanup old item","idempotencyKey":"idem-delete-1","preflightHash":"...","stateWitnessHash":"..."}' \
-  "$OPENMCP_BASE_URL/api/agent/v1/actions"
+  "$OPENPORT_BASE_URL/api/agent/v1/actions"
 ```
 
 ## Agent-side recommendations
@@ -82,10 +82,10 @@ curl -sS -X POST \
 
 ## OpenClaw-style runtime mapping
 
-- tool registration source: OpenMCP `manifest`
-- tool invocation channel: OpenMCP HTTP endpoints
-- confirmation workflow: OpenMCP draft + admin approval path
-- audit trail source: OpenMCP audit events
+- tool registration source: OpenPort `manifest`
+- tool invocation channel: OpenPort HTTP endpoints
+- confirmation workflow: OpenPort draft + admin approval path
+- audit trail source: OpenPort audit events
 
 ## Safety requirements
 

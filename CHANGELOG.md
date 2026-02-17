@@ -17,16 +17,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ## [0.1.0] - 2026-02-13
 
 ### Added
-- Initial OpenMCP reference runtime with `agent/v1` read/action/draft endpoints.
+- Initial OpenPort reference runtime with `agent/v1` read/action/draft endpoints.
 - Admin control surface for app/key lifecycle, policy update, auto-execute settings, draft review, and audit listing.
-- OpenAPI contract file at `spec/openmcp-v1.openapi.yaml`.
+- OpenAPI contract file at `spec/openport-v1.openapi.yaml`.
 - Runtime adapter modes: in-memory, Postgres, and Prisma embedding support.
 - Core security controls: token hashing, scope checks, tenant/workspace boundary enforcement, IP policy checks, and request rate limiting.
 - High-risk action controls: preflight hash validation, idempotency key handling, and explicit auto-execute windows.
 - Structured audit events on success, denial, and failure paths.
 - Safety tooling: secret scan, private-marker scan, and release gate automation.
 - CI workflow to run release gate on push and pull requests.
-- Public adapter repository template scaffold under `templates/openmcp-adapter-public-template`.
+- Public adapter repository template scaffold under `templates/openport-adapter-public-template`.
 
 ### Tests
 - Contract tests for OpenAPI validity and route coverage.

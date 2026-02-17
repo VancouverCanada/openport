@@ -1,12 +1,12 @@
-# OpenMCP Implementation Blueprint
+# OpenPort Implementation Blueprint
 
-This blueprint is the practical path to ship OpenMCP as an independent open-source project without leaking private product details.
+This blueprint is the practical path to ship OpenPort as an independent open-source project without leaking private product details.
 
 ## Workstreams
 
 ### 1. Protocol and runtime
 
-- keep `spec/openmcp-v1.openapi.yaml` as the source of truth
+- keep `spec/openport-v1.openapi.yaml` as the source of truth
 - maintain stable envelope and error code behavior
 - keep draft-first write flows as default
 - keep adapter boundaries explicit in TypeScript interfaces
@@ -46,13 +46,13 @@ Exit criteria:
 ### 4. Private adapter strategy
 
 - keep private adapter in a separate closed repository
-- map private domain APIs to OpenMCP `DomainAdapter`
-- never copy private DTOs/business logic into OpenMCP
+- map private domain APIs to OpenPort `DomainAdapter`
+- never copy private DTOs/business logic into OpenPort
 
 Exit criteria:
 
-- private adapter compiles against published OpenMCP interfaces
-- no private imports or private package dependencies in OpenMCP
+- private adapter compiles against published OpenPort interfaces
+- no private imports or private package dependencies in OpenPort
 
 ## Recommended execution order
 

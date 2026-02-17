@@ -16,4 +16,4 @@ Describe what changed and why.
 
 ## Stewardship note
 
-OpenMCP is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.

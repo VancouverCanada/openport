@@ -2,7 +2,7 @@
 
 ## Versioning policy
 
-OpenMCP uses Semantic Versioning:
+OpenPort uses Semantic Versioning:
 
 - `MAJOR`: breaking API or behavior changes
 - `MINOR`: backward-compatible features
@@ -39,7 +39,7 @@ git checkout main
 git pull --ff-only
 npm ci
 npm run gate
-git tag -a v0.1.0 -m "OpenMCP v0.1.0"
+git tag -a v0.1.0 -m "OpenPort v0.1.0"
 git push origin v0.1.0
 ```
 

@@ -1,6 +1,6 @@
 # Extraction Boundary
 
-This document defines what can and cannot be extracted from any private product into OpenMCP.
+This document defines what can and cannot be extracted from any private product into OpenPort.
 
 ## Investigation summary (source modules)
 
@@ -49,7 +49,7 @@ Use this label per file/module:
 ## Clean-room extraction protocol
 
 1. Freeze scope: list only conceptual behavior to copy.
-2. Define neutral interfaces in OpenMCP (`TenantResolver`, `PolicyStore`, `AuditSink`, `ActionExecutor`).
+2. Define neutral interfaces in OpenPort (`TenantResolver`, `PolicyStore`, `AuditSink`, `ActionExecutor`).
 3. Re-implement from spec, not by direct copy-paste of private modules.
 4. Red-team review before first public push.
 
