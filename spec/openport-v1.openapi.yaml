@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: OpenMCP Agent API
+  title: OpenPort Agent API
   version: 0.1.0
   description: Standardized AI gateway API for web applications.
 servers:

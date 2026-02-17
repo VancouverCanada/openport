@@ -1,12 +1,12 @@
 # Conformance Kit
 
-OpenMCP provides a baseline conformance profile and executable runner so implementations can prove they satisfy core protocol behavior.
+OpenPort provides a baseline conformance profile and executable runner so implementations can prove they satisfy core protocol behavior.
 
 Stewardship: **Accentrust Inc.** and **Sebastian Zhu**.
 
 ## Included assets
 
-- `profile/openmcp-v1-profile.json`
+- `profile/openport-v1-profile.json`
 - `scripts/run-conformance.mjs`
 
 ## Run locally against the reference runtime
@@ -16,12 +16,12 @@ npm run build
 npm run conformance:local
 ```
 
-## Run against a remote OpenMCP implementation
+## Run against a remote OpenPort implementation
 
 Set environment variables:
 
-- `OPENMCP_BASE_URL`
-- `OPENMCP_AGENT_TOKEN`
+- `OPENPORT_BASE_URL`
+- `OPENPORT_AGENT_TOKEN`
 
 Then run:
 

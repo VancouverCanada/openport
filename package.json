@@ -1,7 +1,7 @@
 {
-  "name": "openmcp",
+  "name": "openport",
   "version": "0.1.0",
-  "description": "OpenMCP reference runtime for safe AI agent access to web application data and actions",
+  "description": "OpenPort reference runtime for safe AI agent access to web application data and actions",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,13 +21,13 @@
     "release:prepare": "bash scripts/prepare-release.sh"
   },
   "keywords": [
-    "openmcp",
+    "openport",
     "agent",
     "llm",
     "api",
     "security"
   ],
-  "author": "Accentrust and the OpenMCP authors",
+  "author": "Accentrust and the OpenPort authors",
   "license": "MIT",
   "dependencies": {
     "canonicalize": "^2.1.0",

@@ -1,5 +1,5 @@
 import { ErrorCodes } from './error-codes.js'
-import { OpenMCPError } from './errors.js'
+import { OpenPortError } from './errors.js'
 import { AuditService } from './audit.js'
 import { ensureLedgerAllowed, ensureScope, ensureWorkspaceBoundary, getDataPolicy, resolveDateRange } from './policy.js'
 import { InMemoryStore } from './store.js'
@@ -87,13 +87,13 @@ export class AgentEngine {
     ensureScope(ctx, ['transaction.read'])
     const ledgerId = query.ledgerId?.trim()
     if (!ledgerId) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
     }
 
     const ledgers = await this.domain.listLedgers(ctx.actorUserId)
     const ledger = ledgers.find((item) => item.id === ledgerId)
     if (!ledger) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
     }
 
     ensureWorkspaceBoundary(ctx, { ledgerOrgId: ledger.organization_id, orgId: null })
@@ -150,7 +150,7 @@ export class AgentEngine {
   async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown> }): Promise<Record<string, unknown>> {
     const tool = this.tools.getActionTool(input.action)
     if (!tool) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
 
@@ -208,10 +208,10 @@ export class AgentEngine {
     if (input.preflightId?.trim()) {
       const record = this.store.getPreflight(input.preflightId.trim())
       if (!record || record.app_id !== ctx.app.id || record.key_id !== ctx.key.id || record.actor_user_id !== ctx.actorUserId) {
-        throw new OpenMCPError(400, ErrorCodes.AGENT_PREFLIGHT_NOT_FOUND, 'Preflight not found')
+        throw new OpenPortError(400, ErrorCodes.AGENT_PREFLIGHT_NOT_FOUND, 'Preflight not found')
       }
       if (record.action_type !== actionName) {
-        throw new OpenMCPError(400, ErrorCodes.AGENT_PREFLIGHT_MISMATCH, 'Preflight mismatch')
+        throw new OpenPortError(400, ErrorCodes.AGENT_PREFLIGHT_MISMATCH, 'Preflight mismatch')
       }
       if (payload === undefined) payload = record.payload
       if (!preflightHash?.trim()) preflightHash = record.impact_hash
@@ -220,12 +220,12 @@ export class AgentEngine {
     }
 
     if (!payload) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'payload required')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'payload required')
     }
 
     const tool = this.tools.getActionTool(actionName)
     if (!tool) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
 
@@ -272,7 +272,7 @@ export class AgentEngine {
     const expectedStateWitnessHash = stateWitnessHash?.trim() || null
 
     if (expectedStateWitnessHash && computedStateWitnessHash && computedStateWitnessHash !== expectedStateWitnessHash) {
-      throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+      throw new OpenPortError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
         action: tool.name,
         reason: 'state_witness_mismatch'
       })
@@ -368,7 +368,7 @@ export class AgentEngine {
   async getDraft(ctx: AgentRequestContext, draftId: string): Promise<Record<string, unknown>> {
     const draft = this.store.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
 
     const latestExecution = this.store.getLatestExecutionForDraft(draft.id)
@@ -381,16 +381,16 @@ export class AgentEngine {
   async executeDraft(ctx: AgentRequestContext, draftId: string, opts: { confirmedByUserId: string | null }): Promise<{ draftStatus: string; execution: Record<string, unknown> }> {
     const draft = this.store.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
 
     if (draft.status === 'canceled') {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft was canceled')
+      throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft was canceled')
     }
 
     const tool = this.tools.getActionTool(draft.action_type)
     if (!tool) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
 
     ensureScope(ctx, tool.requiredScopes)
@@ -410,7 +410,7 @@ export class AgentEngine {
 
     if (draft.preflight_state_witness_hash) {
       if (!tool.computeStateWitness) {
-        throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+        throw new OpenPortError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
           action: tool.name,
           reason: 'state_witness_unsupported'
         })
@@ -432,7 +432,7 @@ export class AgentEngine {
           draftId: draft.id,
           details: { actionType: tool.name, reason: 'state_witness_mismatch' }
         })
-        throw new OpenMCPError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
+        throw new OpenPortError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
           action: tool.name,
           reason: 'state_witness_mismatch'
         })

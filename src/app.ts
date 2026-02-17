@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { AgentRequestContext } from './types.js'
-import { createOpenMCPRuntime, type OpenMCPRuntime, type OpenMCPRuntimeOptions } from './runtime.js'
+import { createOpenPortRuntime, type OpenPortRuntime, type OpenPortRuntimeOptions } from './runtime.js'
 import { toErrorResponse } from './errors.js'
 
 function success<T>(code: string, data: T): { ok: true; code: string; data: T } {
@@ -16,7 +16,7 @@ function getAdminUserId(request: FastifyRequest): string {
   return userId
 }
 
-function getAgentContext(request: FastifyRequest, runtime: OpenMCPRuntime): AgentRequestContext {
+function getAgentContext(request: FastifyRequest, runtime: OpenPortRuntime): AgentRequestContext {
   const headers = request.headers as Record<string, string | string[] | undefined>
   const ip = request.ip || '127.0.0.1'
   return runtime.auth.authenticate(headers, ip)
@@ -54,7 +54,7 @@ const preflightBodySchema = z.object({
   payload: z.record(z.unknown())
 })
 
-export function buildApp(runtime: OpenMCPRuntime = createOpenMCPRuntime()): FastifyInstance {
+export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): FastifyInstance {
   const app = Fastify({ logger: false })
 
   app.addHook('onClose', async () => {
@@ -275,8 +275,8 @@ async function handle(reply: FastifyReply, fn: () => Promise<unknown> | unknown)
   return reply.send(value)
 }
 
-export async function buildDemoApp(options: OpenMCPRuntimeOptions = {}): Promise<{ app: FastifyInstance; runtime: OpenMCPRuntime; bootstrap: Record<string, unknown> }> {
-  const runtime = createOpenMCPRuntime(options)
+export async function buildDemoApp(options: OpenPortRuntimeOptions = {}): Promise<{ app: FastifyInstance; runtime: OpenPortRuntime; bootstrap: Record<string, unknown> }> {
+  const runtime = createOpenPortRuntime(options)
   const app = buildApp(runtime)
 
   const bootstrap = runtime.admin.createApp('admin_demo', {

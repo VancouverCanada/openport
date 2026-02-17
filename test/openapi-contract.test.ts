@@ -16,13 +16,13 @@ function toFastifyPath(specPath: string): string {
 
 describe('openapi contract', () => {
   it('has a valid OpenAPI document', async () => {
-    const specPath = path.resolve(process.cwd(), 'spec/openmcp-v1.openapi.yaml')
+    const specPath = path.resolve(process.cwd(), 'spec/openport-v1.openapi.yaml')
     const parsed = await SwaggerParser.validate(specPath)
     expect(parsed.openapi).toMatch(/^3\./)
   })
 
   it('registers all documented routes in reference app', async () => {
-    const specPath = path.resolve(process.cwd(), 'spec/openmcp-v1.openapi.yaml')
+    const specPath = path.resolve(process.cwd(), 'spec/openport-v1.openapi.yaml')
     const raw = await readFile(specPath, 'utf8')
     const doc = parseYaml(raw) as SpecDoc
 

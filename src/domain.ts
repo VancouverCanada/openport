@@ -1,4 +1,4 @@
-import { OpenMCPError } from './errors.js'
+import { OpenPortError } from './errors.js'
 import { ErrorCodes } from './error-codes.js'
 import type { DomainAdapter, Ledger, ListTransactionsInput, Transaction } from './types.js'
 import { clampInt, nowIso, randomId } from './utils.js'
@@ -99,7 +99,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
     const date = String(payload.date || '').trim() || nowIso()
 
     if (!ledgerId || !title || !kind || !Number.isFinite(amount)) {
-      throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
+      throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid transaction payload')
     }
     this.requireLedger(ledgerId)
 
@@ -124,7 +124,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
   async updateTransaction(_: string, transactionId: string, payload: Record<string, unknown>): Promise<Transaction> {
     const existing = this.transactions.find((t) => t.id === transactionId)
     if (!existing || existing.is_deleted) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     if (payload.ledgerId || payload.ledger_id) {
@@ -139,7 +139,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
     if (payload.amount_home !== undefined || payload.amountHome !== undefined) {
       const amount = Number(payload.amount_home ?? payload.amountHome)
       if (!Number.isFinite(amount)) {
-        throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
+        throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'Invalid amount')
       }
       existing.amount_home = amount
     }
@@ -158,7 +158,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
   async softDeleteTransaction(_: string, transactionId: string): Promise<{ id: string; deleted: true }> {
     const existing = this.transactions.find((t) => t.id === transactionId)
     if (!existing || existing.is_deleted) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     existing.is_deleted = true
@@ -169,7 +169,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
   async hardDeleteTransaction(_: string, transactionId: string): Promise<{ id: string; deleted: true; hard: true }> {
     const index = this.transactions.findIndex((t) => t.id === transactionId)
     if (index < 0) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
     }
 
     this.transactions.splice(index, 1)
@@ -184,7 +184,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
   private requireLedger(ledgerId: string): void {
     const exists = this.ledgers.some((ledger) => ledger.id === ledgerId)
     if (!exists) {
-      throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
+      throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Ledger not found')
     }
   }
 }

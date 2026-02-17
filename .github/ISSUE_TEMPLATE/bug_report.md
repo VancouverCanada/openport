@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report incorrect behavior or regressions in OpenMCP
+about: Report incorrect behavior or regressions in OpenPort
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -12,7 +12,7 @@ Describe the bug clearly.
 
 ## Environment
 
-- OpenMCP version:
+- OpenPort version:
 - Node version:
 - Runtime mode (`memory` / `postgres` / `prisma`):
 

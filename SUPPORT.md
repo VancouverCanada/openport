@@ -1,6 +1,6 @@
 # Support
 
-OpenMCP is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
+OpenPort is stewarded by **Accentrust Inc.** and **Sebastian Zhu**.
 
 ## Security issues
 
@@ -11,7 +11,7 @@ Follow `SECURITY.md` for private reporting.
 
 Open a GitHub issue with:
 
-- OpenMCP version
+- OpenPort version
 - Node version
 - expected behavior
 - actual behavior

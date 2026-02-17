@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose an enhancement to OpenMCP protocol, runtime, or tooling
+about: Propose an enhancement to OpenPort protocol, runtime, or tooling
 title: "[Feature] "
 labels: enhancement
 assignees: ""

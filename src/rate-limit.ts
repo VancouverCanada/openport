@@ -1,4 +1,4 @@
-import { OpenMCPError } from './errors.js'
+import { OpenPortError } from './errors.js'
 import { ErrorCodes } from './error-codes.js'
 
 type Bucket = {
@@ -18,7 +18,7 @@ export class RateLimiter {
     }
 
     if (bucket.count >= limit) {
-      throw new OpenMCPError(429, ErrorCodes.AGENT_RATE_LIMITED, 'Rate limit exceeded')
+      throw new OpenPortError(429, ErrorCodes.AGENT_RATE_LIMITED, 'Rate limit exceeded')
     }
 
     bucket.count += 1

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PrismaDomainAdapter, type OpenMCPPrismaClient } from '../src/adapters/prisma-domain-adapter.js'
+import { PrismaDomainAdapter, type OpenPortPrismaClient } from '../src/adapters/prisma-domain-adapter.js'
 
 type LedgerRow = {
   id: string
@@ -25,7 +25,7 @@ type TxRow = {
   updated_at: Date
 }
 
-class FakePrisma implements OpenMCPPrismaClient {
+class FakePrisma implements OpenPortPrismaClient {
   private ledgerRows: LedgerRow[]
   private txRows: TxRow[]
 
