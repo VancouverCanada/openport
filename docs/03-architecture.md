@@ -57,5 +57,6 @@ Admin side (human-managed):
   - short TTL
   - preflight hash
   - (optional) preflight handle (`preflightId`) to avoid resending payload
+  - (optional, stronger profile) state witness hash precondition (`stateWitnessHash`)
   - idempotency key
   - step-up confirmation

@@ -46,6 +46,7 @@ The response includes:
 
 - `impactHash`: binds auto-execution to the evaluated impact.
 - `preflightId`: a short-lived handle the client can reuse to avoid resending the payload.
+- `stateWitnessHash` (if supported by the action): binds execution to the observed resource version/state.
 
 ### 4. Create action request
 
@@ -66,7 +67,7 @@ the `preflightId` handle returned by `/preflight` so the server can reuse the ca
 curl -sS -X POST \
   -H "Authorization: Bearer $OPENMCP_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"action":"transaction.delete","preflightId":"pfl_...","execute":true,"justification":"cleanup old item","idempotencyKey":"idem-delete-1","preflightHash":"..."}' \
+  -d '{"action":"transaction.delete","preflightId":"pfl_...","execute":true,"justification":"cleanup old item","idempotencyKey":"idem-delete-1","preflightHash":"...","stateWitnessHash":"..."}' \
   "$OPENMCP_BASE_URL/api/agent/v1/actions"
 ```
 
@@ -75,6 +76,7 @@ curl -sS -X POST \
 - cache manifest for short intervals and refresh on auth/policy errors
 - keep idempotency keys stable per write intent
 - treat `preflight` + `actions` as a single intent: do not generate a second payload after preflight
+- when available, carry `stateWitnessHash` from preflight to execution and retry from a fresh preflight on `agent.precondition_failed`
 - treat draft creation as non-final until explicit execution success
 - surface policy denial codes directly to operator
 

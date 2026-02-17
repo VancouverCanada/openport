@@ -66,5 +66,17 @@ OpenMCP should ship as testable profiles:
 2. `authz`: scope and policy denials + revocation behavior
 3. `writes`: draft-first and high-risk safeguards
 4. `abuse`: rate limits and non-5xx fuzz regression
+5. `state-witness` (optional stronger governance profile): execute-time precondition checks against server-observed resource state
 
 The repository already includes a minimal `core` conformance runner; the next step is to add `authz` and `abuse` profiles.
+
+## Optional strong profile: State Witness / Preconditions
+
+This profile addresses TOCTOU between preflight and execute, including delayed human approvals.
+
+- `POST /preflight` MAY return `stateWitness` and `stateWitnessHash`.
+- `POST /actions` MAY receive `stateWitnessHash`; implementations SHOULD also support `preflightId` so clients can avoid payload regeneration.
+- If a draft is bound to `preflight_state_witness_hash`, `executeDraft` MUST recompute the current witness and fail closed when mismatch occurs.
+- Recommended denial code: `agent.precondition_failed`.
+
+The profile is intentionally optional for broad ecosystem compatibility, but strongly recommended for high-risk write actions.

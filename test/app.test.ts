@@ -111,8 +111,10 @@ describe('openmcp reference runtime', () => {
     const preflightData = preflight.json().data
     const preflightHash = preflightData.impactHash
     const preflightId = preflightData.preflightId
+    const stateWitnessHash = preflightData.stateWitnessHash
     expect(typeof preflightId).toBe('string')
     expect(preflightId.length).toBeGreaterThan(6)
+    expect(typeof stateWitnessHash).toBe('string')
 
     const executed = await app.inject({
       method: 'POST',
@@ -124,7 +126,8 @@ describe('openmcp reference runtime', () => {
         execute: true,
         justification: 'cleanup old item',
         idempotencyKey: 'idem-delete-1',
-        preflightHash
+        preflightHash,
+        stateWitnessHash
       }
     })
 
@@ -132,6 +135,38 @@ describe('openmcp reference runtime', () => {
     const executedPayload = executed.json()
     expect(executedPayload.data.status).toBe('executed')
     expect(executedPayload.data.execution.status).toBe('success')
+
+    await app.close()
+  })
+
+  it('fails closed when state witness changes before approval', async () => {
+    const { app, bootstrap, runtime } = await buildDemoApp()
+    const token = String((bootstrap as any).token)
+
+    const draftResp = await app.inject({
+      method: 'POST',
+      url: '/api/agent/v1/actions',
+      headers: bearer(token),
+      payload: {
+        action: 'transaction.delete',
+        payload: { transactionId: 'txn_2' }
+      }
+    })
+
+    expect(draftResp.statusCode).toBe(200)
+    const draftId = draftResp.json().data.draft.id
+
+    await runtime.domain.updateTransaction('svc_org_demo', 'txn_2', { title: 'Changed before approval' })
+
+    const approved = await app.inject({
+      method: 'POST',
+      url: `/api/agent-admin/v1/drafts/${draftId}/approve`,
+      headers: { 'x-admin-user': 'admin_demo' },
+      payload: { note: 'approve after state changed' }
+    })
+
+    expect(approved.statusCode).toBe(409)
+    expect(approved.json().code).toBe('agent.precondition_failed')
 
     await app.close()
   })

@@ -32,5 +32,6 @@ npm run conformance:remote
 ## Scope notes
 
 - This profile checks core endpoint behavior and envelope consistency.
+- State Witness / Preconditions is listed as an optional stronger governance profile.
 - It is intentionally minimal and safe for public CI usage.
 - Product-specific authorization logic should add extra profile checks in downstream repos.

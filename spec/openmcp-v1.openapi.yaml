@@ -67,7 +67,7 @@ paths:
                 $ref: '#/components/schemas/SuccessTransactions'
   /api/agent/v1/preflight:
     post:
-      summary: Pre-compute impact and return a preflight hash
+      summary: Pre-compute impact and return preconditions for execution
       requestBody:
         required: true
         content:
@@ -240,6 +240,15 @@ components:
                   additionalProperties: true
                 impactHash:
                   type: string
+                stateWitness:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: Optional server-generated state witness snapshot (for State Witness profile).
+                stateWitnessHash:
+                  type: string
+                  nullable: true
+                  description: Canonical hash of stateWitness used as an execute-time precondition.
                 preflightId:
                   type: string
     CreateActionRequest:
@@ -266,6 +275,9 @@ components:
           type: string
         preflightHash:
           type: string
+        stateWitnessHash:
+          type: string
+          description: Optional state precondition hash (typically returned by POST /preflight).
       required: [action]
     SuccessActionResult:
       allOf:

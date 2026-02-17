@@ -39,7 +39,8 @@ const actionBodySchema = z.object({
   requestId: z.string().optional(),
   idempotencyKey: z.string().optional(),
   justification: z.string().optional(),
-  preflightHash: z.string().optional()
+  preflightHash: z.string().optional(),
+  stateWitnessHash: z.string().optional()
 }).superRefine((value, ctx) => {
   const hasPayload = value.payload !== undefined
   const hasPreflightId = Boolean(value.preflightId && value.preflightId.trim())

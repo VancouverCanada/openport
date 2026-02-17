@@ -9,6 +9,40 @@ function toLedgerOrgId(ledgers: Ledger[], ledgerId: string): string | null {
   return row?.organization_id || null
 }
 
+function resolveTransactionId(payload: Record<string, unknown>): string {
+  return String(payload.transactionId || payload.id || '').trim()
+}
+
+async function buildTransactionStateWitness(
+  ctx: AgentRequestContext,
+  payload: Record<string, unknown>,
+  domain: DomainAdapter
+): Promise<Record<string, unknown>> {
+  const transactionId = resolveTransactionId(payload)
+  if (!transactionId) {
+    throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
+  }
+
+  const existing = await domain.getTransactionById(ctx.actorUserId, transactionId)
+  if (!existing) {
+    return {
+      kind: 'resource_version',
+      resource: 'transaction',
+      id: transactionId,
+      exists: false
+    }
+  }
+
+  return {
+    kind: 'resource_version',
+    resource: 'transaction',
+    id: existing.id,
+    ledger_id: existing.ledger_id,
+    updated_at: existing.updated_at,
+    is_deleted: existing.is_deleted
+  }
+}
+
 function selectTransaction(row: Record<string, unknown>, allowSensitiveFields: boolean): { item: Record<string, unknown>; redactedFields: string[] } {
   const redactedFields: string[] = []
   const title = allowSensitiveFields ? row.title : (redactedFields.push('transaction.title'), '[redacted]')
@@ -104,7 +138,7 @@ export class AgentToolRegistry {
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { transaction: { type: 'object' } } },
         execute: async (ctx, payload) => {
-          const transactionId = String(payload.transactionId || payload.id || '').trim()
+          const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
@@ -120,7 +154,8 @@ export class AgentToolRegistry {
 
           const transaction = await this.domain.updateTransaction(ctx.actorUserId, transactionId, payload)
           return { transaction }
-        }
+        },
+        computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
       },
       {
         kind: 'action',
@@ -133,7 +168,7 @@ export class AgentToolRegistry {
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
         computeImpact: async (ctx, payload) => {
-          const transactionId = String(payload.transactionId || payload.id || '').trim()
+          const transactionId = resolveTransactionId(payload)
           if (!transactionId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
           if (!existing) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
@@ -151,7 +186,7 @@ export class AgentToolRegistry {
           }
         },
         execute: async (ctx, payload) => {
-          const transactionId = String(payload.transactionId || payload.id || '').trim()
+          const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
@@ -166,7 +201,8 @@ export class AgentToolRegistry {
 
           const deleted = await this.domain.softDeleteTransaction(ctx.actorUserId, transactionId)
           return { deleted }
-        }
+        },
+        computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
       },
       {
         kind: 'action',
@@ -179,7 +215,7 @@ export class AgentToolRegistry {
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
         computeImpact: async (ctx, payload) => {
-          const transactionId = String(payload.transactionId || payload.id || '').trim()
+          const transactionId = resolveTransactionId(payload)
           if (!transactionId) throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           const existing = await this.domain.getTransactionById(ctx.actorUserId, transactionId)
           if (!existing) throw new OpenMCPError(404, ErrorCodes.AGENT_NOT_FOUND, 'Transaction not found')
@@ -196,7 +232,7 @@ export class AgentToolRegistry {
           }
         },
         execute: async (ctx, payload) => {
-          const transactionId = String(payload.transactionId || payload.id || '').trim()
+          const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenMCPError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
           }
@@ -212,7 +248,8 @@ export class AgentToolRegistry {
 
           const deleted = await this.domain.hardDeleteTransaction(ctx.actorUserId, transactionId)
           return { deleted }
-        }
+        },
+        computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
       },
       {
         kind: 'action',
