@@ -175,6 +175,62 @@ export class AdminEngine {
     return { ok: true, app: updated }
   }
 
+  restoreApp(userId: string, appId: string): Record<string, unknown> {
+    const app = this.store.getApp(appId)
+    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (app.status === 'active') return { ok: true, app }
+
+    const updated = this.store.saveApp({
+      id: app.id,
+      scope: app.scope,
+      name: app.name,
+      description: app.description,
+      user_id: app.user_id,
+      org_id: app.org_id,
+      service_user_id: app.service_user_id,
+      scopes: app.scopes,
+      policy: app.policy,
+      auto_execute: app.auto_execute,
+      created_by: app.created_by,
+      status: 'active'
+    })
+
+    void this.audit.log({
+      appId: app.id,
+      actorUserId: app.service_user_id || app.user_id || userId,
+      performedByUserId: userId,
+      action: 'agent_app.restore',
+      status: 'success'
+    })
+
+    return { ok: true, app: updated }
+  }
+
+  deleteApp(userId: string, appId: string): Record<string, unknown> {
+    const app = this.store.getApp(appId)
+    if (!app) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    if (app.status !== 'revoked') {
+      throw new OpenPortError(400, ErrorCodes.COMMON_VALIDATION, 'Only disabled integrations can be permanently deleted')
+    }
+    const pendingDraftCount = this.store.listDrafts({ appId, status: 'draft' }).length
+    if (pendingDraftCount > 0) {
+      throw new OpenPortError(400, ErrorCodes.COMMON_VALIDATION, 'Cannot permanently delete integration with pending drafts')
+    }
+
+    const ok = this.store.deleteApp(appId)
+    if (!ok) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+
+    void this.audit.log({
+      appId: app.id,
+      actorUserId: app.service_user_id || app.user_id || userId,
+      performedByUserId: userId,
+      action: 'agent_app.delete',
+      status: 'success'
+    })
+
+    return { ok: true, app: { id: app.id, deleted: true } }
+  }
+
   revokeKey(userId: string, keyId: string): Record<string, unknown> {
     const key = this.store.keys.get(keyId)
     if (!key) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent key not found')
