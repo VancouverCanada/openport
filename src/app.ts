@@ -165,6 +165,24 @@ export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): Fa
     })
   })
 
+  app.post('/api/agent-admin/v1/apps/:id/restore', async (request, reply) => {
+    return handle(reply, async () => {
+      const userId = getAdminUserId(request)
+      const params = z.object({ id: z.string() }).parse(request.params)
+      const data = runtime.admin.restoreApp(userId, params.id)
+      return success('common.success', data)
+    })
+  })
+
+  app.delete('/api/agent-admin/v1/apps/:id', async (request, reply) => {
+    return handle(reply, async () => {
+      const userId = getAdminUserId(request)
+      const params = z.object({ id: z.string() }).parse(request.params)
+      const data = runtime.admin.deleteApp(userId, params.id)
+      return success('common.success', data)
+    })
+  })
+
   app.post('/api/agent-admin/v1/keys/:id/revoke', async (request, reply) => {
     return handle(reply, async () => {
       const userId = getAdminUserId(request)

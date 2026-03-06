@@ -35,6 +35,27 @@ export class InMemoryStore {
     return this.apps.get(appId) || null
   }
 
+  deleteApp(appId: string): boolean {
+    const existed = this.apps.delete(appId)
+    if (!existed) return false
+
+    for (const [keyId, key] of this.keys.entries()) {
+      if (key.app_id !== appId) continue
+      this.keys.delete(keyId)
+      this.keysByHash.delete(key.token_hash)
+    }
+
+    for (const [draftId, draft] of this.drafts.entries()) {
+      if (draft.app_id !== appId) continue
+      this.drafts.delete(draftId)
+      for (const [execId, execution] of this.executions.entries()) {
+        if (execution.draft_id === draftId) this.executions.delete(execId)
+      }
+    }
+
+    return true
+  }
+
   saveApp(input: {
     id?: string
     scope: AgentApp['scope']
