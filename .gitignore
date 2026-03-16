@@ -13,4 +13,6 @@ node_modules/
 
 # Build
 dist/
+.next/
 coverage/
+.openport-product/

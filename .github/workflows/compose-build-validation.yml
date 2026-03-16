@@ -1,0 +1,33 @@
+name: compose-build-validation
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  compose-images:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Prepare env
+        run: npm run env:product
+
+      - name: Docker daemon preflight
+        run: npm run docker:preflight
+
+      - name: Compose image acceptance
+        run: npm run acceptance:images

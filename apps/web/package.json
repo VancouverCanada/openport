@@ -1,0 +1,48 @@
+{
+  "name": "@openport/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@iconify/react": "^6.0.0",
+    "@joplin/turndown-plugin-gfm": "^1.0.61",
+    "@openport/product-contracts": "file:../../packages/openport-product-contracts",
+    "@tiptap/extension-bubble-menu": "^3.20.1",
+    "@tiptap/extension-floating-menu": "^3.20.1",
+    "@tiptap/extension-image": "^3.20.1",
+    "@tiptap/extension-link": "^3.5.3",
+    "@tiptap/extension-mention": "^3.20.1",
+    "@tiptap/extension-placeholder": "^3.5.3",
+    "@tiptap/extension-table": "^3.20.1",
+    "@tiptap/extension-task-item": "^3.5.3",
+    "@tiptap/extension-task-list": "^3.5.3",
+    "@tiptap/react": "^3.5.3",
+    "@tiptap/starter-kit": "^3.5.3",
+    "@tiptap/suggestion": "^3.20.1",
+    "dompurify": "^3.3.0",
+    "marked": "^16.3.0",
+    "next": "16.1.6",
+    "prosemirror-keymap": "^1.2.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "socket.io-client": "^4.8.1",
+    "turndown": "^7.2.1",
+    "y-prosemirror": "^1.2.17",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "^5.8.2"
+  }
+}

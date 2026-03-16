@@ -54,4 +54,5 @@ Adjust these mappings to your own public-safe adapter backend.
 
 ## License
 
-MIT
+This template is distributed under the same `AGPL-3.0-or-later` licensing
+baseline as OpenPort OSS unless you replace it in your derived repository.
