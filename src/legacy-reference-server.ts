@@ -1,0 +1,25 @@
+import { buildDemoApp } from './legacy-app.js'
+
+const PORT = Number(process.env.PORT || 8080)
+const HOST = process.env.HOST || '127.0.0.1'
+
+async function main(): Promise<void> {
+  const domainAdapter = process.env.OPENPORT_DOMAIN_ADAPTER === 'postgres' ? 'postgres' : 'memory'
+  const { app, bootstrap } = await buildDemoApp({
+    domainAdapter,
+    postgresConnectionString: process.env.OPENPORT_DATABASE_URL
+  })
+
+  await app.listen({ host: HOST, port: PORT })
+
+  console.log('[openport] reference server started')
+  console.log(`[openport] listening on http://${HOST}:${PORT}`)
+  console.log(`[openport] domain adapter: ${domainAdapter}`)
+  console.log('[openport] admin header: x-admin-user: admin_demo')
+  console.log('[openport] bootstrap credentials:', bootstrap)
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.env
+.env.*
+.openport-product
+*.log
+.DS_Store
