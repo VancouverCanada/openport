@@ -31,6 +31,28 @@
 | 7 | Docker 化与发布 | done | compose/env/bootstrap/health 已验收通过 |
 | 8 | 开源治理与版本边界 | in_progress | AGPL、商标政策、OSS/Cloud 分版策略 |
 
+## 2026-03-16 收口进展（Minimal Animation Adoption）
+
+| 任务 | 状态 | 说明 |
+| --- | --- | --- |
+| 建立动画基础层（对齐 minimal） | done | 已新增 `components/animate`（`transitions/variants/motion-lazy/motion-container/motion-viewport/scroll-progress`） |
+| 全局接入 MotionLazy + 滚动进度条 | done | 已新增 `app-motion-shell.tsx`，并接入 `app/layout.tsx` |
+| Landing 接入 MotionViewport 与 Embla 视差轮播 | done | 已新增 `entry-parallax-carousel.tsx`，首页改为 `MotionViewport + EntryParallaxCarousel` |
+| 聊天/项目列表接入 AnimatePresence + layout spring | done | `workspace-sidebar.tsx` 与 `project-tree-item.tsx` 已接入列表重排动画 |
+| 全局动效节奏调慢为中速偏慢 | done | `globals.css` 的 `--motion-fast/base/slow` 已统一为 `260/380/560ms` |
+| 按钮微交互统一到慢速 token | done | `capsule-button` / `icon-button` / `text-button` 已统一使用新的 motion tokens |
+| 解决 TipTap 依赖树回归并恢复构建 | done | 锁定 `@tiptap/*` 到 `3.5.3` 并通过 `overrides` 固定传递依赖，避免 `3.20.x` 缺失 `dist` 导致构建失败 |
+| 本轮构建验收 | done | `npm run build:web` 已通过 |
+
+## 2026-03-16 收口进展（Projects vs Open WebUI Folders Final 4-Gap）
+
+| 任务 | 状态 | 说明 |
+| --- | --- | --- |
+| Chat 画布消费 project 背景图 | done | `ChatShell` 已把 `selectedProject.meta.backgroundImageUrl` 应用到 `chat-main-stage` 背景 |
+| Projects 多模型语义 | done | `OpenPortProjectData` 已新增 `modelRoutes`，并贯通 contracts、API DTO/service/store、web normalization 与 modal 编辑 |
+| Project 文件上限校验 | done | `ProjectModal` 已新增 `NEXT_PUBLIC_OPENPORT_PROJECT_MAX_FILE_COUNT`（默认 32）校验，覆盖提交、上传和勾选流程 |
+| JSON 拖拽导入回退路径 | done | `workspace-sidebar` 已支持“project bundle -> chat import fallback”，并在导入到 project 时自动绑定 imported chats |
+
 ## 2026-03-15 补充进展
 
 | 任务 | 状态 | 说明 |
@@ -2536,3 +2558,43 @@
     - [apps/web/src/components/chat-composer-tools-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-composer-tools-menu.tsx)
 - `done`：这轮构建验证已通过：
   - `npm run build:web`
+- `done`：新增 [docs/74-openport-openwebui-ui-gap-closure-round2-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/74-openport-openwebui-ui-gap-closure-round2-plan.md)，继续参考本地 `open-webui-main` 的 `Sidebar.svelte / ChatPlaceholder.svelte / Controls.svelte / SettingsModal.svelte / InputMenu.svelte`，一次性收口匿名根页、sidebar 轻量化、空态纯化、controls 去表单化、settings IA、composer submenu flow。
+- `done`：这轮 `openwebui ui gap closure round 2` 已完成：
+  - 匿名根页已收成最小 auth-first 入口，只保留 wordmark + auth actions：
+    - [apps/web/src/app/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/page.tsx)
+  - sidebar 继续压轻：
+    - `New chat` 改成更轻的 utility entry
+    - `Projects` empty state 收成 `No projects yet.`
+    - `Pinned Models` 缩成更轻的 `Pinned`
+    - [apps/web/src/components/workspace-sidebar.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-sidebar.tsx)
+  - chat 空态继续纯化：
+    - 移除 project hint block
+    - hero model selector 简化
+    - [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
+  - controls 继续去表单化：
+    - `operator mode` 移入 `Valves`
+    - `Project` selector 从面板主表单移除
+    - `Context` 改成更轻的 `References`
+    - [apps/web/src/components/chat-controls-panel.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-controls-panel.tsx)
+  - settings 和 tools IA 继续向 Open WebUI 收口：
+    - `Connections / Integrations / Personalization` 的排序和 copy 收紧
+    - composer tools 把 `Prompts / Files` 收进 `Workspace` submenu
+    - [apps/web/src/components/chat-settings-modal.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-settings-modal.tsx)
+    - [apps/web/src/components/chat-composer-tools-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-composer-tools-menu.tsx)
+- `done`：这轮 `openwebui motion closure` 已补齐并通过构建验证：
+  - `ChatShell` 增加 menu/panel mounted+visible 状态机，补齐关闭退场动画：
+    - `model menu` / `account menu` 不再瞬间卸载
+    - `controls` 关闭时保持短暂 mounted 以完成退场
+    - [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
+  - `ChatControlsPanel` 增加 `className` 注入，支持 `is-open / is-closing` 面板态：
+    - [apps/web/src/components/chat-controls-panel.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-controls-panel.tsx)
+  - `/chat` 空态补齐分层入场节奏（head -> composer -> suggestions）：
+    - [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
+    - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
+  - 消息气泡补齐逐条入场：
+    - [apps/web/src/components/ui/message-bubble.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/ui/message-bubble.tsx)
+    - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
+  - 动画 token/keyframes 与 reduced-motion 覆盖同步更新：
+    - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
+  - 验证：
+    - `npm run build:web`

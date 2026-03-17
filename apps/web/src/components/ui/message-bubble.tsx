@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { OpenPortChatAttachment } from '@openport/product-contracts'
 import { Iconify } from '../iconify'
 
@@ -10,11 +10,12 @@ type MessageBubbleProps = {
   className?: string
   label?: ReactNode
   role: 'assistant' | 'user'
+  style?: CSSProperties
 }
 
-export function MessageBubble({ attachments = [], children, className = '', label, role }: MessageBubbleProps) {
+export function MessageBubble({ attachments = [], children, className = '', label, role, style }: MessageBubbleProps) {
   return (
-    <article className={`message-bubble ${role}${className ? ` ${className}` : ''}`} data-message-role={role}>
+    <article className={`message-bubble ${role}${className ? ` ${className}` : ''}`} data-message-role={role} style={style}>
       <span className="message-role">{label || (role === 'assistant' ? 'AI' : 'You')}</span>
       {attachments.length > 0 ? (
         <div className="message-bubble-attachments">

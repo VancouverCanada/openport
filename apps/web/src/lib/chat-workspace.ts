@@ -33,6 +33,7 @@ export type OpenPortProjectMeta = {
 export type OpenPortProjectData = {
   systemPrompt: string
   defaultModelRoute: string | null
+  modelRoutes: string[]
   files: OpenPortProjectFile[]
 }
 
@@ -113,8 +114,23 @@ function getDefaultProjectData(): OpenPortProjectData {
   return {
     systemPrompt: '',
     defaultModelRoute: null,
+    modelRoutes: [],
     files: []
   }
+}
+
+function normalizeProjectModelRoutes(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+
+  const uniqueRoutes = new Set<string>()
+  input.forEach((value) => {
+    if (typeof value !== 'string') return
+    const normalizedRoute = value.trim()
+    if (!normalizedRoute) return
+    uniqueRoutes.add(normalizedRoute)
+  })
+
+  return Array.from(uniqueRoutes)
 }
 
 function normalizeProjectFile(item: unknown): OpenPortProjectFile | null {
@@ -161,6 +177,8 @@ function normalizeStoredProject(item: unknown): OpenPortProject | null {
       systemPrompt?: string
       default_model_route?: string | null
       defaultModelRoute?: string | null
+      model_routes?: string[]
+      modelRoutes?: string[]
       files?: unknown[]
     }
   }
@@ -205,13 +223,20 @@ function normalizeStoredProject(item: unknown): OpenPortProject | null {
           : false
   }
 
+  const modelRoutes = normalizeProjectModelRoutes(candidate.data?.modelRoutes ?? candidate.data?.model_routes)
+  const normalizedDefaultModelRoute =
+    typeof candidate.data?.defaultModelRoute === 'string' && candidate.data.defaultModelRoute.trim().length > 0
+      ? candidate.data.defaultModelRoute.trim()
+      : typeof candidate.data?.default_model_route === 'string' && candidate.data.default_model_route.trim().length > 0
+        ? candidate.data.default_model_route.trim()
+        : null
+  const defaultModelRoute = normalizedDefaultModelRoute || modelRoutes[0] || null
+
   const data = {
     ...getDefaultProjectData(),
     systemPrompt: candidate.data?.systemPrompt ?? candidate.data?.system_prompt ?? '',
-    defaultModelRoute:
-      candidate.data?.defaultModelRoute ??
-      candidate.data?.default_model_route ??
-      null,
+    defaultModelRoute,
+    modelRoutes,
     files: Array.isArray(candidate.data?.files)
       ? candidate.data.files
           .map((entry) => normalizeProjectFile(entry))
@@ -298,9 +323,26 @@ function mergeProjectData(
   currentValue: OpenPortProjectData,
   nextValue?: Partial<OpenPortProjectData>
 ): OpenPortProjectData {
+  const hasModelRoutes = Object.prototype.hasOwnProperty.call(nextValue || {}, 'modelRoutes')
+  const baseModelRoutes = hasModelRoutes
+    ? normalizeProjectModelRoutes(nextValue?.modelRoutes)
+    : currentValue.modelRoutes
+  const normalizedDefaultModelRoute =
+    typeof nextValue?.defaultModelRoute === 'string' && nextValue.defaultModelRoute.trim().length > 0
+      ? nextValue.defaultModelRoute.trim()
+      : nextValue?.defaultModelRoute === null
+        ? null
+        : hasModelRoutes
+          ? baseModelRoutes[0] ?? null
+          : currentValue.defaultModelRoute
+  const modelRoutes = normalizeProjectModelRoutes([...baseModelRoutes, normalizedDefaultModelRoute || ''])
+  const defaultModelRoute = normalizedDefaultModelRoute || modelRoutes[0] || null
+
   return {
     ...currentValue,
     ...(nextValue || {}),
+    defaultModelRoute,
+    modelRoutes,
     files: Array.isArray(nextValue?.files)
       ? nextValue.files
           .map((entry) => normalizeProjectFile(entry))
@@ -611,11 +653,20 @@ export function getProjectChatSettings(
       systemPrompt: project?.data.systemPrompt || '',
       valves: {
         ...baseSettings.valves,
-        modelRoute: project?.data.defaultModelRoute || baseSettings.valves.modelRoute
+        modelRoute: getProjectPrimaryModelRoute(project) || baseSettings.valves.modelRoute
       }
     }
   }
   return getInheritedChatSettings(baseSettings, project, options.preferences, options.models)
+}
+
+export function getProjectPrimaryModelRoute(project: OpenPortProject | null | undefined): string | null {
+  if (!project) return null
+  if (typeof project.data.defaultModelRoute === 'string' && project.data.defaultModelRoute.trim().length > 0) {
+    return project.data.defaultModelRoute.trim()
+  }
+  const modelRoutes = Array.isArray(project.data.modelRoutes) ? project.data.modelRoutes : []
+  return modelRoutes.find((route) => typeof route === 'string' && route.trim().length > 0) || null
 }
 
 export function buildProjectExportBundle(

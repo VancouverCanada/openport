@@ -417,6 +417,7 @@ export type OpenPortProjectMeta = {
 export type OpenPortProjectData = {
   systemPrompt: string
   defaultModelRoute: string | null
+  modelRoutes: string[]
   files: OpenPortProjectFile[]
 }
 

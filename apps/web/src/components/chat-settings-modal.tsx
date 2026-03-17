@@ -46,9 +46,9 @@ type SettingsTab = {
 const settingsTabs: SettingsTab[] = [
   { id: 'general', icon: 'solar:user-circle-outline', title: 'General', keywords: ['general', 'account', 'access', 'user', 'shortcuts'] },
   { id: 'interface', icon: 'solar:settings-outline', title: 'Interface', keywords: ['interface', 'layout', 'sidebar', 'controls', 'models'] },
-  { id: 'personalization', icon: 'solar:palette-outline', title: 'Personalization', keywords: ['personalization', 'sidebar', 'home', 'models', 'sections'] },
   { id: 'connections', icon: 'solar:link-outline', title: 'Connections', keywords: ['connections', 'providers', 'routing', 'runtime', 'models'] },
   { id: 'integrations', icon: 'solar:widget-5-outline', title: 'Integrations', keywords: ['integrations', 'tools', 'knowledge', 'prompts', 'workspace'] },
+  { id: 'personalization', icon: 'solar:palette-outline', title: 'Personalization', keywords: ['personalization', 'sidebar', 'home', 'models', 'sections'] },
   { id: 'data', icon: 'solar:database-outline', title: 'Data', keywords: ['data', 'archive', 'export', 'sessions', 'history'] },
   { id: 'about', icon: 'solar:info-circle-outline', title: 'About', keywords: ['about', 'openwebui', 'reference', 'releases'] }
 ]
@@ -270,7 +270,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
               </div>
 
               <div className="chat-settings-actions">
-                <TextButton href="/chat" variant="menu"><span>Open chat</span></TextButton>
+                <TextButton href="/chat" variant="menu"><span>Chat home</span></TextButton>
                 <TextButton onClick={onOpenShortcuts} type="button" variant="menu"><span>Keyboard shortcuts</span></TextButton>
               </div>
             </section>
@@ -280,7 +280,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>Interface</strong>
-                <span>Configure the chat home, composer, and default model behavior before a conversation overrides it.</span>
+                <span>Adjust the chat home, sidebar, composer, and default model behavior before a conversation overrides it.</span>
               </div>
 
               <div className="chat-settings-stats">
@@ -369,7 +369,61 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
 
               <div className="chat-settings-actions">
                 <TextButton href="/chat" variant="menu"><span>Open chat home</span></TextButton>
-                <TextButton href="/chat?view=archived" variant="menu"><span>Review archived view</span></TextButton>
+                <TextButton href="/chat?view=archived" variant="menu"><span>Archived chats</span></TextButton>
+              </div>
+            </section>
+          ) : null}
+
+          {section === 'connections' ? (
+            <section className="chat-settings-section">
+              <div className="chat-settings-copy">
+                <strong>Connections</strong>
+                <span>Review the models and runtime surfaces that power the active chat workspace.</span>
+              </div>
+
+              <div className="chat-settings-stats">
+                <div>
+                  <span>Models</span>
+                  <strong>{workspaceModels.length}</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{status}</strong>
+                </div>
+              </div>
+
+              <div className="chat-settings-actions">
+                <TextButton href="/workspace/models" variant="menu"><span>Models</span></TextButton>
+                <TextButton href="/workspace" variant="menu"><span>Workspace overview</span></TextButton>
+                <TextButton href="/dashboard/integrations" variant="menu"><span>Runtime status</span></TextButton>
+              </div>
+            </section>
+          ) : null}
+
+          {section === 'integrations' ? (
+            <section className="chat-settings-section">
+              <div className="chat-settings-copy">
+                <strong>Integrations</strong>
+                <span>Open the knowledge, prompts, tools, and skills used by chat attachments and actions.</span>
+              </div>
+
+              <div className="chat-settings-stats">
+                <div>
+                  <span>Knowledge</span>
+                  <strong>Ready</strong>
+                </div>
+                <div>
+                  <span>Prompt tools</span>
+                  <strong>Available</strong>
+                </div>
+              </div>
+
+              <div className="chat-settings-actions">
+                <TextButton href="/workspace" variant="menu"><span>Workspace overview</span></TextButton>
+                <TextButton href="/workspace/knowledge" variant="menu"><span>Knowledge</span></TextButton>
+                <TextButton href="/workspace/prompts" variant="menu"><span>Prompts</span></TextButton>
+                <TextButton href="/workspace/tools" variant="menu"><span>Tools</span></TextButton>
+                <TextButton href="/workspace/skills" variant="menu"><span>Skills</span></TextButton>
               </div>
             </section>
           ) : null}
@@ -378,7 +432,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>Personalization</strong>
-                <span>Adjust the surfaces that shape the chat-first app shell after sign in.</span>
+                <span>Shape the chat-first shell around your account, pinned models, and reading density.</span>
               </div>
 
               <div className="chat-settings-stats">
@@ -394,40 +448,8 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
 
               <div className="chat-settings-actions">
                 <TextButton href="/chat" variant="menu"><span>Open chat home</span></TextButton>
-                <TextButton href="/dashboard/notes" variant="menu"><span>Open notes</span></TextButton>
-                <TextButton href="/workspace/models" variant="menu"><span>Manage pinned models</span></TextButton>
-              </div>
-            </section>
-          ) : null}
-
-          {section === 'connections' ? (
-            <section className="chat-settings-section">
-              <div className="chat-settings-copy">
-                <strong>Connections</strong>
-                <span>Manage model routing and runtime surfaces that feed the chat-first application shell.</span>
-              </div>
-
-              <div className="chat-settings-actions">
-                <TextButton href="/workspace/models" variant="menu"><span>Model registry</span></TextButton>
-                <TextButton href="/workspace" variant="menu"><span>Workspace overview</span></TextButton>
-                <TextButton href="/dashboard/integrations" variant="menu"><span>Connection status</span></TextButton>
-              </div>
-            </section>
-          ) : null}
-
-          {section === 'integrations' ? (
-            <section className="chat-settings-section">
-              <div className="chat-settings-copy">
-                <strong>Integrations</strong>
-                <span>Open the knowledge, prompts, tools, skills, and workspace surfaces used by chat attachments and actions.</span>
-              </div>
-
-              <div className="chat-settings-actions">
-                <TextButton href="/workspace" variant="menu"><span>Workspace overview</span></TextButton>
-                <TextButton href="/workspace/knowledge" variant="menu"><span>Knowledge</span></TextButton>
-                <TextButton href="/workspace/prompts" variant="menu"><span>Prompts</span></TextButton>
-                <TextButton href="/workspace/tools" variant="menu"><span>Tools</span></TextButton>
-                <TextButton href="/workspace/skills" variant="menu"><span>Skills</span></TextButton>
+                <TextButton href="/dashboard/notes" variant="menu"><span>Notes</span></TextButton>
+                <TextButton href="/workspace/models" variant="menu"><span>Pinned models</span></TextButton>
               </div>
             </section>
           ) : null}
@@ -536,7 +558,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>OpenPort chat workspace</strong>
-                <span>Chat-first self-hosted UI shaped by the Open WebUI application structure.</span>
+                <span>Chat-first self-hosted UI shaped by the Open WebUI application structure and interaction model.</span>
               </div>
 
               <div className="chat-settings-actions">

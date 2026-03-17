@@ -75,6 +75,29 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
+const DEFAULT_PROJECT_MAX_FILE_COUNT = 32
+
+function resolveProjectMaxFileCount(): number {
+  const rawValue = process.env.NEXT_PUBLIC_OPENPORT_PROJECT_MAX_FILE_COUNT
+  const parsed = Number(rawValue)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PROJECT_MAX_FILE_COUNT
+  }
+  return Math.floor(parsed)
+}
+
+const PROJECT_MAX_FILE_COUNT = resolveProjectMaxFileCount()
+
+function normalizeModelRoutes(routes: string[]): string[] {
+  const uniqueRoutes = new Set<string>()
+  routes.forEach((route) => {
+    const normalizedRoute = route.trim()
+    if (!normalizedRoute) return
+    uniqueRoutes.add(normalizedRoute)
+  })
+  return Array.from(uniqueRoutes)
+}
+
 export function ProjectModal({
   mode,
   onClose,
@@ -103,18 +126,43 @@ export function ProjectModal({
   const [isSaving, setIsSaving] = useState(false)
   const [backgroundImageAssetId, setBackgroundImageAssetId] = useState<string | null>(null)
   const [defaultModelRoute, setDefaultModelRoute] = useState('')
+  const [modelRoutes, setModelRoutes] = useState<string[]>([])
   const backgroundInputRef = useRef<HTMLInputElement | null>(null)
   const filesInputRef = useRef<HTMLInputElement | null>(null)
   const title = mode === 'edit' ? 'Edit Project' : 'Create Project'
+  const selectedKnowledgeCount = useMemo(() => files.filter((file) => file.selected).length, [files])
+  const selectedWorkspaceModels = useMemo(() => {
+    const selected = new Set(modelRoutes)
+    return workspaceModels.filter((model) => selected.has(model.route))
+  }, [modelRoutes, workspaceModels])
   const knowledgeHint = useMemo(() => {
     if (files.length > 0) {
-      return 'Selected knowledge items are attached to this project and will flow into project-scoped chat context.'
+      return `Selected knowledge items are attached to this project and will flow into project-scoped chat context (${selectedKnowledgeCount}/${PROJECT_MAX_FILE_COUNT}).`
     }
-    return 'Upload files into workspace knowledge, then attach the items you want this project to use.'
-  }, [files.length])
+    return `Upload files into workspace knowledge, then attach the items you want this project to use (max ${PROJECT_MAX_FILE_COUNT}).`
+  }, [files.length, selectedKnowledgeCount])
+
+  function updateModelRouteSelection(route: string, checked: boolean): void {
+    setModelRoutes((current) => {
+      const next = checked ? normalizeModelRoutes([...current, route]) : current.filter((item) => item !== route)
+      setDefaultModelRoute((currentDefault) => {
+        if (checked) {
+          return currentDefault || route
+        }
+        if (currentDefault !== route) return currentDefault
+        return next[0] || ''
+      })
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!open) return
+    const nextModelRoutes = normalizeModelRoutes([
+      ...(Array.isArray(project?.data.modelRoutes) ? project?.data.modelRoutes : []),
+      project?.data.defaultModelRoute || ''
+    ])
+
     setName(project?.name || '')
     setBackgroundImageUrl(project?.meta.backgroundImageUrl || null)
     setBackgroundImageAssetId(project?.meta.backgroundImageAssetId || null)
@@ -123,7 +171,8 @@ export function ProjectModal({
     setColor(project?.meta.color || '#111111')
     setHiddenInSidebar(project?.meta.hiddenInSidebar || false)
     setSystemPrompt(project?.data.systemPrompt || '')
-    setDefaultModelRoute(project?.data.defaultModelRoute || '')
+    setModelRoutes(nextModelRoutes)
+    setDefaultModelRoute(project?.data.defaultModelRoute || nextModelRoutes[0] || '')
     setFiles(project?.data.files || [])
     setShowKnowledgePicker(false)
     setIsSaving(false)
@@ -185,6 +234,13 @@ export function ProjectModal({
           onSubmit={(event) => {
             event.preventDefault()
             if (!name.trim()) return
+            if (selectedKnowledgeCount > PROJECT_MAX_FILE_COUNT) {
+              notify('error', `Maximum number of files per project is ${PROJECT_MAX_FILE_COUNT}.`)
+              return
+            }
+
+            const normalizedModelRoutes = normalizeModelRoutes(modelRoutes)
+            const resolvedDefaultModelRoute = (defaultModelRoute || normalizedModelRoutes[0] || '').trim() || null
             setIsSaving(true)
 
             void Promise.resolve(
@@ -201,7 +257,8 @@ export function ProjectModal({
                 },
                 data: {
                   systemPrompt,
-                  defaultModelRoute: defaultModelRoute || null,
+                  defaultModelRoute: resolvedDefaultModelRoute,
+                  modelRoutes: normalizedModelRoutes,
                   files
                 }
               })
@@ -320,11 +377,48 @@ export function ProjectModal({
             />
           </label>
 
+          <div className="project-modal-knowledge">
+            <div className="project-modal-field">
+              <span>Project Models</span>
+            </div>
+
+            <div className="project-modal-files">
+              {workspaceModels.length > 0 ? (
+                workspaceModels.map((model) => {
+                  const checked = modelRoutes.includes(model.route)
+                  return (
+                    <label key={model.id} className="project-modal-file-row">
+                      <input
+                        checked={checked}
+                        onChange={(event) => {
+                          updateModelRouteSelection(model.route, event.target.checked)
+                        }}
+                        type="checkbox"
+                      />
+                      <span>{model.name}</span>
+                      <small>{model.route}</small>
+                    </label>
+                  )
+                })
+              ) : (
+                <div className="project-modal-empty">No workspace models yet.</div>
+              )}
+            </div>
+
+            <p className="project-modal-hint">
+              Projects can scope multiple models. The primary model is used when opening a new chat inside this project.
+            </p>
+          </div>
+
           <label className="project-modal-field">
-            <span>Default Model</span>
-            <select onChange={(event) => setDefaultModelRoute(event.target.value)} value={defaultModelRoute}>
+            <span>Primary Model</span>
+            <select
+              disabled={selectedWorkspaceModels.length === 0}
+              onChange={(event) => setDefaultModelRoute(event.target.value)}
+              value={defaultModelRoute}
+            >
               <option value="">Use workspace default</option>
-              {workspaceModels.map((model) => (
+              {selectedWorkspaceModels.map((model) => (
                 <option key={model.id} value={model.route}>
                   {model.name} ({model.route})
                 </option>
@@ -339,10 +433,20 @@ export function ProjectModal({
             onChange={(event) => {
               const nextFiles = Array.from(event.target.files || [])
               if (nextFiles.length === 0) return
+              const availableSlots = PROJECT_MAX_FILE_COUNT - selectedKnowledgeCount
+              if (availableSlots <= 0) {
+                notify('error', `Maximum number of files per project is ${PROJECT_MAX_FILE_COUNT}.`)
+                return
+              }
+
+              const filesForUpload = nextFiles.slice(0, availableSlots)
+              if (filesForUpload.length < nextFiles.length) {
+                notify('error', `Only ${filesForUpload.length} file(s) were added (max ${PROJECT_MAX_FILE_COUNT} per project).`)
+              }
 
               setIsUploadingKnowledge(true)
               void Promise.all(
-                nextFiles.map((file) =>
+                filesForUpload.map((file) =>
                   fileToBase64(file).then((contentBase64) =>
                     uploadProjectKnowledge(
                       {
@@ -407,11 +511,21 @@ export function ProjectModal({
                           onChange={(event) => {
                             if (event.target.checked) {
                               setFiles((current) => {
+                                const selectedCount = current.filter((file) => file.selected).length
                                 const existing = current.find((file) => file.knowledgeItemId === item.id)
                                 if (existing) {
+                                  if (!existing.selected && selectedCount >= PROJECT_MAX_FILE_COUNT) {
+                                    notify('error', `Maximum number of files per project is ${PROJECT_MAX_FILE_COUNT}.`)
+                                    return current
+                                  }
                                   return current.map((file) =>
                                     file.knowledgeItemId === item.id ? { ...file, selected: true } : file
                                   )
+                                }
+
+                                if (selectedCount >= PROJECT_MAX_FILE_COUNT) {
+                                  notify('error', `Maximum number of files per project is ${PROJECT_MAX_FILE_COUNT}.`)
+                                  return current
                                 }
 
                                 return [...current, createFileRecordFromKnowledge(item)]

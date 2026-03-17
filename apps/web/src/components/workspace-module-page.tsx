@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { m } from 'framer-motion'
 import {
   fetchBootstrap,
   fetchChatSessions,
@@ -14,6 +15,7 @@ import {
   type OpenPortProject,
   type OpenPortProjectKnowledgeItem
 } from '../lib/openport-api'
+import { MotionViewport, varFade } from './animate'
 import { PageHeader } from './ui/page-header'
 import { Tag } from './ui/tag'
 
@@ -107,17 +109,17 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
         />
 
         <section className="workspace-module-section">
-          <div className="workspace-module-grid">
+          <MotionViewport className="workspace-module-grid">
             {modelRoutes.map((item) => (
-              <article key={item.route} className="workspace-module-card">
+              <m.article key={item.route} className="workspace-module-card" variants={varFade('inUp', { distance: 20 })}>
                 <strong>{item.route}</strong>
                 <span>{item.count > 0 ? `${item.count} active chats` : 'Ready for new chats'}</span>
                 <div className="workspace-module-meta-row">
                   <span className="status-pill">{bootstrap?.status || 'ready'}</span>
                 </div>
-              </article>
+              </m.article>
             ))}
-          </div>
+          </MotionViewport>
         </section>
 
         <section className="workspace-module-section">
@@ -128,12 +130,12 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
             </div>
           </div>
 
-          <div className="workspace-module-chip-row">
+          <MotionViewport className="workspace-module-chip-row">
             {(bootstrap?.modules || []).map((module) => (
               <Tag key={module}>{module}</Tag>
             ))}
             {bootstrap?.modules?.length ? null : <p className="workspace-module-empty">No runtime modules reported.</p>}
-          </div>
+          </MotionViewport>
         </section>
       </div>
     )
@@ -149,7 +151,7 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
         />
 
         <section className="workspace-module-section">
-          <div className="workspace-module-list">
+          <MotionViewport className="workspace-module-list">
             {knowledgeItems.length > 0 ? (
               knowledgeItems
                 .slice()
@@ -160,7 +162,7 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
                   )
 
                   return (
-                    <article key={item.id} className="workspace-module-row">
+                    <m.article key={item.id} className="workspace-module-row" variants={varFade('inUp', { distance: 18 })}>
                       <div className="workspace-module-row-copy">
                         <strong>{item.name}</strong>
                         <p>
@@ -170,13 +172,13 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
                       <div className="workspace-module-row-meta">
                         <span>{attachedProjects.length} projects</span>
                       </div>
-                    </article>
+                    </m.article>
                   )
                 })
             ) : (
               <p className="workspace-module-empty">No knowledge items uploaded yet.</p>
             )}
-          </div>
+          </MotionViewport>
         </section>
       </div>
     )
@@ -192,10 +194,10 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
         />
 
         <section className="workspace-module-section">
-          <div className="workspace-module-list">
+          <MotionViewport className="workspace-module-list">
             {promptProjects.length > 0 ? (
               promptProjects.map((project) => (
-                <article key={project.id} className="workspace-module-row workspace-module-row-stack">
+                <m.article key={project.id} className="workspace-module-row workspace-module-row-stack" variants={varFade('inUp', { distance: 18 })}>
                   <div className="workspace-module-row-copy">
                     <strong>{project.name}</strong>
                     <p>
@@ -203,12 +205,12 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
                     </p>
                   </div>
                   <pre className="workspace-module-prompt-preview">{project.data.systemPrompt.trim()}</pre>
-                </article>
+                </m.article>
               ))
             ) : (
               <p className="workspace-module-empty">No project prompts configured yet.</p>
             )}
-          </div>
+          </MotionViewport>
         </section>
       </div>
     )
@@ -223,10 +225,10 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
       />
 
       <section className="workspace-module-section">
-        <div className="workspace-module-list">
+        <MotionViewport className="workspace-module-list">
           {activeIntegrations.length > 0 ? (
             activeIntegrations.map((integration) => (
-              <article key={integration.id} className="workspace-module-row">
+              <m.article key={integration.id} className="workspace-module-row" variants={varFade('inUp', { distance: 18 })}>
                 <div className="workspace-module-row-copy">
                   <strong>{integration.name}</strong>
                   <p>{integration.description || integration.scopes.join(', ') || 'No scopes configured'}</p>
@@ -234,12 +236,12 @@ export function WorkspaceModulePage({ section }: WorkspaceModulePageProps) {
                 <div className="workspace-module-row-meta">
                   <span className="status-pill">{integration.status}</span>
                 </div>
-              </article>
+              </m.article>
             ))
           ) : (
             <p className="workspace-module-empty">No active tools or integrations connected.</p>
           )}
-        </div>
+        </MotionViewport>
       </section>
 
       <section className="workspace-module-section">

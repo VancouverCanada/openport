@@ -40,7 +40,7 @@ type ChatComposerToolsMenuProps = {
   open: boolean
 }
 
-type ToolTab = 'root' | 'files' | 'knowledge' | 'notes' | 'chats' | 'prompts' | 'web'
+type ToolTab = 'root' | 'files' | 'knowledge' | 'notes' | 'chats' | 'prompts' | 'web' | 'workspace'
 
 const toolLabels: Record<Exclude<ToolTab, 'root'>, string> = {
   files: 'Files',
@@ -48,6 +48,7 @@ const toolLabels: Record<Exclude<ToolTab, 'root'>, string> = {
   notes: 'Notes',
   chats: 'Chats',
   prompts: 'Prompts',
+  workspace: 'Workspace',
   web: 'Webpage'
 }
 
@@ -71,6 +72,8 @@ export function ChatComposerToolsMenu({
   open
 }: ChatComposerToolsMenuProps) {
   const [tab, setTab] = useState<ToolTab>('root')
+  const [transitionDirection, setTransitionDirection] = useState<'forward' | 'backward'>('forward')
+  const [tabViewKey, setTabViewKey] = useState(0)
   const [query, setQuery] = useState('')
   const [webUrl, setWebUrl] = useState('')
   const [notes, setNotes] = useState<OpenPortNote[]>([])
@@ -114,6 +117,8 @@ export function ChatComposerToolsMenu({
   useEffect(() => {
     if (!open) {
       setTab('root')
+      setTransitionDirection('forward')
+      setTabViewKey(0)
       setQuery('')
       setWebUrl('')
       setFeedback(null)
@@ -169,6 +174,12 @@ export function ChatComposerToolsMenu({
   )
 
   if (!open) return null
+
+  function switchTab(nextTab: ToolTab, direction: 'forward' | 'backward'): void {
+    setTransitionDirection(direction)
+    setTabViewKey((current) => current + 1)
+    setTab(nextTab)
+  }
 
   async function handleFileUpload(file: File | null): Promise<void> {
     if (!file) return
@@ -270,7 +281,8 @@ export function ChatComposerToolsMenu({
         type="file"
       />
       {tab === 'root' ? (
-        <div className="chat-tools-menu-list">
+        <div className={`chat-tools-menu-view is-${transitionDirection}`} key={`root-${tabViewKey}`}>
+          <div className="chat-tools-menu-list">
           <div className="chat-tools-menu-heading">Attach</div>
           <TextButton
             className="chat-tools-menu-item"
@@ -296,52 +308,51 @@ export function ChatComposerToolsMenu({
               <span>Attach a fresh image from the camera</span>
             </span>
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('web')} type="button" variant="menu">
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('web', 'forward')} type="button" variant="menu">
             <Iconify icon="solar:global-outline" size={17} />
             <span className="chat-tools-menu-copy">
               <strong>Attach Webpage</strong>
               <span>Fetch and attach a URL snapshot</span>
             </span>
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('notes')} type="button" variant="menu">
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('notes', 'forward')} type="button" variant="menu">
             <Iconify icon="solar:notebook-outline" size={17} />
             <span className="chat-tools-menu-copy">
               <strong>Attach Notes</strong>
               <span>{notes.length} notes available</span>
             </span>
+            <Iconify icon="solar:alt-arrow-right-outline" size={15} />
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('knowledge')} type="button" variant="menu">
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('knowledge', 'forward')} type="button" variant="menu">
             <Iconify icon="solar:database-outline" size={17} />
             <span className="chat-tools-menu-copy">
               <strong>Attach Knowledge</strong>
               <span>{knowledgeItems.length} items ready</span>
             </span>
+            <Iconify icon="solar:alt-arrow-right-outline" size={15} />
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('chats')} type="button" variant="menu">
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('chats', 'forward')} type="button" variant="menu">
             <Iconify icon="solar:chat-round-line-outline" size={17} />
             <span className="chat-tools-menu-copy">
               <strong>Reference Chats</strong>
               <span>{chats.length} recent threads</span>
             </span>
+            <Iconify icon="solar:alt-arrow-right-outline" size={15} />
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('prompts')} type="button" variant="menu">
-            <Iconify icon="solar:chat-round-like-outline" size={17} />
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('workspace', 'forward')} type="button" variant="menu">
+            <Iconify icon="solar:widget-5-outline" size={17} />
             <span className="chat-tools-menu-copy">
-              <strong>Prompts</strong>
-              <span>{prompts.length} reusable prompts</span>
+              <strong>Workspace</strong>
+              <span>Prompts and uploaded assets</span>
             </span>
+            <Iconify icon="solar:alt-arrow-right-outline" size={15} />
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('files')} type="button" variant="menu">
-            <Iconify icon="solar:folder-with-files-outline" size={17} />
-            <span className="chat-tools-menu-copy">
-              <strong>Recent Files</strong>
-              <span>{assets.length} uploaded assets</span>
-            </span>
-          </TextButton>
+          </div>
         </div>
       ) : (
-        <div className="chat-tools-menu-list">
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('root')} type="button" variant="menu">
+        <div className={`chat-tools-menu-view is-${transitionDirection}`} key={`${tab}-${tabViewKey}`}>
+          <div className="chat-tools-menu-list">
+          <TextButton className="chat-tools-menu-item" onClick={() => switchTab('root', 'backward')} type="button" variant="menu">
             <Iconify icon="solar:alt-arrow-left-outline" size={16} />
             <span>Back</span>
           </TextButton>
@@ -353,7 +364,6 @@ export function ChatComposerToolsMenu({
           {tab === 'notes' ? renderSearchBar('Search notes') : null}
           {tab === 'chats' ? renderSearchBar('Search chats') : null}
           {tab === 'prompts' ? renderSearchBar('Search prompts') : null}
-
           {tab === 'files' ? (
             <div className="chat-tools-menu-files">
               <CapsuleButton
@@ -498,6 +508,27 @@ export function ChatComposerToolsMenu({
               ))
             : null}
 
+          {tab === 'workspace' ? (
+            <>
+              <TextButton className="chat-tools-menu-item" onClick={() => switchTab('prompts', 'forward')} type="button" variant="menu">
+                <Iconify icon="solar:chat-round-like-outline" size={17} />
+                <span className="chat-tools-menu-copy">
+                  <strong>Prompts</strong>
+                  <span>{prompts.length} reusable prompts</span>
+                </span>
+                <Iconify icon="solar:alt-arrow-right-outline" size={15} />
+              </TextButton>
+              <TextButton className="chat-tools-menu-item" onClick={() => switchTab('files', 'forward')} type="button" variant="menu">
+                <Iconify icon="solar:folder-with-files-outline" size={17} />
+                <span className="chat-tools-menu-copy">
+                  <strong>Recent Files</strong>
+                  <span>{assets.length} uploaded assets</span>
+                </span>
+                <Iconify icon="solar:alt-arrow-right-outline" size={15} />
+              </TextButton>
+            </>
+          ) : null}
+
           {tab === 'web' ? (
             <div className="chat-tools-menu-web">
               <div className="chat-tools-menu-search">
@@ -527,9 +558,11 @@ export function ChatComposerToolsMenu({
             (tab === 'knowledge' && filteredKnowledge.length === 0) ||
             (tab === 'notes' && filteredNotes.length === 0) ||
             (tab === 'chats' && filteredChats.length === 0) ||
-            (tab === 'prompts' && filteredPrompts.length === 0)) ? (
+            (tab === 'prompts' && filteredPrompts.length === 0) ||
+            (tab === 'workspace' && filteredPrompts.length === 0 && filteredAssets.length === 0)) ? (
             <div className="chat-tools-menu-empty">No {tab} available for attachment yet.</div>
           ) : null}
+          </div>
         </div>
       )}
     </div>

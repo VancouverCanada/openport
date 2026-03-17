@@ -39,6 +39,20 @@ const TAG_PREFIX = 'tag:'
 const ARCHIVED_PREFIX = 'archived:'
 const PINNED_PREFIX = 'pinned:'
 const SHARED_PREFIX = 'shared:'
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+] as const
 
 function normalizeProjectName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '-')
@@ -197,7 +211,20 @@ export function getSearchOperatorSuggestions(
 
   if (lowered.startsWith(TAG_PREFIX)) {
     const rawValue = lowered.slice(TAG_PREFIX.length)
-    return tags
+    const suggestions: WorkspaceSearchSuggestion[] = []
+
+    if (!rawValue || 'none'.startsWith(rawValue)) {
+      suggestions.push({
+        id: 'tag:none',
+        label: 'none',
+        description: 'Only show untagged items',
+        replacement: `${TAG_PREFIX}none`
+      })
+    }
+
+    return [
+      ...suggestions,
+      ...tags
       .filter((tag) => tag.toLowerCase().startsWith(rawValue))
       .slice(0, 8)
       .map((tag) => ({
@@ -206,6 +233,7 @@ export function getSearchOperatorSuggestions(
         description: 'Only show items with this tag',
         replacement: `${TAG_PREFIX}${tag}`
       }))
+    ]
   }
 
   if (
@@ -312,12 +340,31 @@ export function getSearchHighlights(
 export function getSearchTimeLabel(value: string): string {
   const date = new Date(value)
   const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const oneDay = 24 * 60 * 60 * 1000
+  const diffTime = now.getTime() - date.getTime()
+  const diffDays = diffTime / (1000 * 3600 * 24)
 
-  if (diff < oneDay && now.getDate() === date.getDate()) return 'Today'
-  if (diff < oneDay * 2 && new Date(now.getTime() - oneDay).getDate() === date.getDate()) return 'Yesterday'
-  if (diff < oneDay * 7) return 'Previous 7 days'
-  if (diff < oneDay * 30) return 'Previous 30 days'
-  return 'Earlier'
+  const nowDate = now.getDate()
+  const nowMonth = now.getMonth()
+  const nowYear = now.getFullYear()
+
+  const dateDate = date.getDate()
+  const dateMonth = date.getMonth()
+  const dateYear = date.getFullYear()
+
+  if (nowYear === dateYear && nowMonth === dateMonth && nowDate === dateDate) {
+    return 'Today'
+  }
+  if (nowYear === dateYear && nowMonth === dateMonth && nowDate - dateDate === 1) {
+    return 'Yesterday'
+  }
+  if (diffDays <= 7) {
+    return 'Previous 7 days'
+  }
+  if (diffDays <= 30) {
+    return 'Previous 30 days'
+  }
+  if (nowYear === dateYear) {
+    return MONTH_NAMES[dateMonth]
+  }
+  return String(dateYear)
 }

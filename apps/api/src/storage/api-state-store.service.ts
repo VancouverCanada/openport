@@ -308,13 +308,35 @@ function normalizeProjectMeta(meta: OpenPortProjectMeta | null | undefined): Ope
   }
 }
 
+function normalizeProjectModelRoutes(modelRoutes: string[] | null | undefined): string[] {
+  if (!Array.isArray(modelRoutes)) return []
+
+  const uniqueRoutes = new Set<string>()
+  for (const route of modelRoutes) {
+    if (typeof route !== 'string') continue
+    const normalizedRoute = route.trim()
+    if (!normalizedRoute) continue
+    uniqueRoutes.add(normalizedRoute)
+  }
+
+  return Array.from(uniqueRoutes)
+}
+
 function normalizeProjectData(data: OpenPortProjectData | null | undefined): OpenPortProjectData {
+  const normalizedDefaultModelRoute =
+    typeof data?.defaultModelRoute === 'string' && data.defaultModelRoute.trim().length > 0
+      ? data.defaultModelRoute.trim()
+      : null
+  const modelRoutes = normalizeProjectModelRoutes([
+    ...(Array.isArray(data?.modelRoutes) ? data.modelRoutes : []),
+    normalizedDefaultModelRoute || ''
+  ])
+  const defaultModelRoute = normalizedDefaultModelRoute || modelRoutes[0] || null
+
   return {
     systemPrompt: data?.systemPrompt ?? '',
-    defaultModelRoute:
-      typeof data?.defaultModelRoute === 'string' && data.defaultModelRoute.trim().length > 0
-        ? data.defaultModelRoute.trim()
-        : null,
+    defaultModelRoute,
+    modelRoutes,
     files: Array.isArray(data?.files) ? data.files.map((file) => normalizeProjectFile(file)) : []
   }
 }

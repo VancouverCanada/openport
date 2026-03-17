@@ -9,7 +9,7 @@ import type {
 } from '@openport/product-contracts'
 import {
   getDefaultChatSettings,
-  getProjectOptions,
+  getProjectPrimaryModelRoute,
   getWorkspaceEventName,
   loadProjects,
   type OpenPortProject
@@ -26,6 +26,7 @@ type ChatControlsPanelProps = {
   activeArchived?: boolean
   activeThreadId: string | null
   activePinned?: boolean
+  className?: string
   activeProject?: OpenPortProject | null
   collaboration?: OpenPortProjectCollaborationState | null
   composerAttachments?: Array<{
@@ -61,6 +62,7 @@ export function ChatControlsPanel({
   activeArchived = false,
   activeThreadId,
   activePinned = false,
+  className = '',
   activeProject = null,
   collaboration = null,
   composerAttachments = [],
@@ -86,7 +88,6 @@ export function ChatControlsPanel({
   const [showSystemPrompt, setShowSystemPrompt] = useState(true)
   const [showAdvancedParams, setShowAdvancedParams] = useState(false)
   const [showContext, setShowContext] = useState(false)
-  const projectOptions = getProjectOptions(projects)
   const contextProject =
     activeProject || (settings.projectId ? projects.find((project) => project.id === settings.projectId) || null : null)
   const hasContextSurface = Boolean(contextProject || settings.projectId || tagsDraft.trim())
@@ -168,11 +169,6 @@ export function ChatControlsPanel({
     window.localStorage.setItem(`openport.chat-controls.${key}`, String(open))
   }
 
-  function updateProject(projectId: string | null): void {
-    const nextSettings = { ...settings, projectId }
-    patchSettings(nextSettings)
-  }
-
   function updateTags(nextTags: string[]): void {
     setTagsDraft(nextTags.join(', '))
     onTagsChange?.(nextTags)
@@ -187,7 +183,7 @@ export function ChatControlsPanel({
   }
 
   return (
-    <aside className="chat-controls" aria-label="Chat controls">
+    <aside className={`chat-controls${className ? ` ${className}` : ''}`} aria-label="Chat controls">
       <div className="chat-controls-header">
         <div className="chat-controls-header-title">
           <Iconify icon="solar:tuning-4-outline" size={18} />
@@ -201,7 +197,7 @@ export function ChatControlsPanel({
       </div>
 
       <div className="chat-controls-intro">
-        <span>{activeThreadId ? 'Conversation' : 'Draft'}</span>
+        <span>{activeThreadId ? 'This conversation' : 'Before you start'}</span>
         {activeThreadId ? (
           <div className="chat-controls-actions">
             <TextButton onClick={onPinToggle} size="sm" type="button" variant="inline">
@@ -309,7 +305,7 @@ export function ChatControlsPanel({
                       valves: {
                         ...settings.valves,
                         modelRoute:
-                          contextProject?.data.defaultModelRoute ||
+                          getProjectPrimaryModelRoute(contextProject) ||
                           uiPreferences.chatDefaults.modelRoute ||
                           models.find((model) => model.isDefault)?.route ||
                           'openport/local'
@@ -324,6 +320,26 @@ export function ChatControlsPanel({
                 </TextButton>
               ) : null}
             </div>
+          </label>
+
+          <label className="chat-controls-field">
+            <span className="chat-controls-field-label">Mode</span>
+            <select
+              className="chat-controls-select"
+              onChange={(event) =>
+                patchSettings({
+                  ...settings,
+                  valves: { ...settings.valves, operatorMode: event.target.value }
+                })
+              }
+              value={settings.valves.operatorMode}
+            >
+              {operatorModeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="chat-controls-field chat-controls-switch">
@@ -353,43 +369,9 @@ export function ChatControlsPanel({
             })
           }
           open={showContext}
-          title="Context"
+          title="References"
         >
           <div className="chat-controls-form-grid">
-            <label className="chat-controls-field">
-              <span className="chat-controls-field-label">Project</span>
-              <select
-                className="chat-controls-select"
-                onChange={(event) => updateProject(event.target.value || null)}
-                value={settings.projectId || ''}
-              >
-                <option value="">No project</option>
-                {projectOptions.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="chat-controls-field">
-              <span className="chat-controls-field-label">Tags</span>
-              <input
-                className="chat-controls-input"
-                onBlur={() =>
-                  updateTags(
-                    tagsDraft
-                      .split(',')
-                      .map((tag) => tag.trim())
-                      .filter(Boolean)
-                  )
-                }
-                onChange={(event) => setTagsDraft(event.target.value)}
-                placeholder="security, review"
-                value={tagsDraft}
-              />
-            </label>
-
             {contextProject ? (
               <div className="chat-controls-field chat-controls-project-context">
                 <span className="chat-controls-field-label">Attached project</span>
@@ -398,6 +380,26 @@ export function ChatControlsPanel({
                   <span>{contextProject.meta.description || `${contextProject.data.files.filter((file) => file.selected).length} knowledge items available`}</span>
                 </div>
               </div>
+            ) : null}
+
+            {(activeThreadId || tagsDraft.trim()) ? (
+              <label className="chat-controls-field">
+                <span className="chat-controls-field-label">Tags</span>
+                <input
+                  className="chat-controls-input"
+                  onBlur={() =>
+                    updateTags(
+                      tagsDraft
+                        .split(',')
+                        .map((tag) => tag.trim())
+                        .filter(Boolean)
+                    )
+                  }
+                  onChange={(event) => setTagsDraft(event.target.value)}
+                  placeholder="security, review"
+                  value={tagsDraft}
+                />
+              </label>
             ) : null}
 
             {contextProject && (collaboration || isSearchingKnowledge || knowledgeMatches.length > 0) ? (
@@ -490,26 +492,6 @@ export function ChatControlsPanel({
         title="Advanced Params"
       >
         <div className="chat-controls-form-grid">
-          <label className="chat-controls-field">
-            <span className="chat-controls-field-label">Operator mode</span>
-            <select
-              className="chat-controls-select"
-              onChange={(event) =>
-                patchSettings({
-                  ...settings,
-                  valves: { ...settings.valves, operatorMode: event.target.value }
-                })
-              }
-              value={settings.valves.operatorMode}
-            >
-              {operatorModeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <label className="chat-controls-field chat-controls-switch">
             <span className="chat-controls-field-label">Stream response</span>
             <input

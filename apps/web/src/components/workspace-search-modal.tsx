@@ -16,6 +16,7 @@ import {
   fetchChatList,
   fetchChatListBySearchText,
   fetchChatSession,
+  fetchCurrentUser,
   fetchSearchContext,
   loadSession
 } from '../lib/openport-api'
@@ -52,26 +53,31 @@ type WorkspaceSearchActionItem = {
 
 type SearchEntry = { kind: 'result'; item: WorkspaceSearchResultItem } | { kind: 'action'; item: WorkspaceSearchActionItem }
 
-function buildWorkspaceActionCatalog(query: string): WorkspaceSearchActionItem[] {
+function buildWorkspaceActionCatalog(query: string, allowNotes: boolean): WorkspaceSearchActionItem[] {
   const trimmedQuery = query.trim()
   const titleSuffix = trimmedQuery ? `: ${trimmedQuery}` : ''
   const querySuffix = trimmedQuery ? `?q=${encodeURIComponent(trimmedQuery)}` : ''
   const noteSuffix = trimmedQuery ? `?content=${encodeURIComponent(trimmedQuery)}` : ''
 
-  return [
+  const actions: WorkspaceSearchActionItem[] = [
     {
       id: 'action-new-chat',
       title: `Start a new conversation${titleSuffix}`,
       icon: 'solar:pen-new-square-outline',
       href: `/${querySuffix}`
-    },
-    {
+    }
+  ]
+
+  if (allowNotes) {
+    actions.push({
       id: 'action-new-note',
       title: `Create a new note${titleSuffix}`,
       icon: 'solar:notebook-outline',
       href: `/notes${noteSuffix}`
-    }
-  ]
+    })
+  }
+
+  return actions
 }
 
 function getEntrySectionLabel(entry: SearchEntry): string {
@@ -86,11 +92,12 @@ function getChatTimestampLabel(value: string): string {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
   const dayDiff = Math.floor((todayStart - targetStart) / oneDay)
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' })
 
   if (dayDiff === 0) return 'Today'
   if (dayDiff === 1) return 'Yesterday'
-  if (dayDiff > 1 && dayDiff < 7) {
-    return date.toLocaleDateString(undefined, { weekday: 'long' })
+  if (dayDiff > 1 && dayDiff <= 7) {
+    return `Last ${weekday}`
   }
 
   return date.toLocaleDateString(undefined, {
@@ -110,6 +117,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0)
   const [previewChat, setPreviewChat] = useState<OpenPortChatSession | null>(null)
+  const [allowCreateNote, setAllowCreateNote] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -121,7 +129,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
     () => getSearchOperatorSuggestions(query, projects, searchTags),
     [projects, query, searchTags]
   )
-  const actionCatalog = useMemo(() => buildWorkspaceActionCatalog(query), [query])
+  const actionCatalog = useMemo(() => buildWorkspaceActionCatalog(query, allowCreateNote), [allowCreateNote, query])
 
   const visibleResults = useMemo<WorkspaceSearchResultItem[]>(
     () =>
@@ -153,6 +161,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
     setHasMore(false)
 
     let isActive = true
+    const session = loadSession()
     void fetchSearchContext(loadSession())
       .then((response) => {
         if (!isActive) return
@@ -162,6 +171,19 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
         if (!isActive) return
         setSearchTags([])
       })
+    if (session) {
+      void fetchCurrentUser(session)
+        .then((response) => {
+          if (!isActive) return
+          setAllowCreateNote(response.role === 'admin' || response.workspaceRole !== 'viewer')
+        })
+        .catch(() => {
+          if (!isActive) return
+          setAllowCreateNote(true)
+        })
+    } else {
+      setAllowCreateNote(false)
+    }
 
     return () => {
       isActive = false
@@ -450,14 +472,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
                     <h3>{previewChat.title}</h3>
                   </div>
                   <div className="workspace-search-preview-messages" id="chat-preview">
-                    {(previewChat.messages.filter((message) =>
-                      queryTerms.length ? queryTerms.some((term) => message.content.toLowerCase().includes(term)) : true
-                    ).slice(-4).length > 0
-                      ? previewChat.messages.filter((message) =>
-                          queryTerms.length ? queryTerms.some((term) => message.content.toLowerCase().includes(term)) : true
-                        ).slice(-4)
-                      : previewChat.messages.slice(-4)
-                    ).map((message) => (
+                    {previewChat.messages.map((message) => (
                       <MessageBubble key={message.id} role={message.role}>
                         <p>
                           <SearchHighlight field="excerpt" highlights={[]} queryTerms={queryTerms} text={message.content} />

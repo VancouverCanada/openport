@@ -14,7 +14,7 @@ type ControlsSectionProps = {
 
 export function ControlsSection({ children, icon, onToggle, open, title }: ControlsSectionProps) {
   return (
-    <section className="chat-controls-section">
+    <section className={`chat-controls-section${open ? ' is-open' : ''}`}>
       <TextButton className="chat-controls-toggle" onClick={onToggle} size="md" type="button" variant="panel">
         <span className="chat-controls-toggle-copy">
           <Iconify icon={icon} size={16} />
@@ -22,7 +22,9 @@ export function ControlsSection({ children, icon, onToggle, open, title }: Contr
         </span>
         <Iconify icon={open ? 'solar:alt-arrow-up-outline' : 'solar:alt-arrow-down-outline'} size={16} />
       </TextButton>
-      {open ? children : null}
+      <div aria-hidden={!open} className="chat-controls-section-body">
+        <div className="chat-controls-section-body-inner">{children}</div>
+      </div>
     </section>
   )
 }

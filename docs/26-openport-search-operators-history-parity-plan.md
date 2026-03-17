@@ -117,6 +117,17 @@ Close the remaining non-1:1 gaps against Open WebUI search by completing three t
 - [x] Search result rows aligned closer to Open WebUI list rhythm:
   - actions with icon + label
   - chat rows as `title + date` with preview on the right
+- [x] Added `tag:none` operator parity:
+  - frontend operator autocomplete can suggest/use `tag:none`
+  - backend search resolves `tag:none` as untagged chats/notes
+- [x] Added Open WebUI-like chat route shape compatibility:
+  - search result href emits `/c/:id`
+  - new Next route `/c/[id]` forwards to internal `/?thread=:id`
+- [x] Action gating parity tightened:
+  - "Create a new note" now conditionally appears based on user role/workspace role instead of always rendering
+- [x] Preview chain now shows full chat message stream for selected result (no fixed 4-message cap).
+- [x] Time bucket labels now follow Open WebUI `getTimeRange` style:
+  - `Today`, `Yesterday`, `Previous 7 days`, `Previous 30 days`, month name, year
 
 ## Verification
 

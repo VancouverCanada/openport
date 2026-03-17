@@ -661,6 +661,7 @@ export async function createProject(
     data?: {
       systemPrompt?: string
       defaultModelRoute?: string | null
+      modelRoutes?: string[]
       files?: OpenPortProjectFile[]
     }
   },
@@ -682,6 +683,7 @@ export async function updateProject(
     data?: {
       systemPrompt?: string
       defaultModelRoute?: string | null
+      modelRoutes?: string[]
       files?: OpenPortProjectFile[]
     }
   },
