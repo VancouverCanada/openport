@@ -1677,7 +1677,10 @@ export function ChatShell() {
                           </div>
                           <div className="owui-assistant-meta">
                             {isAssistantPending ? (
-                              <span className="owui-assistant-live-dot" aria-label="Generating response" />
+                              <span className="owui-assistant-status">
+                                <span className="owui-assistant-live-dot" aria-hidden="true" />
+                                <span>Thinking...</span>
+                              </span>
                             ) : thoughtSeconds ? (
                               assistantThought?.thought ? (
                                 <details className="owui-thoughts">
