@@ -706,7 +706,15 @@ export function ChatShell() {
       <div className={`chat-model-menu-wrap${placement === 'hero' ? ' is-hero' : ''}`} ref={modelMenuRef}>
         <TextButton
           className={`chat-model-trigger${placement === 'hero' ? ' is-hero' : ''}`}
-          onClick={() => setShowModelMenu((current) => !current)}
+          onClick={() => {
+            // Keep the model menu in sync with runtime availability (e.g. Ollama models can appear after startup).
+            if (!showModelMenu) {
+              void fetchWorkspaceModels(loadSession())
+                .then((response) => setModels(response.items))
+                .catch(() => undefined)
+            }
+            setShowModelMenu((current) => !current)
+          }}
           size="md"
           type="button"
           variant="inline"
