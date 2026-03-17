@@ -1357,6 +1357,16 @@ textarea {
   align-content: start;
 }
 
+.workspace-sidebar-history-groups {
+  display: grid;
+  gap: 2px;
+  border-radius: 10px;
+}
+
+.workspace-sidebar-history-groups.is-drop-target {
+  background: rgba(15, 23, 42, 0.04);
+}
+
 .workspace-sidebar-projects {
   display: grid;
   gap: 1px;
@@ -1399,14 +1409,6 @@ textarea {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.2;
-}
-
-.workspace-sidebar-root-link {
-  margin-bottom: 2px;
-}
-
-.workspace-sidebar-root-link.is-dragged-over {
-  background: rgba(15, 23, 42, 0.06);
 }
 
 .workspace-sidebar-project-create {

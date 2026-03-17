@@ -40,7 +40,6 @@ import {
 import {
   getChatUiPreferencesEventName,
   loadChatUiPreferences,
-  reorderPinnedModelRoutes,
   toggleSidebarSection,
   type OpenPortChatUiPreferences
 } from '../lib/chat-ui-preferences'
@@ -109,15 +108,13 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     open: false
   })
   const [isPending, startTransition] = useTransition()
-  const [draggedPinnedModelRoute, setDraggedPinnedModelRoute] = useState<string | null>(null)
-  const [isRootDropTarget, setIsRootDropTarget] = useState(false)
+  const [isChatsDropTarget, setIsChatsDropTarget] = useState(false)
   const { isMobile, toggleSidebar } = useAppShellState()
   const activeThreadId = searchParams.get('thread')
   const selectedProjectId = searchParams.get('project')
   const selectedModelRoute = searchParams.get('model')
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const modalProject =
     projectModalState.projectId ? projects.find((project) => project.id === projectModalState.projectId) || null : null
   const modalParentProject =
@@ -569,10 +566,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
   }
 
   const projectIds = new Set(projects.map((project) => project.id))
-  const pinnedModels = uiPreferences.pinnedModelRoutes
-    .map((route) => models.find((model) => model.route === route))
-    .filter((model): model is OpenPortWorkspaceModel => Boolean(model))
-  const activeModelRoute = selectedModelRoute || activeThread?.settings.valves.modelRoute || null
   const filteredThreads = threads.filter((thread) => {
     const projectId = thread.settings.projectId
     return !projectId || !projectIds.has(projectId)
@@ -591,32 +584,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       saveCollapsedHistoryGroups(nextValue)
       return nextValue
     })
-  }
-
-  function getModelHref(route: string): string {
-    const params = new URLSearchParams()
-    params.set('model', route)
-    if (selectedProjectId) {
-      params.set('project', selectedProjectId)
-    }
-    if (isArchivedView) {
-      params.set('view', 'archived')
-    }
-    return buildChatHref(params)
-  }
-
-  function movePinnedModelRoute(route: string, targetRoute: string): void {
-    if (route === targetRoute) return
-
-    const nextRoutes = [...uiPreferences.pinnedModelRoutes]
-    const fromIndex = nextRoutes.indexOf(route)
-    const toIndex = nextRoutes.indexOf(targetRoute)
-
-    if (fromIndex === -1 || toIndex === -1) return
-
-    nextRoutes.splice(fromIndex, 1)
-    nextRoutes.splice(toIndex, 0, route)
-    setUiPreferences(reorderPinnedModelRoutes(nextRoutes))
   }
 
   return (
@@ -714,38 +681,27 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         title="Chats"
       >
         {uiPreferences.collapsedSidebarSections.chats ? null : (
-          <div className="workspace-sidebar-history-groups">
-            <TextButton
-              active={!selectedProjectId && !isArchivedView}
-              className={`workspace-sidebar-root-link${isRootDropTarget ? ' is-dragged-over' : ''}`}
-              href={selectedModelRoute ? `/chat?model=${encodeURIComponent(selectedModelRoute)}` : '/chat'}
-              onClick={() => {
-                if (isMobile) toggleSidebar()
-              }}
-              onDragLeave={() => setIsRootDropTarget(false)}
-              onDragOver={(event: DragEvent<HTMLAnchorElement>) => {
-                event.preventDefault()
-                setIsRootDropTarget(true)
-              }}
-              onDrop={(event: DragEvent<HTMLAnchorElement>) => {
-                event.preventDefault()
-                setIsRootDropTarget(false)
-                const payload = readDragPayload(event)
-                if (!payload) return
+          <div
+            className={`workspace-sidebar-history-groups${isChatsDropTarget ? ' is-drop-target' : ''}`}
+            onDragLeave={() => setIsChatsDropTarget(false)}
+            onDragOver={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault()
+              setIsChatsDropTarget(true)
+            }}
+            onDrop={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault()
+              setIsChatsDropTarget(false)
+              const payload = readDragPayload(event)
+              if (!payload) return
 
-                if (payload.type === 'project') {
-                  onMoveProject(payload.id, null)
-                  return
-                }
+              if (payload.type === 'project') {
+                onMoveProject(payload.id, null)
+                return
+              }
 
-                void assignThreadProject(payload.id, null)
-              }}
-              variant="sidebar"
-            >
-              <Iconify icon="solar:chat-round-line-outline" size={16} />
-              <span>All chats</span>
-            </TextButton>
-
+              void assignThreadProject(payload.id, null)
+            }}
+          >
             {groupedThreads.length > 0 ? (
               <AnimatePresence initial={false}>
                 {groupedThreads.map((group) => (
@@ -804,7 +760,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         actions={
           <>
             <IconButton
-              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand projects' : 'Collapse projects'}
+              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand folders' : 'Collapse folders'}
               disabled={isProjectsLoading}
               onClick={() => setUiPreferences(toggleSidebarSection('projects'))}
               size="sm"
@@ -821,7 +777,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
               />
             </IconButton>
             <IconButton
-              aria-label="Create project"
+              aria-label="Create folder"
               disabled={isProjectsLoading}
               onClick={() => openCreateProjectModal(null)}
               size="sm"
@@ -833,7 +789,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           </>
         }
         className="workspace-sidebar-projects"
-        title="Projects"
+        title="Folders"
       >
         {uiPreferences.collapsedSidebarSections.projects ? null : (
           <m.div className="workspace-sidebar-project-list" layout transition={layoutMotion}>
@@ -874,82 +830,11 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                 ))}
               </AnimatePresence>
             ) : (
-              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'No projects yet.'}</p>
+              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading folders…' : 'No folders yet.'}</p>
             )}
           </m.div>
         )}
       </SidebarSection>
-
-      {pinnedModels.length > 0 ? (
-        <SidebarSection
-          actions={
-            <IconButton
-              aria-label={uiPreferences.collapsedSidebarSections.pinnedModels ? 'Expand pinned models' : 'Collapse pinned models'}
-              onClick={() => setUiPreferences(toggleSidebarSection('pinnedModels'))}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Iconify
-                icon={
-                  uiPreferences.collapsedSidebarSections.pinnedModels
-                    ? 'solar:alt-arrow-down-outline'
-                    : 'solar:alt-arrow-up-outline'
-                }
-                size={14}
-              />
-            </IconButton>
-          }
-          className="workspace-sidebar-pinned"
-          title="Pinned"
-        >
-          {uiPreferences.collapsedSidebarSections.pinnedModels ? null : (
-            <m.div className="workspace-sidebar-pinned-list" layout transition={layoutMotion}>
-              {pinnedModels.map((model) => (
-                <m.div
-                  className={`workspace-sidebar-pinned-row${draggedPinnedModelRoute === model.route ? ' is-dragging' : ''}`}
-                  draggable
-                  key={model.id}
-                  layout="position"
-                  layoutId={`sidebar-pinned-model-${model.route}`}
-                  onDragEnd={() => setDraggedPinnedModelRoute(null)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDragStart={(event) => {
-                    const dataTransfer = (event as { dataTransfer?: DataTransfer }).dataTransfer
-                    if (!dataTransfer) return
-                    dataTransfer.setData('text/plain', model.route)
-                    setDraggedPinnedModelRoute(model.route)
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    const dataTransfer = (event as { dataTransfer?: DataTransfer }).dataTransfer
-                    if (!dataTransfer) return
-                    const route = dataTransfer.getData('text/plain')
-                    movePinnedModelRoute(route, model.route)
-                    setDraggedPinnedModelRoute(null)
-                  }}
-                  transition={layoutMotion}
-                >
-                  <TextButton
-                    active={activeModelRoute === model.route && !activeThreadId}
-                    className="workspace-sidebar-pinned-item"
-                    href={getModelHref(model.route)}
-                    onClick={() => {
-                      if (isMobile) toggleSidebar()
-                    }}
-                    variant="sidebar"
-                  >
-                    <Iconify icon="solar:bookmark-bold" size={15} />
-                    <span className="workspace-sidebar-pinned-copy">
-                      <strong>{model.name}</strong>
-                    </span>
-                  </TextButton>
-                </m.div>
-              ))}
-            </m.div>
-          )}
-        </SidebarSection>
-      ) : null}
 
       <div className="workspace-sidebar-account">
         <div className="workspace-sidebar-account-row">
