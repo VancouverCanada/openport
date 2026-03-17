@@ -3492,6 +3492,107 @@ textarea {
   color: rgba(15, 23, 42, 0.48);
 }
 
+.owui-assistant-timestamp {
+  font-weight: 600;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.42);
+}
+
+.owui-tooltip-target {
+  position: relative;
+  cursor: default;
+}
+
+.owui-tooltip-target:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.88);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.owui-assistant-live-dot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #111111;
+  animation: owuiLivePulse 900ms ease-in-out infinite;
+}
+
+@keyframes owuiLivePulse {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.owui-thoughts {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.owui-thoughts > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.owui-thoughts > summary::-webkit-details-marker {
+  display: none;
+}
+
+.owui-thoughts > summary::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-right: 2px solid rgba(15, 23, 42, 0.4);
+  border-bottom: 2px solid rgba(15, 23, 42, 0.4);
+  transform: translateY(-1px) rotate(45deg);
+  transition: transform 120ms ease;
+}
+
+.owui-thoughts[open] > summary::after {
+  transform: translateY(1px) rotate(225deg);
+}
+
+.owui-thoughts-body {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.02);
+  color: rgba(15, 23, 42, 0.82);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.owui-thoughts-label {
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.55);
+}
+
 .owui-message-card {
   width: 100%;
 }
@@ -3515,6 +3616,51 @@ textarea {
   color: rgba(15, 23, 42, 0.9);
   line-height: 1.55;
   font-size: 15px;
+}
+
+.owui-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.owui-thinking-label {
+  font-size: 14px;
+}
+
+.owui-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.owui-thinking-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.32);
+  animation: owuiDotPulse 900ms ease-in-out infinite;
+}
+
+.owui-thinking-dots span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.owui-thinking-dots span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+@keyframes owuiDotPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 
 .owui-message-attachments {

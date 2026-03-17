@@ -160,6 +160,7 @@ export function ChatShell() {
   const isArchivedView = view === 'archived'
   const [speechMode, setSpeechMode] = useState<'dictation' | 'voice' | null>(null)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
+  const [assistantThoughtSeconds, setAssistantThoughtSeconds] = useState<Record<string, number>>({})
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -235,6 +236,46 @@ export function ChatShell() {
   }
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
+
+  function extractThinkBlocks(raw: string): { thought: string; visible: string } {
+    const input = raw || ''
+    const parts: string[] = []
+    const visible = input.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, inner: string) => {
+      const trimmed = typeof inner === 'string' ? inner.trim() : ''
+      if (trimmed) parts.push(trimmed)
+      return ''
+    })
+
+    return {
+      thought: parts.join('\n\n').trim(),
+      visible: visible.trim()
+    }
+  }
+
+  function formatChatTimestamp(iso: string): { short: string; full: string } {
+    const date = new Date(iso)
+    const now = new Date()
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+    const yesterday = new Date(now)
+    yesterday.setDate(now.getDate() - 1)
+
+    const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    const shortPrefix = sameDay(date, now) ? 'Today' : sameDay(date, yesterday) ? 'Yesterday' : ''
+    const shortDate = shortPrefix
+      ? `${shortPrefix} at ${time}`
+      : `${date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} at ${time}`
+    const full = date.toLocaleString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+
+    return { short: shortDate, full }
+  }
 
   function openSettings(section: ChatSettingsSection): void {
     setSettingsInitialSection(section)
@@ -1396,6 +1437,13 @@ export function ChatShell() {
         startTransition(() => {
           void postChatMessage(sessionId!, content, messageAttachments, loadSession())
             .then((response) => {
+              const assistant = Array.isArray(response.messages)
+                ? response.messages.find((message) => message.role === 'assistant')
+                : null
+              if (assistant) {
+                const seconds = Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000))
+                setAssistantThoughtSeconds((current) => ({ ...current, [assistant.id]: seconds }))
+              }
               setThreads((current) => {
                 const nextThreads = current.map((thread) => {
                   if (thread.id !== response.session.id) return thread
@@ -1597,6 +1645,12 @@ export function ChatShell() {
                 const isLast = index === messages.length - 1
                 const attachments = Array.isArray(message.attachments) ? message.attachments : []
                 const modelLabel = currentModel?.name || currentModelRoute
+                const thoughtSeconds = message.role === 'assistant' ? assistantThoughtSeconds[message.id] : undefined
+                const isAssistantPending = message.role === 'assistant' && !message.content.trim()
+                const assistantThought =
+                  message.role === 'assistant' && !isAssistantPending ? extractThinkBlocks(message.content) : null
+                const assistantTimestamp =
+                  message.role === 'assistant' && !isAssistantPending ? formatChatTimestamp(message.createdAt) : null
 
                 return (
                   <article
@@ -1611,8 +1665,30 @@ export function ChatShell() {
                           <div className="owui-assistant-model">
                             <span className="owui-assistant-mark">OI</span>
                             <span className="owui-assistant-model-name">{modelLabel}</span>
+                            {assistantTimestamp ? (
+                              <span
+                                className="owui-assistant-timestamp owui-tooltip-target"
+                                data-tooltip={assistantTimestamp.full}
+                                title={assistantTimestamp.full}
+                              >
+                                {assistantTimestamp.short}
+                              </span>
+                            ) : null}
                           </div>
-                          <div className="owui-assistant-meta">{modelLabel}</div>
+                          <div className="owui-assistant-meta">
+                            {isAssistantPending ? (
+                              <span className="owui-assistant-live-dot" aria-label="Generating response" />
+                            ) : thoughtSeconds ? (
+                              assistantThought?.thought ? (
+                                <details className="owui-thoughts">
+                                  <summary>Thought for {thoughtSeconds} seconds</summary>
+                                  <pre className="owui-thoughts-body">{assistantThought.thought}</pre>
+                                </details>
+                              ) : (
+                                <span className="owui-thoughts-label">Thought for {thoughtSeconds} seconds</span>
+                              )
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
 
@@ -1648,7 +1724,7 @@ export function ChatShell() {
                         ) : null}
 
                         <div className="owui-message-content" data-copy-response-source>
-                          {message.role === 'assistant' && !message.content.trim() ? (
+                          {isAssistantPending ? (
                             <span className="owui-thinking">
                               <span className="owui-thinking-dots" aria-hidden="true">
                                 <span />
@@ -1658,7 +1734,7 @@ export function ChatShell() {
                               <span className="owui-thinking-label">Thinking...</span>
                             </span>
                           ) : (
-                            message.content
+                            assistantThought ? assistantThought.visible : message.content
                           )}
                         </div>
                       </div>
