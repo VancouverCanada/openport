@@ -1206,6 +1206,16 @@ export function ChatShell() {
           className={`chat-composer-input${variant === 'empty' ? ' chat-hero-composer-input' : ''}`}
           id="chat-input"
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            if (event.shiftKey) return
+            // Avoid breaking IME composition (e.g. Chinese/Japanese input)
+            if ((event.nativeEvent as any)?.isComposing) return
+
+            event.preventDefault()
+            if (isPending) return
+            submitMessage(draft)
+          }}
           placeholder={
             variant === 'empty'
               ? 'How can I help you today?'
