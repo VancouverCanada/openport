@@ -271,7 +271,7 @@ export function ChatComposerToolsMenu({
       />
       {tab === 'root' ? (
         <div className="chat-tools-menu-list">
-          <div className="chat-tools-menu-heading">Include context</div>
+          <div className="chat-tools-menu-heading">Attach</div>
           <TextButton
             className="chat-tools-menu-item"
             onClick={() => fileInputRef.current?.click()}
@@ -303,31 +303,24 @@ export function ChatComposerToolsMenu({
               <span>Fetch and attach a URL snapshot</span>
             </span>
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('files')} type="button" variant="menu">
-            <Iconify icon="solar:folder-with-files-outline" size={17} />
+          <TextButton className="chat-tools-menu-item" onClick={() => setTab('notes')} type="button" variant="menu">
+            <Iconify icon="solar:notebook-outline" size={17} />
             <span className="chat-tools-menu-copy">
-              <strong>Files</strong>
-              <span>{assets.length} uploaded assets</span>
+              <strong>Attach Notes</strong>
+              <span>{notes.length} notes available</span>
             </span>
           </TextButton>
           <TextButton className="chat-tools-menu-item" onClick={() => setTab('knowledge')} type="button" variant="menu">
             <Iconify icon="solar:database-outline" size={17} />
             <span className="chat-tools-menu-copy">
-              <strong>Knowledge</strong>
+              <strong>Attach Knowledge</strong>
               <span>{knowledgeItems.length} items ready</span>
-            </span>
-          </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('notes')} type="button" variant="menu">
-            <Iconify icon="solar:notebook-outline" size={17} />
-            <span className="chat-tools-menu-copy">
-              <strong>Notes</strong>
-              <span>{notes.length} notes available</span>
             </span>
           </TextButton>
           <TextButton className="chat-tools-menu-item" onClick={() => setTab('chats')} type="button" variant="menu">
             <Iconify icon="solar:chat-round-line-outline" size={17} />
             <span className="chat-tools-menu-copy">
-              <strong>Chats</strong>
+              <strong>Reference Chats</strong>
               <span>{chats.length} recent threads</span>
             </span>
           </TextButton>
@@ -338,11 +331,11 @@ export function ChatComposerToolsMenu({
               <span>{prompts.length} reusable prompts</span>
             </span>
           </TextButton>
-          <TextButton className="chat-tools-menu-item" onClick={() => setTab('web')} type="button" variant="menu">
-            <Iconify icon="solar:global-outline" size={17} />
+          <TextButton className="chat-tools-menu-item" onClick={() => setTab('files')} type="button" variant="menu">
+            <Iconify icon="solar:folder-with-files-outline" size={17} />
             <span className="chat-tools-menu-copy">
-              <strong>Webpage</strong>
-              <span>Paste a URL to attach</span>
+              <strong>Recent Files</strong>
+              <span>{assets.length} uploaded assets</span>
             </span>
           </TextButton>
         </div>

@@ -177,9 +177,6 @@ export function ChatShell() {
   }
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
-  const currentProjectContext = selectedProject
-    ? `${selectedProject.name}${selectedProject.data.files.filter((file) => file.selected).length > 0 ? ` · ${selectedProject.data.files.filter((file) => file.selected).length} knowledge items` : ''}`
-    : null
 
   function onControlsResizeStart(startEvent: ReactMouseEvent<HTMLDivElement>): void {
     if (isMobile) return
@@ -567,12 +564,29 @@ export function ChatShell() {
   function renderModelSelector(placement: 'header' | 'hero') {
     return (
       <div className={`chat-model-menu-wrap${placement === 'hero' ? ' is-hero' : ''}`} ref={modelMenuRef}>
-        <TextButton className="chat-model-trigger" onClick={() => setShowModelMenu((current) => !current)} size="md" type="button" variant="inline">
-          <span>{currentModel?.name || currentModelRoute}</span>
+        <TextButton
+          className={`chat-model-trigger${placement === 'hero' ? ' is-hero' : ''}`}
+          onClick={() => setShowModelMenu((current) => !current)}
+          size="md"
+          type="button"
+          variant="inline"
+        >
+          {placement === 'hero' ? (
+            <span className="chat-model-trigger-copy">
+              <span className="chat-empty-model-mark">
+                <span className="chat-empty-model-icon">
+                  <Iconify icon="solar:cpu-bolt-outline" size={18} />
+                </span>
+              </span>
+              <span>{currentModel?.name || currentModelRoute}</span>
+            </span>
+          ) : (
+            <span>{currentModel?.name || currentModelRoute}</span>
+          )}
           <Iconify icon="solar:alt-arrow-down-outline" size={15} />
         </TextButton>
-        <span className="chat-model-trigger-subtitle">
-          {activeThread ? currentModelRoute : currentModelDescription}
+        <span className={`chat-model-trigger-subtitle${placement === 'hero' ? ' is-hero' : ''}`}>
+          {activeThread && placement !== 'hero' ? currentModelRoute : currentModelDescription}
         </span>
 
         {showModelMenu ? (
@@ -913,16 +927,7 @@ export function ChatShell() {
 
         {showEmptyStage ? (
           <div className="chat-empty-stage">
-            <div className="chat-empty-head">
-              <div className="chat-empty-model">
-                <div className="chat-empty-model-mark">
-                  <span className="chat-empty-model-icon">
-                    <Iconify icon="solar:cpu-bolt-outline" size={18} />
-                  </span>
-                </div>
-                {renderModelSelector('hero')}
-              </div>
-            </div>
+            <div className="chat-empty-head">{renderModelSelector('hero')}</div>
 
             {renderComposer('empty')}
 
@@ -948,10 +953,9 @@ export function ChatShell() {
               ))}
             </div>
 
-            {currentProjectContext ? (
+            {selectedProject ? (
               <div className="chat-empty-context">
-                <Iconify icon="solar:folder-with-files-outline" size={14} />
-                <span>{currentProjectContext}</span>
+                <span>Using project {selectedProject.name}</span>
               </div>
             ) : null}
           </div>

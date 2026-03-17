@@ -11,12 +11,10 @@ import {
   exportProject as exportProjectRemote,
   fetchChatSessions,
   fetchProjects,
-  fetchWorkspaces,
   fetchWorkspaceModels,
   importProjectBundle,
   loadSession,
   moveProject as moveProjectRemote,
-  switchSessionWorkspace,
   type OpenPortProjectExportBundle,
   updateChatSessionSettings,
   updateProject as updateProjectRemote,
@@ -31,7 +29,6 @@ import {
   groupChatSessionsByTimeRange,
   loadProjects,
   loadCollapsedHistoryGroups,
-  saveProjectKnowledgeToCache,
   saveProjectsToCache,
   saveCollapsedHistoryGroups,
   toggleProjectExpanded,
@@ -56,7 +53,6 @@ import { ProjectModal } from './project-modal'
 import { ProjectTreeItem } from './project-tree-item'
 import { SidebarSection } from './ui/sidebar-section'
 import { TextButton } from './ui/text-button'
-import type { OpenPortWorkspace } from '@openport/product-contracts'
 
 const appLinks = [
   { href: '/dashboard/notes', label: 'Notes', icon: 'solar:notebook-outline' },
@@ -83,9 +79,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
   const [models, setModels] = useState<OpenPortWorkspaceModel[]>([])
   const [accountLabel, setAccountLabel] = useState('local operator')
   const [projects, setProjects] = useState<OpenPortProject[]>([])
-  const [workspaces, setWorkspaces] = useState<OpenPortWorkspace[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('')
-  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false)
   const [uiPreferences, setUiPreferences] = useState<OpenPortChatUiPreferences>(loadChatUiPreferences())
   const [isProjectsLoading, setIsProjectsLoading] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
@@ -150,25 +143,8 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       if (session?.email && isActive) {
         setAccountLabel(session.email)
       }
-      if (session?.workspaceId && isActive) {
-        setActiveWorkspaceId(session.workspaceId)
-      }
       setCollapsedGroups(loadCollapsedHistoryGroups())
       setUiPreferences(loadChatUiPreferences())
-      const workspaceLoad = session
-        ? fetchWorkspaces(session)
-            .then((response) => {
-              if (!isActive) return
-              setWorkspaces(response.items)
-            })
-            .catch(() => {
-              if (!isActive) return
-              setWorkspaces([])
-            })
-        : Promise.resolve().then(() => {
-            if (!isActive) return
-            setWorkspaces([])
-          })
 
       await Promise.all([
         refreshProjects(),
@@ -180,8 +156,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           .catch(() => {
             if (!isActive) return
             setModels([])
-          }),
-        workspaceLoad
+          })
       ])
 
       try {
@@ -198,7 +173,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     return () => {
       isActive = false
     }
-  }, [activeWorkspaceId, isArchivedView])
+  }, [isArchivedView])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -237,7 +212,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     return () => {
       source.close()
     }
-  }, [activeWorkspaceId, isArchivedView])
+  }, [isArchivedView])
 
   async function assignThreadProject(threadId: string, projectId: string | null): Promise<void> {
     const thread = threads.find((entry) => entry.id === threadId)
@@ -292,33 +267,11 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           if (isMobile) toggleSidebar()
         } catch {
           notify('error', 'Unable to create chat.')
-          router.push('/chat')
+          router.push('/')
           if (isMobile) toggleSidebar()
         }
       })()
     })
-  }
-
-  function onWorkspaceSwitch(nextWorkspaceId: string): void {
-    const targetWorkspaceId = nextWorkspaceId.trim()
-    if (!targetWorkspaceId || targetWorkspaceId === activeWorkspaceId || isSwitchingWorkspace) return
-
-    setIsSwitchingWorkspace(true)
-    const nextSession = switchSessionWorkspace(targetWorkspaceId)
-    if (!nextSession) {
-      setIsSwitchingWorkspace(false)
-      notify('error', 'Unable to switch workspace.')
-      return
-    }
-
-    setActiveWorkspaceId(targetWorkspaceId)
-    saveProjectsToCache([])
-    saveProjectKnowledgeToCache([])
-    window.dispatchEvent(new CustomEvent(getWorkspaceEventName()))
-    router.push('/chat')
-    router.refresh()
-    notify('success', 'Workspace switched.')
-    setIsSwitchingWorkspace(false)
   }
 
   function openCreateProjectModal(parentProjectId: string | null = null): void {
@@ -452,7 +405,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       }
 
       if (selectedProjectId && descendantIds.has(selectedProjectId)) {
-        router.push('/chat')
+        router.push('/')
       }
 
       notify('success', deleteState.clearAssignments ? 'Project and contents deleted.' : 'Project deleted.')
@@ -546,11 +499,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     .map((route) => models.find((model) => model.route === route))
     .filter((model): model is OpenPortWorkspaceModel => Boolean(model))
   const activeModelRoute = selectedModelRoute || activeThread?.settings.valves.modelRoute || null
-  const workspaceOptions = workspaces.length > 0
-    ? workspaces
-    : activeWorkspaceId
-      ? [{ id: activeWorkspaceId, name: 'Current workspace' }]
-      : []
   const filteredThreads = threads.filter((thread) => {
     const projectId = thread.settings.projectId
     return !projectId || !projectIds.has(projectId)
@@ -671,85 +619,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
 
       <SidebarSection
         actions={
-          <>
-            <IconButton
-              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand projects' : 'Collapse projects'}
-              disabled={isProjectsLoading}
-              onClick={() => setUiPreferences(toggleSidebarSection('projects'))}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Iconify
-                icon={
-                  uiPreferences.collapsedSidebarSections.projects
-                    ? 'solar:alt-arrow-down-outline'
-                    : 'solar:alt-arrow-up-outline'
-                }
-                size={14}
-              />
-            </IconButton>
-            <IconButton
-              aria-label="Create project"
-              disabled={isProjectsLoading}
-              onClick={() => openCreateProjectModal(null)}
-              size="sm"
-              type="button"
-              variant="toolbar"
-            >
-              <Iconify icon="solar:add-circle-outline" size={15} />
-            </IconButton>
-          </>
-        }
-        className="workspace-sidebar-projects"
-        title="Projects"
-      >
-        {uiPreferences.collapsedSidebarSections.projects ? null : (
-          <>
-            <div className="workspace-sidebar-project-list">
-              {projects.some((project) => project.parentId === null && !project.meta.hiddenInSidebar) ? (
-                projects
-                  .filter((project) => project.parentId === null && !project.meta.hiddenInSidebar)
-                  .sort((left, right) =>
-                    left.name.localeCompare(right.name, undefined, {
-                      numeric: true,
-                      sensitivity: 'base'
-                    })
-                  )
-                  .map((project) => (
-                    <ProjectTreeItem
-                      key={project.id}
-                      activeThreadId={activeThreadId}
-                      getThreadHref={getThreadHref}
-                      onAssignThreadToProject={(threadId, projectId) => {
-                        void assignThreadProject(threadId, projectId)
-                      }}
-                      onCreateChildProject={(parentProject) => openCreateProjectModal(parentProject.id)}
-                      onDeleteProject={requestDeleteProject}
-                      onImportProject={(file, parentProjectId) => {
-                        void importProject(file, parentProjectId)
-                      }}
-                      onExportProject={exportProject}
-                      onMoveProject={onMoveProject}
-                      onOpenEditProject={openEditProjectModal}
-                      onSelectProject={onSelectProject}
-                      onToggleProject={onToggleProject}
-                      project={project}
-                      projects={projects}
-                      selectedProjectId={selectedProjectId}
-                      threads={threads}
-                    />
-                  ))
-              ) : (
-                <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'No projects yet.'}</p>
-              )}
-            </div>
-          </>
-        )}
-      </SidebarSection>
-
-      <SidebarSection
-        actions={
           <IconButton
             aria-label={uiPreferences.collapsedSidebarSections.chats ? 'Expand chats' : 'Collapse chats'}
             onClick={() => setUiPreferences(toggleSidebarSection('chats'))}
@@ -847,6 +716,83 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         )}
       </SidebarSection>
 
+      <SidebarSection
+        actions={
+          <>
+            <IconButton
+              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand projects' : 'Collapse projects'}
+              disabled={isProjectsLoading}
+              onClick={() => setUiPreferences(toggleSidebarSection('projects'))}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Iconify
+                icon={
+                  uiPreferences.collapsedSidebarSections.projects
+                    ? 'solar:alt-arrow-down-outline'
+                    : 'solar:alt-arrow-up-outline'
+                }
+                size={14}
+              />
+            </IconButton>
+            <IconButton
+              aria-label="Create project"
+              disabled={isProjectsLoading}
+              onClick={() => openCreateProjectModal(null)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Iconify icon="solar:add-circle-outline" size={15} />
+            </IconButton>
+          </>
+        }
+        className="workspace-sidebar-projects"
+        title="Projects"
+      >
+        {uiPreferences.collapsedSidebarSections.projects ? null : (
+          <div className="workspace-sidebar-project-list">
+            {projects.some((project) => project.parentId === null && !project.meta.hiddenInSidebar) ? (
+              projects
+                .filter((project) => project.parentId === null && !project.meta.hiddenInSidebar)
+                .sort((left, right) =>
+                  left.name.localeCompare(right.name, undefined, {
+                    numeric: true,
+                    sensitivity: 'base'
+                  })
+                )
+                .map((project) => (
+                  <ProjectTreeItem
+                    key={project.id}
+                    activeThreadId={activeThreadId}
+                    getThreadHref={getThreadHref}
+                    onAssignThreadToProject={(threadId, projectId) => {
+                      void assignThreadProject(threadId, projectId)
+                    }}
+                    onCreateChildProject={(parentProject) => openCreateProjectModal(parentProject.id)}
+                    onDeleteProject={requestDeleteProject}
+                    onImportProject={(file, parentProjectId) => {
+                      void importProject(file, parentProjectId)
+                    }}
+                    onExportProject={exportProject}
+                    onMoveProject={onMoveProject}
+                    onOpenEditProject={openEditProjectModal}
+                    onSelectProject={onSelectProject}
+                    onToggleProject={onToggleProject}
+                    project={project}
+                    projects={projects}
+                    selectedProjectId={selectedProjectId}
+                    threads={threads}
+                  />
+                ))
+            ) : (
+              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'Projects appear here.'}</p>
+            )}
+          </div>
+        )}
+      </SidebarSection>
+
       {pinnedModels.length > 0 ? (
         <SidebarSection
           actions={
@@ -913,24 +859,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       ) : null}
 
       <div className="workspace-sidebar-account">
-        {workspaceOptions.length > 1 ? (
-          <div className="workspace-sidebar-workspace-switcher">
-            <label htmlFor="workspace-sidebar-switcher">Active workspace</label>
-            <select
-              className="workspace-sidebar-workspace-select"
-              disabled={isSwitchingWorkspace}
-              id="workspace-sidebar-switcher"
-              onChange={(event) => onWorkspaceSwitch(event.target.value)}
-              value={activeWorkspaceId || workspaceOptions[0]?.id || ''}
-            >
-              {workspaceOptions.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
         <div className="workspace-sidebar-account-row">
           <Iconify icon="solar:user-circle-outline" size={18} />
           <span>{accountLabel}</span>

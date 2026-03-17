@@ -19,6 +19,7 @@ import {
   type OpenPortWorkspaceInvite,
   type OpenPortWorkspaceMember
 } from '../lib/openport-api'
+import { canManageWorkspace } from '../lib/workspace-permissions'
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
@@ -27,11 +28,11 @@ import { ResourceCard, ResourceCardCopy, ResourceCardHeading } from './ui/resour
 import { Tag } from './ui/tag'
 
 type CapabilityRole = 'admin' | 'member' | 'viewer'
-type CapabilityModule = keyof OpenPortWorkspaceCapabilityPolicy['roles']['admin']
+type CapabilityModule = Exclude<keyof OpenPortWorkspaceCapabilityPolicy['roles']['admin'], 'access'>
 type CapabilityAction = keyof OpenPortWorkspaceCapabilityPolicy['roles']['admin']['models']
 
 const ROLE_OPTIONS: CapabilityRole[] = ['admin', 'member', 'viewer']
-const MODULE_OPTIONS: CapabilityModule[] = ['models', 'knowledge', 'prompts', 'tools', 'skills', 'access']
+const MODULE_OPTIONS: CapabilityModule[] = ['models', 'knowledge', 'prompts', 'tools', 'skills']
 const ACTION_OPTIONS: CapabilityAction[] = ['read', 'manage', 'import', 'export', 'publish', 'share', 'validate']
 
 export function WorkspaceGovernance() {
@@ -66,7 +67,7 @@ export function WorkspaceGovernance() {
         fetchCurrentUser(resolvedSession)
       ])
       setWorkspaces(workspaceResponse.items)
-      setCanManageAccess(Boolean(currentUser.permissions.workspace.access))
+      setCanManageAccess(canManageWorkspace(currentUser))
 
       const selectedId = workspaceId || activeWorkspaceId || resolvedSession.workspaceId || workspaceResponse.items[0]?.id || ''
       if (selectedId) {

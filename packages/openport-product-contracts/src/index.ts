@@ -54,7 +54,6 @@ export type OpenPortWorkspaceModulePermissions = {
   prompts: boolean
   tools: boolean
   skills: boolean
-  access: boolean
 }
 
 export type OpenPortWorkspaceModuleCapabilities = {
@@ -73,7 +72,6 @@ export type OpenPortWorkspaceResourceCapabilities = {
   prompts: OpenPortWorkspaceModuleCapabilities
   tools: OpenPortWorkspaceModuleCapabilities
   skills: OpenPortWorkspaceModuleCapabilities
-  access: OpenPortWorkspaceModuleCapabilities
 }
 
 export type OpenPortWorkspaceMemberRole = 'owner' | 'admin' | 'member' | 'viewer'
@@ -842,6 +840,47 @@ export type OpenPortWorkspaceToolExecutionChain = {
   steps: OpenPortWorkspaceToolExecutionStep[]
 }
 
+export type OpenPortWorkspaceToolRunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
+
+export type OpenPortWorkspaceToolRunStepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+
+export type OpenPortWorkspaceToolRunStep = {
+  id: string
+  chainStepId: string
+  toolId: string
+  toolName: string
+  mode: OpenPortWorkspaceToolExecutionStepMode
+  when: OpenPortWorkspaceToolExecutionStepWhen
+  condition: string
+  conditionMatched: boolean
+  branchPath: string
+  outputKey: string
+  status: OpenPortWorkspaceToolRunStepStatus
+  inputSnapshot: string
+  outputSnapshot: string
+  errorMessage: string | null
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export type OpenPortWorkspaceToolRun = {
+  id: string
+  workspaceId: string
+  toolId: string
+  trigger: 'manual' | 'replay' | 'api'
+  status: OpenPortWorkspaceToolRunStatus
+  debug: boolean
+  replayOfRunId: string | null
+  inputPayload: string
+  outputPayload: string
+  errorMessage: string | null
+  steps: OpenPortWorkspaceToolRunStep[]
+  startedAt: string | null
+  finishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type OpenPortWorkspaceTool = {
   id: string
   workspaceId: string
@@ -859,6 +898,127 @@ export type OpenPortWorkspaceTool = {
   accessGrants: OpenPortWorkspaceResourceGrant[]
   createdAt: string
   updatedAt: string
+}
+
+export type OpenPortWorkspaceConnectorAdapter = 'directory' | 'web' | 's3' | 'github' | 'notion' | 'rss'
+
+export type OpenPortWorkspaceConnectorSyncMode = 'full' | 'incremental'
+
+export type OpenPortWorkspaceConnectorTaskStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
+
+export type OpenPortWorkspaceConnectorSchedule = {
+  enabled: boolean
+  intervalMinutes: number
+  timezone: string
+  incremental: boolean
+  nextRunAt: string | null
+}
+
+export type OpenPortWorkspaceConnectorSyncPolicy = {
+  autoRetry: boolean
+  maxRetries: number
+  retryBackoffSeconds: number
+  maxDocumentsPerRun: number
+}
+
+export type OpenPortWorkspaceConnectorSourceConfig = {
+  directoryPath: string
+  urls: string[]
+  bucket: string
+  prefix: string
+  repository: string
+  branch: string
+  notionDatabaseId: string
+  rssFeedUrls: string[]
+  includePatterns: string[]
+  excludePatterns: string[]
+}
+
+export type OpenPortWorkspaceConnectorStatus = {
+  health: 'idle' | 'running' | 'ok' | 'error'
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastFailureAt: string | null
+  lastTaskId: string | null
+  lastErrorMessage: string | null
+}
+
+export type OpenPortWorkspaceConnector = {
+  id: string
+  workspaceId: string
+  name: string
+  adapter: OpenPortWorkspaceConnectorAdapter
+  description: string
+  enabled: boolean
+  credentialId: string | null
+  tags: string[]
+  schedule: OpenPortWorkspaceConnectorSchedule
+  syncPolicy: OpenPortWorkspaceConnectorSyncPolicy
+  sourceConfig: OpenPortWorkspaceConnectorSourceConfig
+  status: OpenPortWorkspaceConnectorStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export type OpenPortWorkspaceConnectorCredentialField = {
+  key: string
+  label: string
+  secret: boolean
+  configured: boolean
+  valuePreview: string
+}
+
+export type OpenPortWorkspaceConnectorCredential = {
+  id: string
+  workspaceId: string
+  name: string
+  provider: OpenPortWorkspaceConnectorAdapter
+  description: string
+  fields: OpenPortWorkspaceConnectorCredentialField[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type OpenPortWorkspaceConnectorTaskSummary = {
+  scanned: number
+  created: number
+  updated: number
+  removed: number
+  errors: number
+}
+
+export type OpenPortWorkspaceConnectorTask = {
+  id: string
+  workspaceId: string
+  connectorId: string
+  trigger: 'manual' | 'schedule' | 'retry'
+  mode: OpenPortWorkspaceConnectorSyncMode
+  status: OpenPortWorkspaceConnectorTaskStatus
+  attempt: number
+  maxAttempts: number
+  scheduledAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  retryOfTaskId: string | null
+  nextRetryAt: string | null
+  errorMessage: string | null
+  summary: OpenPortWorkspaceConnectorTaskSummary
+  createdAt: string
+  updatedAt: string
+}
+
+export type OpenPortWorkspaceConnectorAuditLevel = 'info' | 'warn' | 'error'
+
+export type OpenPortWorkspaceConnectorAuditEvent = {
+  id: string
+  workspaceId: string
+  connectorId: string
+  taskId: string | null
+  level: OpenPortWorkspaceConnectorAuditLevel
+  action: string
+  message: string
+  detail: string
+  createdAt: string
 }
 
 export type OpenPortWorkspaceToolValidationResponse = {
@@ -939,6 +1099,22 @@ export type OpenPortWorkspaceToolPackageResponse = {
 export type OpenPortWorkspaceToolPackageImportResponse = {
   item: OpenPortWorkspaceTool
   validation: OpenPortWorkspaceToolValidationResponse
+}
+
+export type OpenPortWorkspaceToolRunResponse = {
+  item: OpenPortWorkspaceToolRun
+}
+
+export type OpenPortWorkspaceConnectorResponse = {
+  item: OpenPortWorkspaceConnector
+}
+
+export type OpenPortWorkspaceConnectorCredentialResponse = {
+  item: OpenPortWorkspaceConnectorCredential
+}
+
+export type OpenPortWorkspaceConnectorTaskResponse = {
+  item: OpenPortWorkspaceConnectorTask
 }
 
 export type OpenPortWorkspaceSkillResponse = {

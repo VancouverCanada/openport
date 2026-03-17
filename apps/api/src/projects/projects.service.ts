@@ -2686,6 +2686,22 @@ export class ProjectsService {
     return item
   }
 
+  private async ensureKnowledgeSourceExists(actor: Actor, sourceId: string): Promise<void> {
+    const items = await this.stateStore.readKnowledgeItems(actor.workspaceId)
+    const exists = items.some((item) => this.getKnowledgeSources(item).some((source) => source.id === sourceId))
+    if (!exists) {
+      throw new NotFoundException('Knowledge source not found')
+    }
+  }
+
+  private async ensureKnowledgeChunkExists(actor: Actor, chunkId: string): Promise<void> {
+    const chunks = await this.stateStore.readKnowledgeChunks(actor.workspaceId)
+    const exists = chunks.some((entry) => entry.id === chunkId)
+    if (!exists) {
+      throw new NotFoundException('Knowledge chunk not found')
+    }
+  }
+
   private async ensureKnowledgeResourcePermission(
     actor: Actor,
     grants: OpenPortWorkspaceResourceGrant[],
@@ -2702,7 +2718,7 @@ export class ProjectsService {
     actor: Actor,
     sourceId: string
   ): Promise<{ allGrants: OpenPortWorkspaceResourceGrant[]; grants: OpenPortWorkspaceResourceGrant[] }> {
-    await this.findKnowledgeItemBySourceId(actor, sourceId)
+    await this.ensureKnowledgeSourceExists(actor, sourceId)
     const allGrants = await this.stateStore.readKnowledgeSourceGrants(actor.workspaceId)
     const current = allGrants.filter((grant) => grant.resourceType === 'knowledge_source' && grant.resourceId === sourceId)
     const ensured = this.ensureKnowledgeGrantSafeguards(actor, 'knowledge_source', sourceId, current)
@@ -2728,7 +2744,7 @@ export class ProjectsService {
     actor: Actor,
     chunkId: string
   ): Promise<{ allGrants: OpenPortWorkspaceResourceGrant[]; grants: OpenPortWorkspaceResourceGrant[] }> {
-    await this.findKnowledgeItemByChunkId(actor, chunkId)
+    await this.ensureKnowledgeChunkExists(actor, chunkId)
     const allGrants = await this.stateStore.readKnowledgeChunkGrants(actor.workspaceId)
     const current = allGrants.filter((grant) => grant.resourceType === 'knowledge_chunk' && grant.resourceId === chunkId)
     const ensured = this.ensureKnowledgeGrantSafeguards(actor, 'knowledge_chunk', chunkId, current)

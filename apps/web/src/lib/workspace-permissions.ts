@@ -35,8 +35,7 @@ export function getWorkspacePermissions(user: OpenPortCurrentUserResponse | null
       knowledge: false,
       prompts: false,
       tools: false,
-      skills: false,
-      access: false
+      skills: false
     }
   )
 }
@@ -60,8 +59,7 @@ export function getWorkspaceCapabilities(user: OpenPortCurrentUserResponse | nul
       knowledge: emptyModuleCapabilities(),
       prompts: emptyModuleCapabilities(),
       tools: emptyModuleCapabilities(),
-      skills: emptyModuleCapabilities(),
-      access: emptyModuleCapabilities()
+      skills: emptyModuleCapabilities()
     }
   )
 }
@@ -106,22 +104,18 @@ export function getFirstAccessibleWorkspaceHref(permissions: OpenPortWorkspaceMo
     return firstPrimary.href
   }
 
-  return '/chat'
+  return '/'
 }
 
 const manageRoutePatterns = [
   /^\/workspace\/models\/create$/,
   /^\/workspace\/models\/[^/]+$/,
-  /^\/workspace\/models\/[^/]+\/access$/,
   /^\/workspace\/prompts\/create$/,
   /^\/workspace\/prompts\/[^/]+$/,
-  /^\/workspace\/prompts\/[^/]+\/access$/,
   /^\/workspace\/tools\/create$/,
   /^\/workspace\/tools\/[^/]+$/,
-  /^\/workspace\/tools\/[^/]+\/access$/,
   /^\/workspace\/skills\/create$/,
   /^\/workspace\/skills\/[^/]+$/,
-  /^\/workspace\/skills\/[^/]+\/access$/,
   /^\/workspace\/knowledge\/create$/,
   /^\/workspace\/knowledge\/collections\/create$/,
   /^\/workspace\/knowledge\/collections\/[^/]+\/edit$/,

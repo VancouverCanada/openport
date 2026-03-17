@@ -1049,6 +1049,7 @@ export function WorkspaceKnowledge({ initialView = 'documents' }: WorkspaceKnowl
             <CapsuleButton active={knowledgeView === 'collections'} href="/workspace/knowledge/collections" variant="secondary">Collections</CapsuleButton>
             <CapsuleButton active={knowledgeView === 'sources'} href="/workspace/knowledge/sources" variant="secondary">Sources</CapsuleButton>
             <CapsuleButton active={knowledgeView === 'chunks'} href="/workspace/knowledge/chunks" variant="secondary">Chunks</CapsuleButton>
+            <CapsuleButton href="/workspace/knowledge/connectors" variant="secondary">Connectors</CapsuleButton>
             <CapsuleButton onClick={handleExportVisible} type="button" variant="secondary">Export visible</CapsuleButton>
             {canManage ? (
               <WorkspaceKnowledgeAddContentMenu

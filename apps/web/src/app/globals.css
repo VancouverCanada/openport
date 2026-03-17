@@ -467,9 +467,9 @@ textarea {
   background: #ffffff;
 }
 
-.landing-page--minimal {
+.landing-page--minimal,
+.landing-page--entry {
   display: grid;
-  grid-template-rows: auto 1fr;
   min-height: 100vh;
   background: #fbfbfa;
 }
@@ -547,12 +547,22 @@ textarea {
   padding: 28px 24px 44px;
 }
 
+.landing-auth-shell--entry {
+  min-height: 100vh;
+  padding-top: 24px;
+}
+
 .landing-auth-copy {
   display: grid;
   justify-items: center;
   gap: 12px;
   width: min(360px, 100%);
   text-align: center;
+}
+
+.landing-auth-copy--entry {
+  gap: 16px;
+  width: min(280px, 100%);
 }
 
 .landing-auth-kicker {
@@ -857,10 +867,10 @@ textarea {
 .workspace-sidebar {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  gap: 6px;
-  padding: 16px 12px 12px;
+  gap: 4px;
+  padding: 16px 12px 10px;
   border-right: 1px solid rgba(15, 23, 42, 0.07);
-  background: #fbfbfa;
+  background: #fdfdfc;
 }
 
 .workspace-sidebar-brand {
@@ -897,7 +907,7 @@ textarea {
 
 .workspace-sidebar-new-chat {
   color: #111111;
-  font-weight: 500;
+  font-weight: 450;
 }
 
 .workspace-sidebar-utility {
@@ -909,7 +919,7 @@ textarea {
   padding: 0 2px;
   border: 0;
   background: transparent;
-  color: rgba(15, 23, 42, 0.68);
+  color: rgba(15, 23, 42, 0.62);
   font-size: 0.96rem;
   font-weight: 400;
   line-height: 1.2;
@@ -1040,13 +1050,13 @@ textarea {
 
 .workspace-sidebar-history {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   align-content: start;
 }
 
 .workspace-sidebar-projects {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   align-content: start;
 }
 
@@ -1093,7 +1103,7 @@ textarea {
 }
 
 .workspace-sidebar-root-link {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .workspace-sidebar-root-link.is-dragged-over {
@@ -1141,7 +1151,7 @@ textarea {
 
 .workspace-sidebar-project-list {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   align-content: start;
 }
 
@@ -1367,7 +1377,7 @@ textarea {
 }
 
 .workspace-sidebar-label {
-  color: rgba(15, 23, 42, 0.54);
+  color: rgba(15, 23, 42, 0.42);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1399,7 +1409,7 @@ textarea {
 
 .workspace-sidebar-empty {
   margin: 0;
-  color: rgba(15, 23, 42, 0.42);
+  color: rgba(15, 23, 42, 0.36);
   font-size: 0.84rem;
 }
 
@@ -1940,10 +1950,24 @@ textarea {
   padding: 10px 12px;
 }
 
+.workspace-search-result-chat {
+  align-items: center;
+  min-height: 48px;
+}
+
 .workspace-search-result-copy {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.workspace-search-result-chat .workspace-search-result-copy {
+  gap: 0;
+}
+
+.workspace-search-result-chat .workspace-search-result-copy strong {
+  font-size: 0.98rem;
+  font-weight: 500;
 }
 
 .workspace-search-result-copy strong {
@@ -1972,6 +1996,12 @@ textarea {
   color: rgba(15, 23, 42, 0.46);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.workspace-search-result-chat .workspace-search-result-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
 }
 
 .workspace-search-recent-row {
@@ -2714,14 +2744,14 @@ textarea {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 14px;
-  min-height: calc(100vh - 160px);
+  gap: 16px;
+  min-height: calc(100vh - 148px);
 }
 
 .chat-empty-head {
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .chat-empty-model {
@@ -2761,8 +2791,31 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: rgba(15, 23, 42, 0.48);
+  color: rgba(15, 23, 42, 0.4);
   font-size: 12px;
+}
+
+.chat-model-trigger.is-hero {
+  gap: 10px;
+  padding: 0;
+  color: #111111;
+  font-size: 2.1rem;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+
+.chat-model-trigger-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-model-trigger-subtitle.is-hero {
+  max-width: 34rem;
+  text-align: center;
+  color: rgba(15, 23, 42, 0.5);
+  font-size: 0.98rem;
+  line-height: 1.5;
 }
 
 .chat-composer-card {
@@ -2904,7 +2957,7 @@ textarea {
   color: rgba(15, 23, 42, 0.42);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -2938,7 +2991,7 @@ textarea {
 .chat-tools-menu-item {
   width: 100%;
   justify-content: flex-start;
-  min-height: 40px;
+  min-height: 38px;
   padding: 8px 10px;
 }
 
@@ -3103,7 +3156,7 @@ textarea {
 .chat-controls {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
   padding-left: 20px;
   border-left: 1px solid rgba(15, 23, 42, 0.07);
   min-width: 0;
@@ -3114,7 +3167,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: rgba(15, 23, 42, 0.46);
+  color: rgba(15, 23, 42, 0.4);
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3167,6 +3220,7 @@ textarea {
 
 .chat-controls-header h2 {
   font-size: 14px;
+  font-weight: 500;
 }
 
 .chat-controls-section {
@@ -3184,7 +3238,7 @@ textarea {
   background: transparent;
   color: #0f172a;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 450;
   letter-spacing: -0.01em;
   text-align: left;
   cursor: pointer;
@@ -3359,7 +3413,7 @@ textarea {
 .chat-settings-panel {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   padding: 16px 18px 18px;
 }
 
@@ -3388,6 +3442,10 @@ textarea {
 .chat-settings-actions {
   display: grid;
   gap: 2px;
+}
+
+.chat-settings-nav-item {
+  min-height: 34px;
 }
 
 .chat-settings-data-grid {

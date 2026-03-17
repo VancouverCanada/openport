@@ -63,29 +63,41 @@ function buildWorkspaceActionCatalog(query: string): WorkspaceSearchActionItem[]
       id: 'action-new-chat',
       title: `Start a new conversation${titleSuffix}`,
       icon: 'solar:pen-new-square-outline',
-      href: `/chat${querySuffix}`
+      href: `/${querySuffix}`
     },
     {
       id: 'action-new-note',
       title: `Create a new note${titleSuffix}`,
       icon: 'solar:notebook-outline',
-      href: `/dashboard/notes/new${noteSuffix}`
+      href: `/notes${noteSuffix}`
     }
   ]
-}
-
-function getResultIcon(type: WorkspaceSearchResultItem['type']): string {
-  switch (type) {
-    case 'chat':
-      return 'solar:chat-round-line-outline'
-    case 'note':
-      return 'solar:notebook-outline'
-  }
 }
 
 function getEntrySectionLabel(entry: SearchEntry): string {
   if (entry.kind === 'action') return 'Actions'
   return getSearchTimeLabel(entry.item.updatedAt)
+}
+
+function getChatTimestampLabel(value: string): string {
+  const date = new Date(value)
+  const now = new Date()
+  const oneDay = 24 * 60 * 60 * 1000
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const dayDiff = Math.floor((todayStart - targetStart) / oneDay)
+
+  if (dayDiff === 0) return 'Today'
+  if (dayDiff === 1) return 'Yesterday'
+  if (dayDiff > 1 && dayDiff < 7) {
+    return date.toLocaleDateString(undefined, { weekday: 'long' })
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric'
+  })
 }
 
 export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProps) {
@@ -358,6 +370,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
             suggestions={suggestions}
             value={query}
           />
+          <div className="workspace-search-operator-hint">Use `folder:name` or `tag:name` / `pinned:true`.</div>
         </div>
 
         <div className="workspace-search-modal-body">
@@ -385,16 +398,18 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
                     {showSectionTitle ? <div className="workspace-search-section-title">{currentSection}</div> : null}
 
                     <TextButton
-                      className={`workspace-search-result workspace-search-result-detail${selectedIndex === index ? ' is-selected' : ''}`}
+                      className={`workspace-search-result workspace-search-result-detail${selectedIndex === index ? ' is-selected' : ''}${entry.kind === 'result' ? ' workspace-search-result-chat' : ''}`}
                       onClick={() => openSelectedEntry(entry)}
                       onMouseEnter={() => setSelectedIndex(index)}
                       size="md"
                       type="button"
                       variant="inline"
                     >
-                      <div className="workspace-search-result-icon">
-                        <Iconify icon={entry.kind === 'action' ? entry.item.icon : getResultIcon(entry.item.type)} size={18} />
-                      </div>
+                      {entry.kind === 'action' ? (
+                        <div className="workspace-search-result-icon">
+                          <Iconify icon={entry.item.icon} size={18} />
+                        </div>
+                      ) : null}
                       <div className="workspace-search-result-copy">
                         <strong>
                           {entry.kind === 'action' ? (
@@ -408,23 +423,11 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
                             />
                           )}
                         </strong>
-                        <span>
-                          {entry.kind === 'action' ? (
-                            entry.item.href
-                          ) : (
-                            <SearchHighlight
-                              field="excerpt"
-                              highlights={entry.item.highlights}
-                              queryTerms={queryTerms}
-                              text={entry.item.excerpt}
-                            />
-                          )}
-                        </span>
+                        {entry.kind === 'action' ? <span>{entry.item.href}</span> : null}
                       </div>
                       {entry.kind === 'result' ? (
                         <div className="workspace-search-result-meta">
-                          <span>{entry.item.metadata || 'Chat'}</span>
-                          <span>{getSearchTimeLabel(entry.item.updatedAt)}</span>
+                          <span>{getChatTimestampLabel(entry.item.updatedAt)}</span>
                         </div>
                       ) : null}
                     </TextButton>

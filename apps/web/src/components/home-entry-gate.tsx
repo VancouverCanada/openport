@@ -1,8 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChatShell } from './chat-shell'
-import { WorkspaceAppShell } from './workspace-app-shell'
 import { loadSession } from '../lib/openport-api'
 
 type HomeEntryGateProps = {
@@ -10,6 +9,7 @@ type HomeEntryGateProps = {
 }
 
 export function HomeEntryGate({ children }: HomeEntryGateProps) {
+  const router = useRouter()
   const [status, setStatus] = useState<'checking' | 'anonymous' | 'authenticated'>('checking')
 
   useEffect(() => {
@@ -22,16 +22,18 @@ export function HomeEntryGate({ children }: HomeEntryGateProps) {
     setStatus('anonymous')
   }, [])
 
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/chat')
+    }
+  }, [router, status])
+
   if (status === 'checking') {
     return <main className="home-entry-redirect" aria-hidden="true" />
   }
 
   if (status === 'authenticated') {
-    return (
-      <WorkspaceAppShell>
-        <ChatShell />
-      </WorkspaceAppShell>
-    )
+    return <main className="home-entry-redirect" aria-hidden="true" />
   }
 
   return <>{children}</>

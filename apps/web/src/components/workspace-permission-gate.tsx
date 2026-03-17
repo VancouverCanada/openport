@@ -46,7 +46,7 @@ export function WorkspacePermissionGate({ children }: Readonly<{ children: React
 
       setChecked(true)
     } catch {
-      router.replace('/chat')
+      router.replace('/')
     }
   }
 

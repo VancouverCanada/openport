@@ -89,6 +89,7 @@ export function ChatControlsPanel({
   const projectOptions = getProjectOptions(projects)
   const contextProject =
     activeProject || (settings.projectId ? projects.find((project) => project.id === settings.projectId) || null : null)
+  const hasContextSurface = Boolean(contextProject || settings.projectId || tagsDraft.trim())
   const modelRouteSource = uiPreferences
     ? getModelRouteSource(settings.valves.modelRoute, contextProject, uiPreferences, models)
     : 'chat'
@@ -200,7 +201,7 @@ export function ChatControlsPanel({
       </div>
 
       <div className="chat-controls-intro">
-        <span>{activeThreadId ? 'Session' : 'Draft'}</span>
+        <span>{activeThreadId ? 'Conversation' : 'Draft'}</span>
         {activeThreadId ? (
           <div className="chat-controls-actions">
             <TextButton onClick={onPinToggle} size="sm" type="button" variant="inline">
@@ -266,7 +267,7 @@ export function ChatControlsPanel({
       >
         <div className="chat-controls-form-grid">
           <label className="chat-controls-field">
-            <span className="chat-controls-field-label">Model route</span>
+            <span className="chat-controls-field-label">Model</span>
             {models.length > 0 ? (
               <select
                 className="chat-controls-select"
@@ -299,7 +300,7 @@ export function ChatControlsPanel({
               />
             )}
             <div className="chat-controls-subactions">
-              <small className="chat-controls-field-meta">Source: {modelRouteSource}</small>
+              <small className="chat-controls-field-meta">Inherited from {modelRouteSource}</small>
               {uiPreferences ? (
                 <TextButton
                   onClick={() =>
@@ -341,7 +342,7 @@ export function ChatControlsPanel({
         </div>
       </ControlsSection>
 
-      {contextProject || activeThreadId ? (
+      {hasContextSurface ? (
         <ControlsSection
           icon="solar:folder-with-files-outline"
           onToggle={() =>
@@ -420,7 +421,7 @@ export function ChatControlsPanel({
                           .join(', ')
                       : collaboration?.activeUsers.length
                         ? collaboration.activeUsers.map((presence) => presence.name).join(', ')
-                        : 'Project context will be used as you draft and send.'}
+                        : 'Project references are attached to this conversation.'}
                   </span>
                 </div>
               </div>
