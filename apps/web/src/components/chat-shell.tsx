@@ -119,6 +119,7 @@ export function ChatShell() {
   const [projects, setProjects] = useState<OpenPortProject[]>([])
   const [pendingSettings, setPendingSettings] = useState(getDefaultChatSettings(null))
   const [showModelMenu, setShowModelMenu] = useState(false)
+  const [modelSearch, setModelSearch] = useState('')
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<ChatSettingsSection>('general')
   const [showToolsMenu, setShowToolsMenu] = useState(false)
@@ -213,6 +214,12 @@ export function ChatShell() {
     }
     return next
   }, [currentModel, currentModelRoute, mergedModels])
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase()
+    if (!q) return availableModels
+    return availableModels.filter((model) => `${model.name} ${model.route}`.toLowerCase().includes(q))
+  }, [availableModels, modelSearch])
   function buildChatHref(params?: URLSearchParams): string {
     const chatHomePath = pathname === '/' ? '/' : '/chat'
     const suffix = params?.toString()
@@ -457,6 +464,7 @@ export function ChatShell() {
   useEffect(() => {
     if (showModelMenu) {
       setModelMenuMounted(true)
+      setModelSearch('')
       const id = window.requestAnimationFrame(() => setModelMenuVisible(true))
       return () => window.cancelAnimationFrame(id)
     }
@@ -904,9 +912,10 @@ export function ChatShell() {
   function renderModelSelector(placement: 'header' | 'hero') {
     return (
       <div className={`chat-model-menu-wrap${placement === 'hero' ? ' is-hero' : ''}`} ref={modelMenuRef}>
-        <TextButton
-          className={`chat-model-trigger${placement === 'hero' ? ' is-hero' : ''}`}
-          onClick={() => {
+        <div className={`owui-model-selector${placement === 'hero' ? ' is-hero' : ''}`}>
+          <TextButton
+            className={`chat-model-trigger${placement === 'hero' ? ' is-hero' : ''}`}
+            onClick={() => {
             // OpenWebUI-style behavior: build the list live from runtime sources (Ollama tags + workspace models).
             if (!showModelMenu) {
               void fetchOllamaTags(null, loadSession())
@@ -961,30 +970,111 @@ export function ChatShell() {
                 .catch(() => undefined)
             }
             setShowModelMenu((current) => !current)
-          }}
-          size="md"
-          type="button"
-          variant="inline"
-        >
-          {placement === 'hero' ? (
-            <span className="chat-model-trigger-copy is-hero">
+            }}
+            size="md"
+            type="button"
+            variant="inline"
+          >
+            {placement === 'hero' ? (
+              <span className="chat-model-trigger-copy is-hero">
+                <span>{currentModel?.name || currentModelRoute}</span>
+              </span>
+            ) : (
               <span>{currentModel?.name || currentModelRoute}</span>
-            </span>
-          ) : (
-            <span>{currentModel?.name || currentModelRoute}</span>
-          )}
-          <Iconify icon="solar:alt-arrow-down-outline" size={15} />
-        </TextButton>
-        <span className={`chat-model-trigger-subtitle${placement === 'hero' ? ' is-hero' : ''}`}>
-          {activeThread && placement !== 'hero' ? currentModelRoute : currentModelDescription}
-        </span>
+            )}
+            <Iconify icon="solar:alt-arrow-down-outline" size={15} />
+          </TextButton>
+
+          {placement === 'header' ? (
+            <IconButton
+              aria-label="Add model"
+              className="owui-model-add"
+              onClick={() => {
+                if (!showModelMenu) {
+                  void fetchOllamaTags(null, loadSession())
+                    .then((payload) => {
+                      const session = loadSession()
+                      const workspaceId = session?.workspaceId || ''
+                      const mapped = (payload.models || [])
+                        .map((entry) =>
+                          typeof entry?.name === 'string'
+                            ? entry.name
+                            : typeof entry?.model === 'string'
+                              ? entry.model
+                              : ''
+                        )
+                        .map((name) => name.trim())
+                        .filter(Boolean)
+                        .map((name) => ({
+                          id: `runtime_ollama_${slugifyOllamaName(name)}`,
+                          workspaceId,
+                          name,
+                          route: `ollama/${name}`,
+                          provider: 'ollama' as const,
+                          description: '',
+                          tags: ['local'],
+                          status: 'active' as const,
+                          isDefault: false,
+                          filterIds: [],
+                          defaultFilterIds: [],
+                          actionIds: [],
+                          defaultFeatureIds: [],
+                          capabilities: {
+                            vision: false,
+                            webSearch: false,
+                            imageGeneration: false,
+                            codeInterpreter: false
+                          },
+                          knowledgeItemIds: [],
+                          toolIds: [],
+                          builtinToolIds: [],
+                          skillIds: [],
+                          promptSuggestions: [],
+                          accessGrants: [],
+                          createdAt: '',
+                          updatedAt: ''
+                        }))
+
+                      setOllamaLiveModels(mapped)
+                    })
+                    .catch(() => undefined)
+                  void fetchWorkspaceModels(loadSession())
+                    .then((response) => setModels(response.items))
+                    .catch(() => undefined)
+                }
+                setShowModelMenu(true)
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Iconify icon="solar:add-circle-outline" size={18} />
+            </IconButton>
+          ) : null}
+        </div>
+
+        {placement === 'hero' ? (
+          <span className={`chat-model-trigger-subtitle${placement === 'hero' ? ' is-hero' : ''}`}>
+            {currentModelDescription}
+          </span>
+        ) : null}
 
         {modelMenuMounted ? (
           <div
             className={`chat-model-menu${placement === 'hero' ? ' is-hero' : ''}${modelMenuVisible ? ' is-open' : ' is-closing'}`}
           >
+            <div className="owui-model-menu-search">
+              <Iconify icon="solar:magnifer-outline" size={16} />
+              <input
+                aria-label="Search a model"
+                className="owui-model-menu-search-input"
+                onChange={(event) => setModelSearch(event.target.value)}
+                placeholder="Search a model"
+                value={modelSearch}
+              />
+            </div>
             <div className="chat-model-menu-list">
-              {availableModels.map((model) => (
+              {filteredModels.map((model) => (
                 <div className={`chat-model-menu-item-row${model.route === currentModelRoute ? ' is-active' : ''}`} key={model.id}>
                   <TextButton
                     active={model.route === currentModelRoute}
@@ -1480,6 +1570,9 @@ export function ChatShell() {
 
                       {message.role === 'assistant' ? (
                         <div className={`owui-assistant-actions${isLast ? ' is-visible' : ''}`}>
+                          <button className="owui-assistant-action" disabled type="button">
+                            <Iconify icon="solar:pen-outline" size={16} />
+                          </button>
                           <button
                             className="owui-assistant-action"
                             onClick={() => {
@@ -1495,6 +1588,9 @@ export function ChatShell() {
                             type="button"
                           >
                             <Iconify icon={speakingMessageId === message.id ? 'solar:stop-outline' : 'solar:volume-loud-outline'} size={16} />
+                          </button>
+                          <button className="owui-assistant-action" disabled type="button">
+                            <Iconify icon="solar:info-circle-outline" size={16} />
                           </button>
                           <button className="owui-assistant-action" disabled type="button">
                             <Iconify icon="solar:like-outline" size={16} />
