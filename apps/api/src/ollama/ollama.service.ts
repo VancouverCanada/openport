@@ -118,6 +118,42 @@ export class OllamaService {
     return (await response.json().catch(() => ({}))) as OllamaTagsResponse
   }
 
+  async fetchAllTags(workspaceId: string): Promise<OllamaTagsResponse> {
+    const config = await this.getConfig(workspaceId)
+    if (!config.ENABLE_OLLAMA_API) {
+      throw new BadRequestException('Ollama API is disabled')
+    }
+    const urls = config.OLLAMA_BASE_URLS
+    if (!urls.length) {
+      throw new BadRequestException('No Ollama URLs configured')
+    }
+
+    type OllamaTagModel = NonNullable<OllamaTagsResponse['models']>[number]
+    const merged = new Map<string, OllamaTagModel>()
+    await Promise.all(
+      urls.map((_, idx) =>
+        this.fetchTags(workspaceId, idx)
+          .then((payload) => {
+            const models = Array.isArray(payload.models) ? payload.models : []
+            models.forEach((entry) => {
+              const name =
+                (typeof entry?.name === 'string' ? entry.name : typeof entry?.model === 'string' ? entry.model : '')
+                  .trim()
+              if (!name) return
+              if (!merged.has(name)) merged.set(name, entry)
+            })
+          })
+          .catch(() => undefined)
+      )
+    )
+
+    const models = Array.from(merged.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, value]) => value)
+
+    return { models }
+  }
+
   async ensureWorkspaceModels(actor: { workspaceId: string }): Promise<void> {
     const config = await this.getConfig(actor.workspaceId)
     if (!config.ENABLE_OLLAMA_API) return

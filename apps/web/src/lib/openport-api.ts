@@ -1264,6 +1264,17 @@ export async function syncOllamaModels(session?: OpenPortSession | null): Promis
   return request<{ ok: true }>('/ollama/sync', { method: 'POST' }, session)
 }
 
+export async function fetchOllamaTags(
+  urlIdx: null | number = null,
+  session?: OpenPortSession | null
+): Promise<{ models: Array<{ name?: string; model?: string; size?: number; modified_at?: string }> }> {
+  const suffix = typeof urlIdx === 'number' ? `/${urlIdx}` : ''
+  const response = await request<{ models?: unknown }>(`/ollama/api/tags${suffix}`, { method: 'GET' }, session)
+  return {
+    models: Array.isArray((response as any).models) ? ((response as any).models as any[]) : []
+  }
+}
+
 export async function fetchWorkspaceModel(
   id: string,
   session?: OpenPortSession | null
