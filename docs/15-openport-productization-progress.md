@@ -42,6 +42,7 @@
 | 全局动效节奏调慢为中速偏慢 | done | `globals.css` 的 `--motion-fast/base/slow` 已统一为 `260/380/560ms` |
 | 按钮微交互统一到慢速 token | done | `capsule-button` / `icon-button` / `text-button` 已统一使用新的 motion tokens |
 | 解决 TipTap 依赖树回归并恢复构建 | done | 锁定 `@tiptap/*` 到 `3.5.3` 并通过 `overrides` 固定传递依赖，避免 `3.20.x` 缺失 `dist` 导致构建失败 |
+| Sidebar 语义继续对齐 Open WebUI | done | 已移除 `All chats` 独立入口；`Projects` 重命名为 `Folders`；左栏移除 `Pinned` 分组并保留拖拽到 chats 根层 |
 | 本轮构建验收 | done | `npm run build:web` 已通过 |
 
 ## 2026-03-16 收口进展（Projects vs Open WebUI Folders Final 4-Gap）
