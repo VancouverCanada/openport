@@ -69,6 +69,14 @@ function slugifyOllamaName(name: string): string {
     .slice(0, 64) || 'model'
 }
 
+function createLocalId(prefix: string): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+      ? (crypto as any).randomUUID()
+      : Math.random().toString(16).slice(2)
+  return `${prefix}_${uuid}_${Date.now()}`
+}
+
 const suggestions = [
   {
     title: 'Review recent changes',
@@ -1308,48 +1316,124 @@ export function ChatShell() {
     setError(null)
     setShowToolsMenu(false)
 
-    startTransition(() => {
-      void (async () => {
+    void (async () => {
       try {
         let sessionId = activeThreadId
+        let createdSession: OpenPortChatSession | null = null
 
+        // If we're starting a brand new chat, create the session and navigate first.
+        // Avoid blocking the optimistic render on slow non-critical calls (like project refresh).
         if (!sessionId) {
           const created = await createChatSession(`New chat ${threads.length + 1}`, loadSession(), {
             settings: pendingSettings
           })
-          assignThreadToProject(created.session.id, selectedProjectId)
-          const nextProjects = await fetchProjects(loadSession()).then((response) => response.items).catch(() => loadProjects())
-          saveProjectsToCache(nextProjects)
-          setProjects(nextProjects)
           sessionId = created.session.id
-          setThreads((current) => [created.session, ...current])
+          createdSession = created.session
           setActiveThreadId(sessionId)
+
           const params = new URLSearchParams()
           params.set('thread', sessionId)
-          if (selectedProjectId) {
-            params.set('project', selectedProjectId)
-          }
-          if (isArchivedView) {
-            params.set('view', 'archived')
-          }
+          if (selectedProjectId) params.set('project', selectedProjectId)
+          if (isArchivedView) params.set('view', 'archived')
           router.push(buildChatHref(params))
+
+          // Best-effort: assign and refresh projects in the background.
+          void (async () => {
+            try {
+              assignThreadToProject(sessionId, selectedProjectId)
+              const nextProjects = await fetchProjects(loadSession())
+                .then((response) => response.items)
+                .catch(() => loadProjects())
+              saveProjectsToCache(nextProjects)
+              setProjects(nextProjects)
+            } catch {
+              // ignore
+            }
+          })()
         }
 
-        const response = await postChatMessage(sessionId, content, messageAttachments, loadSession())
-        setThreads((current) => {
-          const nextThreads = current.map((thread) =>
-            thread.id === response.session.id ? { ...response.session, messages: response.messages } : thread
-          )
-          return sortThreads(nextThreads)
+        const optimisticBaseId = createLocalId('local_msg')
+        const now = new Date().toISOString()
+        const optimisticUserMessage: OpenPortChatMessage = {
+          id: `${optimisticBaseId}_user`,
+          role: 'user',
+          content,
+          createdAt: now,
+          attachments: messageAttachments
+        }
+        const optimisticAssistantMessage: OpenPortChatMessage = {
+          id: `${optimisticBaseId}_assistant`,
+          role: 'assistant',
+          content: '',
+          createdAt: new Date(Date.now() + 1).toISOString()
+        }
+
+        // Optimistic render: show the user message immediately and a placeholder assistant "Thinking..." bubble.
+        if (createdSession) {
+          setThreads((current) => [
+            {
+              ...createdSession,
+              updatedAt: optimisticAssistantMessage.createdAt,
+              messages: [...createdSession.messages, optimisticUserMessage, optimisticAssistantMessage]
+            },
+            ...current
+          ])
+        } else if (sessionId) {
+          setThreads((current) => {
+            const nextThreads = current.map((thread) =>
+              thread.id === sessionId
+                ? {
+                    ...thread,
+                    updatedAt: optimisticAssistantMessage.createdAt,
+                    messages: [...thread.messages, optimisticUserMessage, optimisticAssistantMessage]
+                  }
+                : thread
+            )
+            return sortThreads(nextThreads)
+          })
+        }
+
+        startTransition(() => {
+          void postChatMessage(sessionId!, content, messageAttachments, loadSession())
+            .then((response) => {
+              setThreads((current) => {
+                const nextThreads = current.map((thread) => {
+                  if (thread.id !== response.session.id) return thread
+
+                  const serverMessages = Array.isArray(response.session.messages) ? response.session.messages : []
+                  const responseMessages = Array.isArray(response.messages) ? response.messages : []
+
+                  // Some backends return session metadata quickly and stream messages later.
+                  // Never replace a fuller local thread with a shorter server payload.
+                  const mergedMessages =
+                    serverMessages.length >= thread.messages.length
+                      ? serverMessages
+                      : responseMessages.length > 0
+                        ? [...thread.messages, ...responseMessages].filter((msg, idx, all) => all.findIndex((m) => m.id === msg.id) === idx)
+                        : thread.messages
+
+                  return {
+                    ...thread,
+                    ...response.session,
+                    messages: mergedMessages
+                  }
+                })
+                return sortThreads(nextThreads)
+              })
+              setComposerAttachments([])
+            })
+            .catch((submitError) => {
+              setDraft(content)
+              setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
+              notify('error', 'Unable to send message.')
+            })
         })
-        setComposerAttachments([])
       } catch (submitError) {
         setDraft(content)
         setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
         notify('error', 'Unable to send message.')
       }
-      })()
-    })
+    })()
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -1564,7 +1648,18 @@ export function ChatShell() {
                         ) : null}
 
                         <div className="owui-message-content" data-copy-response-source>
-                          {message.content}
+                          {message.role === 'assistant' && !message.content.trim() ? (
+                            <span className="owui-thinking">
+                              <span className="owui-thinking-dots" aria-hidden="true">
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                              <span className="owui-thinking-label">Thinking...</span>
+                            </span>
+                          ) : (
+                            message.content
+                          )}
                         </div>
                       </div>
 
