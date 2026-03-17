@@ -169,6 +169,9 @@ export function ChatShell() {
     Record<string, Array<{ done: boolean; action: string; description: string; urls?: string[]; query?: string }>>
   >({})
   const [expandedStatusHistory, setExpandedStatusHistory] = useState<Record<string, boolean>>({})
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
+  const autoScrollRef = useRef(true)
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -292,6 +295,14 @@ export function ChatShell() {
     })
 
     return { short: shortDate, full }
+  }
+
+  function scrollToLatest(behavior: ScrollBehavior = 'auto'): void {
+    try {
+      bottomSentinelRef.current?.scrollIntoView({ behavior, block: 'end' })
+    } catch {
+      // ignore
+    }
   }
 
   function openSettings(section: ChatSettingsSection): void {
@@ -642,6 +653,31 @@ export function ChatShell() {
       isActive = false
     }
   }, [activeThreadId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const threshold = 140
+    const handleScroll = () => {
+      const doc = document.documentElement
+      const distance = doc.scrollHeight - (window.scrollY + window.innerHeight)
+      const nearBottom = distance <= threshold
+
+      if (nearBottom) {
+        autoScrollRef.current = true
+        setShowJumpToLatest(false)
+        return
+      }
+
+      // User scrolled away from the bottom: stop auto-scrolling and show the jump affordance.
+      autoScrollRef.current = false
+      setShowJumpToLatest(true)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     if (!session || typeof window === 'undefined') return
@@ -1466,6 +1502,10 @@ export function ChatShell() {
           })
         }
 
+        if (autoScrollRef.current) {
+          scrollToLatest('smooth')
+        }
+
         const abort = new AbortController()
         const onEvent = (evt: any) => {
           if (!evt || !evt.event) return
@@ -1498,6 +1538,9 @@ export function ChatShell() {
               })
               return sortThreads(nextThreads)
             })
+            if (autoScrollRef.current) {
+              scrollToLatest('auto')
+            }
           }
         }
 
@@ -1757,6 +1800,7 @@ export function ChatShell() {
                   message.role === 'assistant' && !isAssistantPending ? extractThinkBlocks(message.content) : null
                 const assistantTimestamp =
                   message.role === 'assistant' && !isAssistantPending ? formatChatTimestamp(message.createdAt) : null
+                const userTimestamp = message.role === 'user' ? formatChatTimestamp(message.createdAt) : null
                 const statusHistory = message.role === 'assistant' ? assistantStatusHistoryById[message.id] || [] : []
                 const statusExpanded = message.role === 'assistant' ? Boolean(expandedStatusHistory[message.id]) : false
 
@@ -1768,6 +1812,21 @@ export function ChatShell() {
                     style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
                   >
                     <div className="owui-message-inner">
+                      {message.role === 'user' ? (
+                        <div className="owui-user-head">
+                          <span className="owui-user-label">YOU</span>
+                          {userTimestamp ? (
+                            <span
+                              className="owui-user-timestamp owui-tooltip-target"
+                              data-tooltip={userTimestamp.full}
+                              title={userTimestamp.full}
+                            >
+                              {userTimestamp.short}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       {message.role === 'assistant' ? (
                         <div className="owui-assistant-head">
                           <div className="owui-assistant-model">
@@ -1879,7 +1938,12 @@ export function ChatShell() {
                               <span className="owui-thinking-label">Thinking...</span>
                             </span>
                           ) : (
-                            assistantThought ? assistantThought.visible : message.content
+                            <>
+                              {assistantThought ? assistantThought.visible : message.content}
+                              {isAssistantPending && message.content.trim() ? (
+                                <span className="owui-stream-cursor" aria-hidden="true" />
+                              ) : null}
+                            </>
                           )}
                         </div>
                       </div>
@@ -1934,7 +1998,22 @@ export function ChatShell() {
                   </article>
                 )
               })}
+              <div aria-hidden="true" ref={bottomSentinelRef} />
             </div>
+
+            {showJumpToLatest ? (
+              <button
+                className="owui-jump-latest"
+                onClick={() => {
+                  autoScrollRef.current = true
+                  setShowJumpToLatest(false)
+                  scrollToLatest('smooth')
+                }}
+                type="button"
+              >
+                Jump to latest
+              </button>
+            ) : null}
 
             <div className="chat-main-composer">{renderComposer('thread')}</div>
           </>
