@@ -3492,10 +3492,23 @@ textarea {
   color: rgba(15, 23, 42, 0.48);
 }
 
+.owui-assistant-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.55);
+}
+
 .owui-assistant-timestamp {
   font-weight: 600;
   font-size: 12px;
   color: rgba(15, 23, 42, 0.42);
+  visibility: hidden;
+}
+
+.owui-message--assistant:hover .owui-assistant-timestamp {
+  visibility: visible;
 }
 
 .owui-tooltip-target {
