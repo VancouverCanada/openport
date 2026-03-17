@@ -20,6 +20,7 @@ import {
   fetchChatSessions,
   fetchProjectCollaboration,
   fetchProjects,
+  fetchOllamaTags,
   fetchWorkspaceModels,
   loadSession,
   postChatMessage,
@@ -54,6 +55,15 @@ import { FeedbackBanner } from './ui/feedback-banner'
 import { IconButton } from './ui/icon-button'
 import { MessageBubble } from './ui/message-bubble'
 import { TextButton } from './ui/text-button'
+
+function slugifyOllamaName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64) || 'model'
+}
 
 const suggestions = [
   {
@@ -98,6 +108,7 @@ export function ChatShell() {
   const session = useMemo(() => loadSession(), [])
   const [threads, setThreads] = useState<OpenPortChatSession[]>([])
   const [models, setModels] = useState<OpenPortWorkspaceModel[]>([])
+  const [ollamaLiveModels, setOllamaLiveModels] = useState<OpenPortWorkspaceModel[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -143,9 +154,17 @@ export function ChatShell() {
     projects.find((project) => project.id === activeThread?.settings.projectId) ||
     null
   const accountInitial = (session?.name || session?.email || 'O').trim().charAt(0).toUpperCase()
+  const mergedModels = useMemo(() => {
+    const merged = new Map<string, OpenPortWorkspaceModel>()
+    ;[...ollamaLiveModels, ...models].forEach((model) => {
+      if (!model?.route) return
+      if (!merged.has(model.route)) merged.set(model.route, model)
+    })
+    return Array.from(merged.values())
+  }, [models, ollamaLiveModels])
   const currentModelRoute = activeThread?.settings.valves.modelRoute || pendingSettings.valves.modelRoute
   const currentModel =
-    models.find((model) => model.route === currentModelRoute) || {
+    mergedModels.find((model) => model.route === currentModelRoute) || {
       id: currentModelRoute,
       name: currentModelRoute,
       route: currentModelRoute,
@@ -183,12 +202,12 @@ export function ChatShell() {
       } as CSSProperties)
     : undefined
   const availableModels = useMemo(() => {
-    const next = [...models]
+    const next = [...mergedModels]
     if (!next.some((model) => model.route === currentModelRoute)) {
       next.unshift(currentModel)
     }
     return next
-  }, [currentModel, currentModelRoute, models])
+  }, [currentModel, currentModelRoute, mergedModels])
   function buildChatHref(params?: URLSearchParams): string {
     const chatHomePath = pathname === '/' ? '/' : '/chat'
     const suffix = params?.toString()
@@ -707,8 +726,55 @@ export function ChatShell() {
         <TextButton
           className={`chat-model-trigger${placement === 'hero' ? ' is-hero' : ''}`}
           onClick={() => {
-            // Keep the model menu in sync with runtime availability (e.g. Ollama models can appear after startup).
+            // OpenWebUI-style behavior: build the list live from runtime sources (Ollama tags + workspace models).
             if (!showModelMenu) {
+              void fetchOllamaTags(null, loadSession())
+                .then((payload) => {
+                  const session = loadSession()
+                  const workspaceId = session?.workspaceId || ''
+                  const mapped = (payload.models || [])
+                    .map((entry) =>
+                      typeof entry?.name === 'string'
+                        ? entry.name
+                        : typeof entry?.model === 'string'
+                          ? entry.model
+                          : ''
+                    )
+                    .map((name) => name.trim())
+                    .filter(Boolean)
+                    .map((name) => ({
+                      id: `runtime_ollama_${slugifyOllamaName(name)}`,
+                      workspaceId,
+                      name,
+                      route: `ollama/${name}`,
+                      provider: 'ollama' as const,
+                      description: '',
+                      tags: ['local'],
+                      status: 'active' as const,
+                      isDefault: false,
+                      filterIds: [],
+                      defaultFilterIds: [],
+                      actionIds: [],
+                      defaultFeatureIds: [],
+                      capabilities: {
+                        vision: false,
+                        webSearch: false,
+                        imageGeneration: false,
+                        codeInterpreter: false
+                      },
+                      knowledgeItemIds: [],
+                      toolIds: [],
+                      builtinToolIds: [],
+                      skillIds: [],
+                      promptSuggestions: [],
+                      accessGrants: [],
+                      createdAt: '',
+                      updatedAt: ''
+                    }))
+
+                  setOllamaLiveModels(mapped)
+                })
+                .catch(() => undefined)
               void fetchWorkspaceModels(loadSession())
                 .then((response) => setModels(response.items))
                 .catch(() => undefined)

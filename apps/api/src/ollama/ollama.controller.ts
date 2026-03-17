@@ -47,7 +47,7 @@ export class OllamaController {
   @Get('api/tags')
   tagsDefault(@Req() req: FastifyRequest): Promise<Record<string, unknown>> {
     const actor = resolveActor(req.headers)
-    return this.ollama.fetchTags(actor.workspaceId, 0)
+    return this.ollama.fetchAllTags(actor.workspaceId)
   }
 
   @Get('api/tags/:idx')
@@ -57,10 +57,22 @@ export class OllamaController {
     return this.ollama.fetchTags(actor.workspaceId, Number.isFinite(parsed) ? parsed : 0)
   }
 
+  @Get('api/version')
+  versionDefault(@Req() req: FastifyRequest): Promise<Record<string, unknown>> {
+    const actor = resolveActor(req.headers)
+    return this.ollama.verify(actor.workspaceId, 0).then((payload) => ({ version: payload.version }))
+  }
+
+  @Get('api/version/:idx')
+  version(@Req() req: FastifyRequest, @Param('idx') idx: string): Promise<Record<string, unknown>> {
+    const actor = resolveActor(req.headers)
+    const parsed = Number(idx)
+    return this.ollama.verify(actor.workspaceId, Number.isFinite(parsed) ? parsed : 0).then((payload) => ({ version: payload.version }))
+  }
+
   @Post('sync')
   sync(@Req() req: FastifyRequest): Promise<Record<string, unknown>> {
     const actor = resolveActor(req.headers)
     return this.ollama.ensureWorkspaceModels(actor).then(() => ({ ok: true }))
   }
 }
-
