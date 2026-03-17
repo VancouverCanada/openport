@@ -107,6 +107,11 @@ export type UpdateChatSessionMetaInput = {
   folderId?: string | null
   tags?: string[]
 }
+
+export type OllamaConfigResponse = {
+  ENABLE_OLLAMA_API: boolean
+  OLLAMA_BASE_URLS: string[]
+}
 export type {
   OpenPortAuthResponse,
   OpenPortBootstrapResponse,
@@ -1178,17 +1183,96 @@ export async function deleteProjectKnowledge(
   return request<{ ok: true }>(`/projects/knowledge/${itemId}`, { method: 'DELETE' }, session)
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+}
+
+function normalizeWorkspaceModel(input: OpenPortWorkspaceModel): OpenPortWorkspaceModel {
+  const model = input as Partial<OpenPortWorkspaceModel>
+  return {
+    ...input,
+    description: typeof model.description === 'string' ? model.description : '',
+    tags: normalizeStringArray(model.tags),
+    filterIds: normalizeStringArray(model.filterIds),
+    defaultFilterIds: normalizeStringArray(model.defaultFilterIds),
+    actionIds: normalizeStringArray(model.actionIds),
+    defaultFeatureIds: normalizeStringArray(model.defaultFeatureIds),
+    knowledgeItemIds: normalizeStringArray(model.knowledgeItemIds),
+    toolIds: normalizeStringArray(model.toolIds),
+    builtinToolIds: normalizeStringArray(model.builtinToolIds),
+    skillIds: normalizeStringArray(model.skillIds),
+    promptSuggestions: Array.isArray(model.promptSuggestions)
+      ? model.promptSuggestions.filter(
+          (entry): entry is OpenPortWorkspaceModel['promptSuggestions'][number] =>
+            Boolean(entry) &&
+            typeof entry.id === 'string' &&
+            typeof entry.title === 'string' &&
+            typeof entry.prompt === 'string'
+        )
+      : [],
+    capabilities: {
+      vision: Boolean(model.capabilities?.vision),
+      webSearch: Boolean(model.capabilities?.webSearch),
+      imageGeneration: Boolean(model.capabilities?.imageGeneration),
+      codeInterpreter: Boolean(model.capabilities?.codeInterpreter)
+    },
+    accessGrants: Array.isArray(model.accessGrants) ? model.accessGrants : []
+  }
+}
+
 export async function fetchWorkspaceModels(
   session?: OpenPortSession | null
 ): Promise<OpenPortListResponse<OpenPortWorkspaceModel>> {
-  return request<OpenPortListResponse<OpenPortWorkspaceModel>>('/workspace/models', { method: 'GET' }, session)
+  const response = await request<OpenPortListResponse<OpenPortWorkspaceModel>>('/workspace/models', { method: 'GET' }, session)
+  return {
+    ...response,
+    items: Array.isArray(response.items) ? response.items.map((item) => normalizeWorkspaceModel(item)) : []
+  }
+}
+
+export async function fetchOllamaConfig(session?: OpenPortSession | null): Promise<OllamaConfigResponse> {
+  const response = await request<OllamaConfigResponse>('/ollama/config', { method: 'GET' }, session)
+  return {
+    ENABLE_OLLAMA_API: Boolean(response.ENABLE_OLLAMA_API),
+    OLLAMA_BASE_URLS: Array.isArray(response.OLLAMA_BASE_URLS) ? response.OLLAMA_BASE_URLS : []
+  }
+}
+
+export async function updateOllamaConfig(
+  input: Partial<OllamaConfigResponse>,
+  session?: OpenPortSession | null
+): Promise<OllamaConfigResponse> {
+  const response = await request<OllamaConfigResponse>('/ollama/config/update', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, session)
+  return {
+    ENABLE_OLLAMA_API: Boolean(response.ENABLE_OLLAMA_API),
+    OLLAMA_BASE_URLS: Array.isArray(response.OLLAMA_BASE_URLS) ? response.OLLAMA_BASE_URLS : []
+  }
+}
+
+export async function verifyOllamaConnection(
+  urlIdx = 0,
+  session?: OpenPortSession | null
+): Promise<{ ok: true; version: string; baseUrl: string }> {
+  const suffix = urlIdx ? `/${urlIdx}` : ''
+  return request<{ ok: true; version: string; baseUrl: string }>(`/ollama/verify${suffix}`, { method: 'GET' }, session)
+}
+
+export async function syncOllamaModels(session?: OpenPortSession | null): Promise<{ ok: true }> {
+  return request<{ ok: true }>('/ollama/sync', { method: 'POST' }, session)
 }
 
 export async function fetchWorkspaceModel(
   id: string,
   session?: OpenPortSession | null
 ): Promise<OpenPortWorkspaceModelResponse> {
-  return request<OpenPortWorkspaceModelResponse>(`/workspace/models/${id}`, { method: 'GET' }, session)
+  const response = await request<OpenPortWorkspaceModelResponse>(`/workspace/models/${id}`, { method: 'GET' }, session)
+  return {
+    ...response,
+    item: normalizeWorkspaceModel(response.item)
+  }
 }
 
 export async function createWorkspaceModel(

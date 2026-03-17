@@ -8,8 +8,10 @@ import {
   buildProjectEventsUrl,
   createChatSession,
   createProject as createProjectRemote,
+  deleteChatSession,
   deleteProject as deleteProjectRemote,
   exportProject as exportProjectRemote,
+  fetchChatSession,
   fetchChatSessions,
   fetchProjects,
   fetchWorkspaceModels,
@@ -18,6 +20,7 @@ import {
   loadSession,
   moveProject as moveProjectRemote,
   type OpenPortProjectExportBundle,
+  updateChatSessionMeta,
   updateChatSessionSettings,
   updateProject as updateProjectRemote,
   type OpenPortChatSession,
@@ -54,6 +57,8 @@ import { ProjectModal } from './project-modal'
 import { ProjectTreeItem } from './project-tree-item'
 import { SidebarSection } from './ui/sidebar-section'
 import { TextButton } from './ui/text-button'
+import type { WorkspaceResourceMenuItem } from './workspace-resource-menu'
+import { WorkspaceResourceMenu } from './workspace-resource-menu'
 
 const appLinks = [
   { href: '/dashboard/notes', label: 'Notes', icon: 'solar:notebook-outline' },
@@ -107,6 +112,21 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     projectId: null,
     open: false
   })
+  const [deleteThreadState, setDeleteThreadState] = useState<{
+    open: boolean
+    threadId: string | null
+  }>({
+    open: false,
+    threadId: null
+  })
+  const [renameThreadState, setRenameThreadState] = useState<{
+    open: boolean
+    threadId: string | null
+  }>({
+    open: false,
+    threadId: null
+  })
+  const [renameDraft, setRenameDraft] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isChatsDropTarget, setIsChatsDropTarget] = useState(false)
   const { isMobile, toggleSidebar } = useAppShellState()
@@ -123,6 +143,8 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       : null
   const deleteProjectTarget =
     deleteState.projectId ? projects.find((project) => project.id === deleteState.projectId) || null : null
+  const deleteThreadTarget =
+    deleteThreadState.threadId ? threads.find((thread) => thread.id === deleteThreadState.threadId) || null : null
 
   async function refreshProjects(): Promise<void> {
     setIsProjectsLoading(true)
@@ -321,7 +343,9 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
       await refreshProjects()
       closeProjectModal()
       notify('success', 'Project created.')
-      router.push(`/chat?project=${project.id}`)
+      const params = new URLSearchParams()
+      params.set('project', project.id)
+      router.push(buildChatHref(params))
     } catch {
       notify('error', projectModalState.mode === 'edit' ? 'Unable to update project.' : 'Unable to create project.')
     }
@@ -575,7 +599,15 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
 
   function buildChatHref(params?: URLSearchParams): string {
     const suffix = params?.toString()
-    return suffix ? `/chat?${suffix}` : '/chat'
+    return suffix ? `/?${suffix}` : '/'
+  }
+
+  function buildThreadHref(threadId: string, projectId: string | null = null): string {
+    const params = new URLSearchParams()
+    params.set('thread', threadId)
+    if (projectId) params.set('project', projectId)
+    if (isArchivedView) params.set('view', 'archived')
+    return buildChatHref(params)
   }
 
   function toggleHistoryGroup(label: string): void {
@@ -586,12 +618,205 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     })
   }
 
+  function requestDeleteThread(threadId: string): void {
+    setDeleteThreadState({ open: true, threadId })
+  }
+
+  function closeDeleteThreadDialog(): void {
+    setDeleteThreadState({ open: false, threadId: null })
+  }
+
+  async function confirmDeleteThread(): Promise<void> {
+    const threadId = deleteThreadState.threadId
+    if (!threadId) return
+
+    try {
+      await deleteChatSession(threadId, loadSession())
+      setThreads((current) => current.filter((thread) => thread.id !== threadId))
+      await refreshProjects()
+      closeDeleteThreadDialog()
+      notify('success', 'Chat deleted.')
+
+      if (activeThreadId === threadId) {
+        const params = new URLSearchParams()
+        if (selectedProjectId) params.set('project', selectedProjectId)
+        if (isArchivedView) params.set('view', 'archived')
+        router.push(buildChatHref(params))
+      }
+    } catch {
+      notify('error', 'Unable to delete chat.')
+    }
+  }
+
+  function requestRenameThread(threadId: string): void {
+    const thread = threads.find((entry) => entry.id === threadId)
+    setRenameDraft(thread?.title ?? '')
+    setRenameThreadState({ open: true, threadId })
+  }
+
+  function closeRenameThreadDialog(): void {
+    setRenameThreadState({ open: false, threadId: null })
+    setRenameDraft('')
+  }
+
+  async function confirmRenameThread(): Promise<void> {
+    const threadId = renameThreadState.threadId
+    if (!threadId) return
+    const nextTitle = renameDraft.trim()
+    if (!nextTitle) return
+
+    try {
+      const { session } = await updateChatSessionMeta(threadId, { title: nextTitle }, loadSession())
+      setThreads((current) => current.map((thread) => (thread.id === session.id ? session : thread)))
+      closeRenameThreadDialog()
+      notify('success', 'Chat renamed.')
+    } catch {
+      notify('error', 'Unable to rename chat.')
+    }
+  }
+
+  async function downloadThread(threadId: string): Promise<void> {
+    try {
+      const { session } = await fetchChatSession(threadId, loadSession())
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        items: [session]
+      }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `chat-${(session.title || 'chat').replace(/\\s+/g, '-').toLowerCase()}-${Date.now()}.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      notify('success', 'Chat downloaded.')
+    } catch {
+      notify('error', 'Unable to download chat.')
+    }
+  }
+
+  async function cloneThread(threadId: string): Promise<void> {
+    const beforeIds = new Set(threads.map((thread) => thread.id))
+
+    try {
+      const { session } = await fetchChatSession(threadId, loadSession())
+      const now = new Date().toISOString()
+      const clonePayload = {
+        ...session,
+        id: '',
+        title: `Copy of ${session.title || 'Chat'}`,
+        createdAt: now,
+        updatedAt: now,
+        archived: false,
+        pinned: false,
+        shared: false
+      }
+
+      await importChatSessions([clonePayload], loadSession())
+      const afterResponse = await fetchChatSessions({ archived: isArchivedView }, loadSession())
+      setThreads(afterResponse.items)
+      await refreshProjects()
+
+      const created = afterResponse.items.find((thread) => !beforeIds.has(thread.id))
+      if (created) {
+        router.push(buildThreadHref(created.id, created.settings.projectId ?? null))
+        if (isMobile) toggleSidebar()
+      }
+
+      notify('success', 'Chat cloned.')
+    } catch {
+      notify('error', 'Unable to clone chat.')
+    }
+  }
+
+  async function shareThread(threadId: string): Promise<void> {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const url = `${origin}/c/${threadId}`
+    try {
+      await updateChatSessionMeta(threadId, { shared: true }, loadSession()).catch(() => undefined)
+      await navigator.clipboard.writeText(url)
+      notify('success', 'Share link copied.')
+    } catch {
+      notify('error', 'Unable to copy share link.')
+    }
+  }
+
+  function updateThreadMeta(threadId: string, input: { archived?: boolean; pinned?: boolean; tags?: string[] }): void {
+    void updateChatSessionMeta(threadId, input, loadSession())
+      .then(({ session }) => {
+        if (typeof input.archived === 'boolean' && input.archived !== isArchivedView) {
+          setThreads((current) => current.filter((thread) => thread.id !== session.id))
+          if (activeThreadId === session.id) {
+            const params = new URLSearchParams()
+            if (selectedProjectId) params.set('project', selectedProjectId)
+            if (input.archived) params.set('view', 'archived')
+            router.push(buildChatHref(params))
+          }
+          return
+        }
+
+        setThreads((current) => current.map((thread) => (thread.id === session.id ? session : thread)))
+      })
+      .catch(() => {
+        notify('error', 'Unable to update chat.')
+      })
+  }
+
+  function getThreadMenuItems(thread: OpenPortChatSession): WorkspaceResourceMenuItem[] {
+    return [
+      {
+        icon: 'solar:share-outline',
+        label: 'Share',
+        onClick: () => {
+          void shareThread(thread.id)
+        }
+      },
+      {
+        icon: 'solar:download-minimalistic-outline',
+        label: 'Download',
+        onClick: () => {
+          void downloadThread(thread.id)
+        }
+      },
+      {
+        icon: 'solar:pen-outline',
+        label: 'Rename',
+        onClick: () => requestRenameThread(thread.id)
+      },
+      { type: 'divider', icon: '', label: '' },
+      {
+        icon: thread.pinned ? 'solar:pin-bold' : 'solar:pin-outline',
+        label: thread.pinned ? 'Unpin' : 'Pin',
+        onClick: () => updateThreadMeta(thread.id, { pinned: !(thread.pinned ?? false) })
+      },
+      {
+        icon: 'solar:copy-outline',
+        label: 'Clone',
+        onClick: () => {
+          void cloneThread(thread.id)
+        }
+      },
+      { type: 'divider', icon: '', label: '' },
+      {
+        icon: thread.archived ? 'solar:archive-up-outline' : 'solar:archive-outline',
+        label: thread.archived ? 'Restore' : 'Archive',
+        onClick: () => updateThreadMeta(thread.id, { archived: !(thread.archived ?? false) })
+      },
+      {
+        danger: true,
+        icon: 'solar:trash-bin-trash-outline',
+        label: 'Delete',
+        onClick: () => requestDeleteThread(thread.id)
+      }
+    ]
+  }
+
   return (
     <aside className="workspace-sidebar" aria-label="Workspace navigation">
       <div className="workspace-sidebar-brand">
         <a
           className="workspace-sidebar-wordmark"
-          href="/chat"
+          href="/"
           onClick={() => {
             if (isMobile) toggleSidebar()
           }}
@@ -728,17 +953,24 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                           layoutId={`sidebar-thread-${thread.id}`}
                           transition={layoutMotion}
                         >
-                          <TextButton
-                          active={activeThreadId === thread.id}
-                          href={getThreadHref(thread.id)}
-                          onClick={() => {
-                            if (isMobile) toggleSidebar()
-                          }}
-                          variant="sidebar"
-                        >
-                          <Iconify icon="solar:chat-round-line-outline" size={16} />
-                          <span>{thread.title}</span>
-                        </TextButton>
+                          <div className={`workspace-sidebar-thread-row${activeThreadId === thread.id ? ' is-active' : ''}`}>
+                            <TextButton
+                              active={activeThreadId === thread.id}
+                              className="workspace-sidebar-thread-link"
+                              href={getThreadHref(thread.id)}
+                              onClick={() => {
+                                if (isMobile) toggleSidebar()
+                              }}
+                              variant="sidebar"
+                            >
+                              <Iconify icon="solar:chat-round-line-outline" size={16} />
+                              <span className="workspace-sidebar-thread-title">{thread.title}</span>
+                            </TextButton>
+                            <WorkspaceResourceMenu
+                              ariaLabel={`Open actions for ${thread.title}`}
+                              items={getThreadMenuItems(thread)}
+                            />
+                          </div>
                         </m.div>
                       ))}
                       </AnimatePresence>
@@ -760,7 +992,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         actions={
           <>
             <IconButton
-              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand folders' : 'Collapse folders'}
+              aria-label={uiPreferences.collapsedSidebarSections.projects ? 'Expand projects' : 'Collapse projects'}
               disabled={isProjectsLoading}
               onClick={() => setUiPreferences(toggleSidebarSection('projects'))}
               size="sm"
@@ -777,7 +1009,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
               />
             </IconButton>
             <IconButton
-              aria-label="Create folder"
+              aria-label="Create project"
               disabled={isProjectsLoading}
               onClick={() => openCreateProjectModal(null)}
               size="sm"
@@ -789,7 +1021,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           </>
         }
         className="workspace-sidebar-projects"
-        title="Folders"
+        title="Projects"
       >
         {uiPreferences.collapsedSidebarSections.projects ? null : (
           <m.div className="workspace-sidebar-project-list" layout transition={layoutMotion}>
@@ -830,7 +1062,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                 ))}
               </AnimatePresence>
             ) : (
-              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading folders…' : 'No folders yet.'}</p>
+              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'No projects yet.'}</p>
             )}
           </m.div>
         )}
@@ -876,6 +1108,40 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
             type="checkbox"
           />
           <span>Delete all contents inside this project</span>
+        </label>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        confirmLabel="Delete"
+        onCancel={closeDeleteThreadDialog}
+        onConfirm={() => {
+          void confirmDeleteThread()
+        }}
+        open={deleteThreadState.open}
+        title="Delete chat?"
+      >
+        <div className="project-delete-copy">
+          Are you sure you want to delete "{deleteThreadTarget?.title || 'this chat'}"? This cannot be undone.
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        confirmLabel="Rename"
+        onCancel={closeRenameThreadDialog}
+        onConfirm={() => {
+          void confirmRenameThread()
+        }}
+        open={renameThreadState.open}
+        title="Rename chat"
+      >
+        <label className="project-modal-field">
+          <span>Title</span>
+          <input
+            autoFocus
+            onChange={(event) => setRenameDraft(event.target.value)}
+            placeholder="Enter chat title"
+            value={renameDraft}
+          />
         </label>
       </ConfirmDialog>
     </aside>

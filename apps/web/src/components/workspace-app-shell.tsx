@@ -38,6 +38,10 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
     return pathname === href || pathname.startsWith(`${href}/`)
   }
 
+  function isChatPathActive(): boolean {
+    return pathname === '/' || isPathActive('/chat')
+  }
+
   useEffect(() => {
     const openShortcuts = () => setShowShortcuts(true)
 
@@ -169,9 +173,9 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
 
             <nav className="workspace-sidebar-compact-nav" aria-label="Primary">
               <IconButton
-                active={isPathActive('/chat')}
+                active={isChatPathActive()}
                 aria-label="Chat"
-                onClick={() => router.push('/chat')}
+                onClick={() => router.push('/')}
                 size="sm"
                 type="button"
                 variant="ghost"
@@ -200,7 +204,7 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
               <IconButton
                 active={isPathActive('/dashboard/workspace') || isPathActive('/workspace')}
                 aria-label="Workspace"
-                onClick={() => router.push('/dashboard/workspace')}
+                onClick={() => router.push('/workspace')}
                 size="sm"
                 type="button"
                 variant="ghost"

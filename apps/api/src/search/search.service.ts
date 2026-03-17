@@ -40,8 +40,11 @@ type SearchContextSignals = {
   hasChats: boolean
   hasNotes: boolean
   hasProjects: boolean
-  folderSuggestion: string | null
+  projectSuggestion: string | null
 }
+
+const PROJECT_PREFIX = 'project:'
+const FOLDER_PREFIX = 'folder:'
 
 function normalizeProjectToken(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '-')
@@ -91,7 +94,7 @@ export class SearchService {
       recentSearches,
       recommendations: this.buildRecommendations(recentSearches, signals),
       tags: signals.tags,
-      operators: ['tag:', 'folder:', 'pinned:', 'shared:', 'archived:', 'type:']
+      operators: ['tag:', 'project:', 'pinned:', 'shared:', 'archived:', 'type:']
     }
   }
 
@@ -134,8 +137,9 @@ export class SearchService {
         }
       }
 
-      if (lowered.startsWith('folder:')) {
-        const value = normalizeProjectToken(token.slice('folder:'.length))
+      if (lowered.startsWith(PROJECT_PREFIX) || lowered.startsWith(FOLDER_PREFIX)) {
+        const prefix = lowered.startsWith(PROJECT_PREFIX) ? PROJECT_PREFIX : FOLDER_PREFIX
+        const value = normalizeProjectToken(token.slice(prefix.length))
         if (value) {
           projectQuery = value
         }
@@ -408,7 +412,7 @@ export class SearchService {
         return left.tag.localeCompare(right.tag)
       })
 
-    const folderSuggestion = projectResponse.items[0]?.name
+    const projectSuggestion = projectResponse.items[0]?.name
       ? normalizeProjectToken(projectResponse.items[0].name)
       : null
 
@@ -423,7 +427,7 @@ export class SearchService {
       hasChats: chatResponse.items.length > 0,
       hasNotes: noteResponse.items.length > 0,
       hasProjects: projectResponse.items.length > 0,
-      folderSuggestion
+      projectSuggestion
     }
   }
 
@@ -471,13 +475,13 @@ export class SearchService {
       })
     }
 
-    if (context.hasProjects && context.folderSuggestion) {
+    if (context.hasProjects && context.projectSuggestion) {
       recommendations.push({
-        id: 'rec-folder-default',
-        query: `folder:${context.folderSuggestion}`,
-        label: 'Folder scope',
-        description: 'Search chats inside a project folder scope',
-        reason: 'Folder'
+        id: 'rec-project-default',
+        query: `project:${context.projectSuggestion}`,
+        label: 'Project scope',
+        description: 'Search chats inside a project scope',
+        reason: 'Project'
       })
     }
 

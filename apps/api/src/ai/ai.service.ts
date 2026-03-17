@@ -19,6 +19,7 @@ import type { UpdateChatSessionMetaDto } from './dto/update-chat-session-meta.dt
 import type { UpdateChatSettingsDto } from './dto/update-chat-settings.dto.js'
 import { ApiStateStoreService } from '../storage/api-state-store.service.js'
 import { ProjectsService } from '../projects/projects.service.js'
+import { OllamaService } from '../ollama/ollama.service.js'
 
 type Actor = {
   userId: string
@@ -31,7 +32,8 @@ type ActorInput = Actor | string
 export class AiService {
   constructor(
     private readonly stateStore: ApiStateStoreService,
-    private readonly projects: ProjectsService
+    private readonly projects: ProjectsService,
+    private readonly ollama: OllamaService
   ) {}
 
   private sortSessions(sessions: OpenPortChatSession[]): OpenPortChatSession[] {
@@ -353,17 +355,62 @@ export class AiService {
             .map((attachment) => `- [${attachment.type}] ${attachment.label}${attachment.meta ? ` (${attachment.meta})` : ''}${attachment.payload ? `: ${attachment.payload.slice(0, 240)}` : ''}`)
             .join('\n')
         : ''
+
+    const createdAssistantAt = new Date().toISOString()
+    let assistantContent = [
+      `OpenPort API shell received: ${normalizedContent}`,
+      attachmentContext ? `Attached context:\n${attachmentContext}` : '',
+      projectContext ? `Project context:\n${projectContext}` : ''
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+
+    const modelRoute = session.settings?.valves?.modelRoute || 'openport/local'
+    if (modelRoute.startsWith('ollama/')) {
+      const modelName = modelRoute.slice('ollama/'.length).trim()
+      if (modelName) {
+        try {
+          const baseUrl = await this.ollama.resolveBaseUrl(actor.workspaceId, 0)
+          const history = [...session.messages, userMessage].slice(-32).map((message) => ({
+            role: message.role,
+            content: message.content
+          }))
+
+          const systemPrompt = session.settings?.systemPrompt?.trim() || ''
+          const messages = systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : history
+
+          const response = await fetch(`${baseUrl}/api/chat`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: modelName,
+              messages,
+              stream: false
+            })
+          })
+
+          if (response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as {
+              message?: { content?: string }
+              response?: string
+            }
+            const content =
+              (typeof payload.message?.content === 'string' && payload.message.content.trim()) ||
+              (typeof payload.response === 'string' && payload.response.trim()) ||
+              ''
+            if (content) assistantContent = content
+          }
+        } catch {
+          // Fall back to shell response on any Ollama error.
+        }
+      }
+    }
+
     const assistantMessage: OpenPortChatMessage = {
       id: `msg_${randomUUID()}`,
       role: 'assistant',
-      content: [
-        `OpenPort API shell received: ${normalizedContent}`,
-        attachmentContext ? `Attached context:\n${attachmentContext}` : '',
-        projectContext ? `Project context:\n${projectContext}` : ''
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-      createdAt: new Date().toISOString()
+      content: assistantContent,
+      createdAt: createdAssistantAt
     }
     session.messages.push(userMessage, assistantMessage)
     session.updatedAt = assistantMessage.createdAt

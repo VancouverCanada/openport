@@ -40,6 +40,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { GroupsService } from '../groups/groups.service.js'
 import { WorkspacesService } from '../workspaces/workspaces.service.js'
 import { ApiStateStoreService } from '../storage/api-state-store.service.js'
+import { OllamaService } from '../ollama/ollama.service.js'
 import type { Actor } from '../projects/projects.service.js'
 import type { CreateWorkspaceModelDto } from './dto/create-workspace-model.dto.js'
 import type { UpdateWorkspaceModelDto } from './dto/update-workspace-model.dto.js'
@@ -103,7 +104,8 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
   constructor(
     private readonly workspaces: WorkspacesService,
     private readonly groups: GroupsService,
-    private readonly stateStore: ApiStateStoreService
+    private readonly stateStore: ApiStateStoreService,
+    private readonly ollama: OllamaService
   ) {}
 
   onModuleInit(): void {
@@ -123,6 +125,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
 
   async listModels(actor: Actor): Promise<OpenPortListResponse<OpenPortWorkspaceModel>> {
     this.assertModuleRead(actor, 'models')
+    await this.ollama.ensureWorkspaceModels(actor).catch(() => undefined)
     const items = await this.stateStore.readWorkspaceModels(actor.workspaceId)
     const resolvedItems = items.length > 0 ? items : [await this.ensureDefaultModel(actor)]
     const groupIds = await this.resolveActorGroupIds(actor)

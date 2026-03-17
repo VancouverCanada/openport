@@ -392,7 +392,7 @@ export function WorkspaceSearchModal({ show, onClose }: WorkspaceSearchModalProp
             suggestions={suggestions}
             value={query}
           />
-          <div className="workspace-search-operator-hint">Use `folder:name` or `tag:name` / `pinned:true`.</div>
+          <div className="workspace-search-operator-hint">Use `project:name` or `tag:name` / `pinned:true`.</div>
         </div>
 
         <div className="workspace-search-modal-body">

@@ -75,8 +75,22 @@ export class IdentityStateService implements OnModuleInit, OnModuleDestroy {
   private state: IdentityState = createEmptyState()
   private pool: Pool | null = null
   private persistQueue: Promise<void> = Promise.resolve()
+  private readonly readyPromise: Promise<void>
+
+  constructor() {
+    // Start initialization immediately to avoid lifecycle ordering deadlocks.
+    this.readyPromise = this.initialize()
+  }
+
+  ready(): Promise<void> {
+    return this.readyPromise
+  }
 
   async onModuleInit(): Promise<void> {
+    await this.readyPromise
+  }
+
+  private async initialize(): Promise<void> {
     if (this.backend !== 'postgres') {
       this.state = this.loadFileState()
       this.logger.log(`Identity state backend: file (${this.filePath})`)

@@ -69,7 +69,7 @@ export function ProjectMenu({
         <div className="project-menu">
           <TextButton onClick={() => runAction(onCreateSubproject)} variant="menu" type="button">
             <Iconify icon="solar:folder-with-files-outline" size={16} />
-            <span>Create Project</span>
+            <span>Create project</span>
           </TextButton>
           <TextButton onClick={() => runAction(onEdit)} variant="menu" type="button">
             <Iconify icon="solar:pen-outline" size={16} />
@@ -82,7 +82,7 @@ export function ProjectMenu({
           {onMoveToRoot ? (
             <TextButton onClick={() => runAction(onMoveToRoot)} variant="menu" type="button">
               <Iconify icon="solar:folder-open-outline" size={16} />
-              <span>Move To Root</span>
+              <span>Move to root</span>
             </TextButton>
           ) : null}
           <TextButton danger onClick={() => runAction(onDelete)} variant="menu" type="button">

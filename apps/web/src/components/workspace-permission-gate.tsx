@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { fetchCurrentUser, loadSession, type OpenPortSession } from '../lib/openport-api'
+import { clearSession, fetchCurrentUser, loadSession, type OpenPortSession } from '../lib/openport-api'
 import {
   canManageWorkspace,
   canAccessWorkspaceModule,
@@ -46,7 +46,9 @@ export function WorkspacePermissionGate({ children }: Readonly<{ children: React
 
       setChecked(true)
     } catch {
-      router.replace('/')
+      // Invalid/expired auth should not bounce between "/" and "/workspace".
+      clearSession()
+      router.replace('/auth/login')
     }
   }
 

@@ -29,7 +29,7 @@ export function RegisterForm() {
           password: String(formData.get('password') || '')
         })
         saveSession(session)
-        setSuccess(`Workspace ${session.workspaceId} created. Redirecting to workspace.`)
+        setSuccess(`Workspace ${session.workspaceId} created. Redirecting to chat.`)
         router.push('/')
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : 'Registration failed'

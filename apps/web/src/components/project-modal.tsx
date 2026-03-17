@@ -24,6 +24,7 @@ import type {
   OpenPortProjectFile,
   OpenPortProjectInput
 } from '../lib/chat-workspace'
+import { Iconify } from './iconify'
 import { CapsuleButton } from './ui/capsule-button'
 import { ModalShell } from './ui/modal-shell'
 import { TextButton } from './ui/text-button'
@@ -98,6 +99,54 @@ function normalizeModelRoutes(routes: string[]): string[] {
   return Array.from(uniqueRoutes)
 }
 
+const PROJECT_ICON_CHOICES = [
+  'solar:folder-with-files-outline',
+  'solar:folder-outline',
+  'solar:chat-round-line-outline',
+  'solar:notebook-outline',
+  'solar:code-2-outline',
+  'solar:database-outline',
+  'solar:cpu-bolt-outline',
+  'solar:cloud-outline',
+  'solar:rocket-outline',
+  'solar:planet-outline',
+  'solar:shield-check-outline',
+  'solar:lock-keyhole-outline',
+  'solar:key-minimalistic-outline',
+  'solar:settings-outline',
+  'solar:magic-stick-3-outline',
+  'solar:bolt-outline',
+  'solar:star-outline',
+  'solar:bookmark-outline',
+  'solar:calendar-outline',
+  'solar:document-text-outline',
+  'solar:paperclip-outline',
+  'solar:command-outline',
+  'solar:hashtag-outline',
+  'solar:graph-new-outline',
+  'solar:chart-square-outline',
+  'solar:tag-outline',
+  'solar:palette-outline',
+  'solar:layers-outline',
+  'solar:box-outline',
+  'solar:compass-outline'
+] as const
+
+const PROJECT_COLOR_PRESETS = [
+  '#111111',
+  '#0f172a',
+  '#0b3b70',
+  '#0a6b5c',
+  '#1f7a1f',
+  '#8a5a00',
+  '#b42318',
+  '#7a2e8d',
+  '#1b3a57',
+  '#334155',
+  '#64748b',
+  '#94a3b8'
+] as const
+
 export function ProjectModal({
   mode,
   onClose,
@@ -124,11 +173,17 @@ export function ProjectModal({
   const [isUploadingKnowledge, setIsUploadingKnowledge] = useState(false)
   const [isUploadingBackground, setIsUploadingBackground] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showIconPicker, setShowIconPicker] = useState(false)
+  const [iconQuery, setIconQuery] = useState('')
+  const [showColorPicker, setShowColorPicker] = useState(false)
   const [backgroundImageAssetId, setBackgroundImageAssetId] = useState<string | null>(null)
   const [defaultModelRoute, setDefaultModelRoute] = useState('')
   const [modelRoutes, setModelRoutes] = useState<string[]>([])
   const backgroundInputRef = useRef<HTMLInputElement | null>(null)
   const filesInputRef = useRef<HTMLInputElement | null>(null)
+  const colorInputRef = useRef<HTMLInputElement | null>(null)
+  const iconFieldRef = useRef<HTMLDivElement | null>(null)
+  const colorFieldRef = useRef<HTMLDivElement | null>(null)
   const title = mode === 'edit' ? 'Edit Project' : 'Create Project'
   const selectedKnowledgeCount = useMemo(() => files.filter((file) => file.selected).length, [files])
   const selectedWorkspaceModels = useMemo(() => {
@@ -174,6 +229,9 @@ export function ProjectModal({
     setModelRoutes(nextModelRoutes)
     setDefaultModelRoute(project?.data.defaultModelRoute || nextModelRoutes[0] || '')
     setFiles(project?.data.files || [])
+    setShowIconPicker(false)
+    setIconQuery('')
+    setShowColorPicker(false)
     setShowKnowledgePicker(false)
     setIsSaving(false)
     setShareForm(DEFAULT_SHARE_FORM)
@@ -217,6 +275,14 @@ export function ProjectModal({
     function handleKeyDown(event: KeyboardEvent): void {
       if (event.key === 'Escape') {
         event.preventDefault()
+        if (showIconPicker) {
+          setShowIconPicker(false)
+          return
+        }
+        if (showColorPicker) {
+          setShowColorPicker(false)
+          return
+        }
         onClose()
       }
     }
@@ -225,7 +291,31 @@ export function ProjectModal({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onClose, open])
+  }, [onClose, open, showColorPicker, showIconPicker])
+
+  useEffect(() => {
+    if (!open) return
+    if (!showIconPicker && !showColorPicker) return
+
+    function handlePointerDown(event: MouseEvent): void {
+      const target = event.target as Node
+      if (showIconPicker && iconFieldRef.current && iconFieldRef.current.contains(target)) return
+      if (showColorPicker && colorFieldRef.current && colorFieldRef.current.contains(target)) return
+      setShowIconPicker(false)
+      setShowColorPicker(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
+  }, [open, showColorPicker, showIconPicker])
+
+  const filteredIcons = useMemo(() => {
+    const query = iconQuery.trim().toLowerCase()
+    if (!query) return PROJECT_ICON_CHOICES as readonly string[]
+    return (PROJECT_ICON_CHOICES as readonly string[]).filter((entry) => entry.toLowerCase().includes(query))
+  }, [iconQuery])
 
   return (
     <ModalShell closeLabel="Close project modal" dialogClassName="project-dialog project-modal" onClose={onClose} open={open} title={title}>
@@ -281,7 +371,7 @@ export function ProjectModal({
             <span>Description</span>
             <textarea
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Optional folder description"
+              placeholder="Optional project description"
               value={description}
             />
           </label>
@@ -289,16 +379,136 @@ export function ProjectModal({
           <div className="project-modal-meta-row">
             <label className="project-modal-field">
               <span>Icon</span>
-              <input
-                onChange={(event) => setIcon(event.target.value)}
-                placeholder="solar:folder-with-files-outline"
-                value={icon}
-              />
+              <div className="project-icon-field" ref={iconFieldRef}>
+                <div className="project-icon-row">
+                  <span className="project-icon-preview" aria-hidden="true">
+                    <Iconify icon={icon || 'solar:folder-with-files-outline'} size={18} />
+                  </span>
+                  <TextButton
+                    onClick={() => setShowIconPicker((current) => !current)}
+                    size="sm"
+                    type="button"
+                    variant="inline"
+                  >
+                    <span>{icon ? 'Change icon' : 'Choose icon'}</span>
+                  </TextButton>
+                  {icon ? (
+                    <TextButton
+                      onClick={() => setIcon('')}
+                      size="sm"
+                      type="button"
+                      variant="inline"
+                    >
+                      <span>Clear</span>
+                    </TextButton>
+                  ) : null}
+                </div>
+
+                {showIconPicker ? (
+                  <div className="project-icon-picker" role="dialog" aria-label="Icon picker">
+                    <div className="project-icon-picker-search">
+                      <Iconify icon="solar:magnifer-outline" size={16} />
+                      <input
+                        onChange={(event) => setIconQuery(event.target.value)}
+                        placeholder="Search icons"
+                        value={iconQuery}
+                      />
+                      {iconQuery.trim() ? (
+                        <button
+                          aria-label="Clear icon search"
+                          className="project-icon-picker-clear"
+                          onClick={() => setIconQuery('')}
+                          type="button"
+                        >
+                          <Iconify icon="solar:close-circle-outline" size={16} />
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="project-icon-picker-grid" role="listbox" aria-label="Project icon choices">
+                      {filteredIcons.map((entry) => (
+                        <button
+                          aria-label={entry}
+                          className={`project-icon-picker-item${entry === icon ? ' is-active' : ''}`}
+                          key={entry}
+                          onClick={() => {
+                            setIcon(entry)
+                            setShowIconPicker(false)
+                          }}
+                          type="button"
+                        >
+                          <Iconify icon={entry} size={18} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </label>
 
             <label className="project-modal-field">
               <span>Color</span>
-              <input onChange={(event) => setColor(event.target.value)} type="color" value={color} />
+              <div className="project-color-field" ref={colorFieldRef}>
+                <button
+                  aria-label="Choose project color"
+                  className="project-color-dot"
+                  onClick={() => setShowColorPicker((current) => !current)}
+                  type="button"
+                >
+                  <span className="project-color-dot-fill" style={{ backgroundColor: color }} />
+                </button>
+                <input
+                  ref={colorInputRef}
+                  aria-label="Project color picker"
+                  className="project-color-input"
+                  onChange={(event) => setColor(event.target.value)}
+                  type="color"
+                  value={color}
+                />
+
+                {showColorPicker ? (
+                  <div className="project-color-picker" role="dialog" aria-label="Color picker">
+                    <div className="project-color-presets" role="listbox" aria-label="Preset colors">
+                      {PROJECT_COLOR_PRESETS.map((preset) => (
+                        <button
+                          aria-label={`Set color ${preset}`}
+                          className={`project-color-preset${preset.toLowerCase() === color.toLowerCase() ? ' is-active' : ''}`}
+                          key={preset}
+                          onClick={() => {
+                            setColor(preset)
+                            setShowColorPicker(false)
+                          }}
+                          type="button"
+                        >
+                          <span className="project-color-preset-fill" style={{ backgroundColor: preset }} />
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="project-color-picker-actions">
+                      <TextButton
+                        onClick={() => colorInputRef.current?.click()}
+                        size="sm"
+                        type="button"
+                        variant="inline"
+                      >
+                        <span>Custom…</span>
+                      </TextButton>
+                      <TextButton
+                        onClick={() => {
+                          setColor('#111111')
+                          setShowColorPicker(false)
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="inline"
+                      >
+                        <span>Reset</span>
+                      </TextButton>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </label>
           </div>
 
@@ -346,7 +556,7 @@ export function ProjectModal({
           <div className="project-modal-field">
             <span>Project Background Image</span>
             <TextButton
-              className="project-modal-inline-action"
+              className="project-modal-subaction"
               onClick={() => {
                 if (backgroundImageUrl) {
                   setBackgroundImageUrl(null)
@@ -355,6 +565,7 @@ export function ProjectModal({
                 }
                 backgroundInputRef.current?.click()
               }}
+              size="sm"
               variant="inline"
               type="button"
             >

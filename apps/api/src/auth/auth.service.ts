@@ -42,7 +42,8 @@ export class AuthService implements OnModuleInit {
   private readonly sessionsByAccessToken = new Map<string, AuthSession>()
   private readonly sessionsByRefreshToken = new Map<string, AuthSession>()
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
+    await this.identityStore.ready()
     const users = this.identityStore.readUsers()
     users.forEach((user) => {
       this.usersByEmail.set(user.email, user)

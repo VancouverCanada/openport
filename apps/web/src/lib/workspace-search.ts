@@ -34,6 +34,7 @@ export type WorkspaceSearchTagFacet = {
 
 export type WorkspaceSearchRecommendation = OpenPortSearchRecommendation
 
+const PROJECT_PREFIX = 'project:'
 const FOLDER_PREFIX = 'folder:'
 const TAG_PREFIX = 'tag:'
 const ARCHIVED_PREFIX = 'archived:'
@@ -73,8 +74,9 @@ export function parseWorkspaceSearchQuery(
   tokens.forEach((token) => {
     const lowered = token.toLowerCase()
 
-    if (lowered.startsWith(FOLDER_PREFIX)) {
-      const rawProjectName = normalizeProjectName(token.slice(FOLDER_PREFIX.length))
+    if (lowered.startsWith(PROJECT_PREFIX) || lowered.startsWith(FOLDER_PREFIX)) {
+      const prefix = lowered.startsWith(PROJECT_PREFIX) ? PROJECT_PREFIX : FOLDER_PREFIX
+      const rawProjectName = normalizeProjectName(token.slice(prefix.length))
       const matchedProject = projects.find((project) => {
         const normalizedName = normalizeProjectName(project.name)
         return normalizedName.includes(rawProjectName) || project.id.toLowerCase() === rawProjectName
@@ -177,14 +179,14 @@ export function getSearchOperatorSuggestions(
   if (!activeToken) return []
 
   if (!activeToken.includes(':')) {
-    return [TAG_PREFIX, FOLDER_PREFIX, PINNED_PREFIX, SHARED_PREFIX, ARCHIVED_PREFIX]
+    return [TAG_PREFIX, PROJECT_PREFIX, PINNED_PREFIX, SHARED_PREFIX, ARCHIVED_PREFIX]
       .filter((option) => option.startsWith(lowered))
       .map((option) => ({
         id: option,
         label: option,
         description:
-          option === FOLDER_PREFIX
-              ? 'Filter chats by folder'
+          option === PROJECT_PREFIX
+              ? 'Filter chats by project'
             : option === TAG_PREFIX
                 ? 'Filter by tags'
                 : option === PINNED_PREFIX
@@ -196,16 +198,17 @@ export function getSearchOperatorSuggestions(
       }))
   }
 
-  if (lowered.startsWith(FOLDER_PREFIX)) {
-    const rawValue = normalizeProjectName(activeToken.slice(FOLDER_PREFIX.length))
+  if (lowered.startsWith(PROJECT_PREFIX) || lowered.startsWith(FOLDER_PREFIX)) {
+    const prefix = lowered.startsWith(PROJECT_PREFIX) ? PROJECT_PREFIX : FOLDER_PREFIX
+    const rawValue = normalizeProjectName(activeToken.slice(prefix.length))
     return projects
       .filter((project) => normalizeProjectName(project.name).includes(rawValue))
       .slice(0, 6)
       .map((project) => ({
         id: project.id,
         label: project.name,
-        description: 'Filter chats in this folder',
-        replacement: `${FOLDER_PREFIX}${normalizeProjectName(project.name)}`
+        description: 'Filter chats in this project',
+        replacement: `${PROJECT_PREFIX}${normalizeProjectName(project.name)}`
       }))
   }
 

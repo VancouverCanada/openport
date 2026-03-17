@@ -7,6 +7,7 @@ import { GroupsModule } from './groups/groups.module.js'
 import { NotesModule } from './notes/notes.module.js'
 import { OpenPortAdminModule } from './openport-admin/openport-admin.module.js'
 import { OpenPortModule } from './openport/openport.module.js'
+import { OllamaModule } from './ollama/ollama.module.js'
 import { ProjectsModule } from './projects/projects.module.js'
 import { RbacModule } from './rbac/rbac.module.js'
 import { SearchModule } from './search/search.module.js'
@@ -30,6 +31,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module.js'
     ProjectsModule,
     NotesModule,
     SearchModule,
+    OllamaModule,
     WorkspaceResourcesModule
   ]
 })

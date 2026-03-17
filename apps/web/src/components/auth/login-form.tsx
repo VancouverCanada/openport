@@ -26,7 +26,7 @@ export function LoginForm() {
       try {
         const session = await loginOpenPort({ email, password, rememberMe: true })
         saveSession(session)
-        setSuccess(`Signed in as ${session.email}. Redirecting to workspace.`)
+        setSuccess(`Signed in as ${session.email}. Redirecting to chat.`)
         router.push('/')
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : 'Login failed'
