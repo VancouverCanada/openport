@@ -3380,20 +3380,24 @@ textarea {
 }
 
 .chat-empty-stage-item {
+  position: relative;
   opacity: 0;
   transform: translateY(10px);
   animation: emptyStageIn var(--motion-base) var(--motion-ease-out) both;
 }
 
 .chat-empty-stage-item--head {
+  z-index: 3;
   animation-delay: 40ms;
 }
 
 .chat-empty-stage-item--composer {
+  z-index: 2;
   animation-delay: 90ms;
 }
 
 .chat-empty-stage-item--suggestions {
+  z-index: 1;
   animation-delay: 140ms;
 }
 
