@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength } from 'class-validator'
+import { IsObject, IsOptional, IsString, MinLength } from 'class-validator'
 import type { OpenPortChatSettings } from '@openport/product-contracts'
 
 export class CreateChatSessionDto {
@@ -8,5 +8,6 @@ export class CreateChatSessionDto {
   title?: string
 
   @IsOptional()
+  @IsObject()
   settings?: OpenPortChatSettings
 }
