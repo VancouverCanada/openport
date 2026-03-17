@@ -1,5 +1,5 @@
-import { WorkspaceModels } from '../../../components/workspace-models'
+import { redirect } from 'next/navigation'
 
 export default function WorkspaceModelsPage() {
-  return <WorkspaceModels />
+  redirect('/workspace')
 }

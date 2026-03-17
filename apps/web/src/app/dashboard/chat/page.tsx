@@ -19,5 +19,5 @@ export default async function DashboardChatPage({ searchParams }: DashboardChatP
     }
   })
 
-  redirect(nextParams.size > 0 ? `/chat?${nextParams.toString()}` : '/chat')
+  redirect(nextParams.size > 0 ? `/?${nextParams.toString()}` : '/')
 }

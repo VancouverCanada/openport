@@ -1,6 +1,6 @@
-# OpenPort Projects 对齐 Open WebUI Folders 实施方案
+# OpenPort Projects 对齐 Open WebUI Projects-Layer 实施方案
 
-本文件用于把 `openport` 的 `Projects` 完整收敛到 Open WebUI `Folders` 的实现结构与交互能力。
+本文件用于把 `openport` 的 `Projects` 完整收敛到 Open WebUI 对应组织层的实现结构与交互能力。
 
 目标不是直接复制 Open WebUI 代码，而是参考其信息架构、状态模型和交互流，在 `openport` 现有 Next.js 架构内做等价实现。
 
@@ -8,7 +8,7 @@
 
 - 2026-03-15 已完成本方案主线实施
 - 目前 `Projects` 已从本地-only 方案升级到 API-backed + workspace knowledge + import/export + destructive delete
-- 剩余差距已经不再是 folders parity 缺口，而是更重的对象存储、向量知识和实时同步增强
+- 剩余差距已经不再是 projects parity 缺口，而是更重的对象存储、向量知识和实时同步增强
 - 上述增强项的正式方案与实施结果已转入 [docs/26-openport-projects-phase3-enhancement-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/26-openport-projects-phase3-enhancement-plan.md)
 
 ## 1. 调查范围
@@ -101,7 +101,7 @@ OpenPort 术语保持：
 
 不会在 UI 中同时引入：
 
-- `Folders`
+- `Projects`
 - `Projects`
 
 Open WebUI 仅作为结构参考，不直接暴露其命名。

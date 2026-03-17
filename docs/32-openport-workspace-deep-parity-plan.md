@@ -40,7 +40,7 @@
 - `Tools`
 - `Projects`
 
-不引入 `Folders`、`Skills`、`Actions` 等第二套术语。
+不引入 `Projects` 之外的第二套术语（如 `Skills`、`Actions`）。
 
 ### 2. 优先扩展现有 API，而不是再起一套新模块
 

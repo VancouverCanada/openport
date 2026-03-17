@@ -11,7 +11,7 @@
   - `/workspace/knowledge`
   - `/workspace/prompts`
   - `/workspace/tools`
-- 保留 `Workspace` 命名，不再引入第二套 `Folders / Projects` 命名
+- 保留 `Workspace` 与 `Projects` 命名，不再引入第二套组织层命名
 
 ## 对齐依据
 

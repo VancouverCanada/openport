@@ -28,6 +28,7 @@ import { ModalShell } from './ui/modal-shell'
 import { TextButton } from './ui/text-button'
 
 type ChatSettingsModalProps = {
+  initialSection?: SettingsSection
   onClose: () => void
   onOpenShortcuts?: () => void
   open: boolean
@@ -35,6 +36,7 @@ type ChatSettingsModalProps = {
 }
 
 type SettingsSection = 'general' | 'interface' | 'personalization' | 'connections' | 'integrations' | 'data' | 'about'
+export type ChatSettingsSection = SettingsSection
 
 type SettingsTab = {
   id: SettingsSection
@@ -53,7 +55,7 @@ const settingsTabs: SettingsTab[] = [
   { id: 'about', icon: 'solar:info-circle-outline', title: 'About', keywords: ['about', 'openwebui', 'reference', 'releases'] }
 ]
 
-export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: ChatSettingsModalProps) {
+export function ChatSettingsModal({ initialSection, onClose, onOpenShortcuts, open, session }: ChatSettingsModalProps) {
   const [section, setSection] = useState<SettingsSection>('general')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('Loading runtime status…')
@@ -82,6 +84,10 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
   useEffect(() => {
     if (!open || !session) return
     let cancelled = false
+
+    if (initialSection) {
+      setSection(initialSection)
+    }
 
     void Promise.all([
       fetchBootstrap(session).catch(() => null),
@@ -270,7 +276,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
               </div>
 
               <div className="chat-settings-actions">
-                <TextButton href="/chat" variant="menu"><span>Chat home</span></TextButton>
+                <TextButton href="/" variant="menu"><span>Chat home</span></TextButton>
                 <TextButton onClick={onOpenShortcuts} type="button" variant="menu"><span>Keyboard shortcuts</span></TextButton>
               </div>
             </section>
@@ -368,8 +374,8 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
               </div>
 
               <div className="chat-settings-actions">
-                <TextButton href="/chat" variant="menu"><span>Open chat home</span></TextButton>
-                <TextButton href="/chat?view=archived" variant="menu"><span>Archived chats</span></TextButton>
+                <TextButton href="/" variant="menu"><span>Open chat home</span></TextButton>
+                <TextButton href="/?view=archived" variant="menu"><span>Archived chats</span></TextButton>
               </div>
             </section>
           ) : null}
@@ -447,7 +453,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
               </div>
 
               <div className="chat-settings-actions">
-                <TextButton href="/chat" variant="menu"><span>Open chat home</span></TextButton>
+                <TextButton href="/" variant="menu"><span>Open chat home</span></TextButton>
                 <TextButton href="/dashboard/notes" variant="menu"><span>Notes</span></TextButton>
                 <TextButton href="/workspace/models" variant="menu"><span>Pinned models</span></TextButton>
               </div>
@@ -510,7 +516,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
                     <strong>Archived chats</strong>
                     <span>Open the archived chat view in the main chat workspace.</span>
                   </div>
-                  <TextButton href="/chat?view=archived" variant="menu"><span>Manage</span></TextButton>
+                  <TextButton href="/?view=archived" variant="menu"><span>Manage</span></TextButton>
                 </div>
 
                 <div className="chat-settings-data-row">

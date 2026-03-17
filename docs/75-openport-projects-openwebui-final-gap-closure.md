@@ -1,4 +1,4 @@
-# OpenPort Projects vs Open WebUI Folders Final Gap Closure
+# OpenPort Projects vs Open WebUI Projects-Layer Final Gap Closure
 
 ## Scope
 

@@ -42,10 +42,10 @@
 | 全局动效节奏调慢为中速偏慢 | done | `globals.css` 的 `--motion-fast/base/slow` 已统一为 `260/380/560ms` |
 | 按钮微交互统一到慢速 token | done | `capsule-button` / `icon-button` / `text-button` 已统一使用新的 motion tokens |
 | 解决 TipTap 依赖树回归并恢复构建 | done | 锁定 `@tiptap/*` 到 `3.5.3` 并通过 `overrides` 固定传递依赖，避免 `3.20.x` 缺失 `dist` 导致构建失败 |
-| Sidebar 语义继续对齐 Open WebUI | done | 已移除 `All chats` 独立入口；`Projects` 重命名为 `Folders`；左栏移除 `Pinned` 分组并保留拖拽到 chats 根层 |
+| Sidebar 语义继续对齐 Open WebUI | done | 已移除 `All chats` 独立入口；统一使用 `Projects` 术语；左栏移除 `Pinned` 分组并保留拖拽到 chats 根层 |
 | 本轮构建验收 | done | `npm run build:web` 已通过 |
 
-## 2026-03-16 收口进展（Projects vs Open WebUI Folders Final 4-Gap）
+## 2026-03-16 收口进展（Projects vs Open WebUI Organization Final 4-Gap）
 
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
@@ -252,6 +252,15 @@
 | 资源 Access 独立路由降级 | done | `/workspace/{models,prompts,tools,skills}/[id]/access` 已改为重定向回资源页，避免 page-first access 流 |
 | 入口语义对齐 `/` | done | `HomeEntryGate`、`LoginForm`、`RegisterForm` 已统一认证后进入 `/` |
 | 本轮编译验收 | done | `npm --prefix apps/api run build` 与 `bash scripts/with-modern-node.sh npm --prefix apps/web run build` 均已通过 |
+
+## 2026-03-17 稳定性修复进展（Workspace 入口异常）
+
+| 任务 | 状态 | 说明 |
+| --- | --- | --- |
+| 修复 Workspace 权限校验失败后的重定向回环 | done | `WorkspacePermissionGate` 在 `fetchCurrentUser` 失败时改为 `clearSession + /auth/login`，避免 `/ -> /workspace` 循环导致 client exception |
+| 修复“无可访问模块”回退路径 | done | `getFirstAccessibleWorkspaceHref` 默认回退改为 `/chat`，避免低权限角色在 `/` 与 `/workspace` 间循环 |
+| 统一紧凑侧栏 Workspace 路由 | done | `WorkspaceAppShell` 紧凑导航从 `/dashboard/workspace` 改为直接 `/workspace` |
+| Workspace models 前端响应归一化兜底 | done | `openport-api.ts` 为 models 列表/详情新增字段归一化（数组/能力位/promptSuggestions/accessGrants），规避历史空字段导致渲染崩溃 |
 
 ## Phase 0 任务清单
 
@@ -485,9 +494,9 @@
 
 ### 2026-03-15
 
-- `done`：新增 [docs/25-openport-project-folders-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/25-openport-project-folders-parity-plan.md)，固化 `Projects -> Open WebUI Folders` 的完整实施方案，并明确当前代码基线已因同事提交更新为 `session.settings.projectId` 驱动的 chat 归档模型。
+- `done`：新增 [docs/25-openport-project-folders-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/25-openport-project-folders-parity-plan.md)，固化 `Projects` 对齐 Open WebUI 组织层的完整实施方案，并明确当前代码基线已因同事提交更新为 `session.settings.projectId` 驱动的 chat 归档模型。
 - `done`：参考 `open-webui-main` 的 `Sidebar/Folders.svelte`、`RecursiveFolder.svelte` 与 `folders` API 结构，把 `openport` 的 `Projects` 从平铺列表升级为树形层级模型，补齐 `parentId / isExpanded / updatedAt`，并对旧的本地存储格式做向后兼容迁移。
-- `done`：在 `apps/web/src/lib/chat-workspace.ts` 中新增 folder-like `project` 能力：子项目创建、重命名、递归删除、父子移动、展开状态持久化、递归作用域 chat 查询与层级 option 输出。
+- `done`：在 `apps/web/src/lib/chat-workspace.ts` 中新增 project-layer `project` 能力：子项目创建、重命名、递归删除、父子移动、展开状态持久化、递归作用域 chat 查询与层级 option 输出。
 - `done`：新增 [apps/web/src/components/project-tree-item.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-tree-item.tsx)，把左侧 `Projects` 区改成递归树组件，支持：
   - 展开/折叠
   - 子项目创建
@@ -521,7 +530,7 @@
   - delete confirm flow
   - export flow
   - clear project assignment on delete
-- `done`：更新 [docs/25-openport-project-folders-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/25-openport-project-folders-parity-plan.md)，把 `Projects -> Folders` parity 方案扩展为第二阶段完整清单，明确需要一次性收掉的 7 个缺口：
+- `done`：更新 [docs/25-openport-project-folders-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/25-openport-project-folders-parity-plan.md)，把 `Projects` parity 方案扩展为第二阶段完整清单，明确需要一次性收掉的 7 个缺口：
   - API-backed projects
   - workspace knowledge binding
   - import
@@ -1363,7 +1372,7 @@
   - 中间聊天区已改成更接近 Open WebUI 的居中空态模型标题和一体化 composer card
   - 右侧 controls rail 已改成 `Valves / System Prompt / Advanced Params` 三段折叠式结构
   - 已再次执行 `npm run build:web`、`npm run compose:up` 并确认 Docker 四个容器健康
-- `done`：进一步参考 Open WebUI 的 `selectedFolder / folder data / per-chat controls` 思路，把本地 `Projects + per-thread settings` 接成一套真实状态：
+- `done`：进一步参考 Open WebUI 的 `selected project / project data / per-chat controls` 思路，把本地 `Projects + per-thread settings` 接成一套真实状态：
   - 新增 [apps/web/src/lib/chat-workspace.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/lib/chat-workspace.ts)
   - 更新 [apps/web/src/components/workspace-sidebar.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-sidebar.tsx)
   - 更新 [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
@@ -1381,7 +1390,7 @@
   - 新增 [apps/web/src/app/dashboard/workspace/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/dashboard/workspace/page.tsx)
   - `Notes` 和 `Workspace` 现在是独立路由，不再伪装成 sidebar 内嵌输入区
   - 左侧导航字号、行高、间距和 section heading 已继续压缩，整体更接近 Open WebUI 的轻量目录结构
-  - `Projects` 仍保留为 OpenPort 自有命名，但不再和 `Folders` 混用
+  - `Projects` 仍保留为 OpenPort 自有命名，不再混用其他组织层术语
   - 已再次执行 `npm run build:web`、`npm run compose:up`，并确认 Docker 四个容器 healthy
 - `done`：对齐聊天区右上角交互，补齐更接近 Open WebUI 的 status / controls / account cluster：
   - 更新 [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
@@ -1658,7 +1667,7 @@
   - 已执行：
     - `npm run build:web`
     - `npm run build:api`
-- `done`：完成 `Projects` 在 `folders parity` 之后的四项重增强，并将方案与实施状态写入 [docs/26-openport-projects-phase3-enhancement-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/26-openport-projects-phase3-enhancement-plan.md)：
+- `done`：完成 `Projects` 在 `projects parity` 之后的四项重增强，并将方案与实施状态写入 [docs/26-openport-projects-phase3-enhancement-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/26-openport-projects-phase3-enhancement-plan.md)：
   - 更新 [apps/api/src/projects/projects.service.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/projects/projects.service.ts)
   - 更新 [apps/api/src/projects/projects.controller.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/projects/projects.controller.ts)
   - 更新 [apps/api/src/projects/project-assets.service.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/projects/project-assets.service.ts)
@@ -2136,9 +2145,9 @@
   - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
 - `done`：chat deep parity 这一轮前端构建已通过：
   - `npm run build:web`
-- `done`：新增 [docs/50-openport-chat-final-gap-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/50-openport-chat-final-gap-plan.md)，继续参考本地 `open-webui-main` 的 `Sidebar.svelte / Folders.svelte / PinnedModelList.svelte / SettingsModal.svelte / InputMenu.svelte`，把 `/chat` 剩余的 folder-like organization、pinned ordering、settings 细分项、以及 input tool flows 继续补齐。
+- `done`：新增 [docs/50-openport-chat-final-gap-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/50-openport-chat-final-gap-plan.md)，继续参考本地 `open-webui-main` 的 `Sidebar.svelte / Folders.svelte / PinnedModelList.svelte / SettingsModal.svelte / InputMenu.svelte`，把 `/chat` 剩余的 project-like organization、pinned ordering、settings 细分项、以及 input tool flows 继续补齐。
 - `done`：`/chat` 最后一轮高价值差异已继续补齐：
-  - `Projects / Chats / Pinned Models` 已支持 section 级折叠，结构更接近 Open WebUI 的 sidebar folders/chats 分组
+  - `Projects / Chats / Pinned Models` 已支持 section 级折叠，结构更接近 Open WebUI 的 sidebar project/chats 分组
   - `Projects` 区新增 `All chats` 根入口，并按名称排序根级项目
   - `Pinned Models` 已支持 drag reorder，并持久化到 chat UI preferences
   - `Settings` modal 已扩成 searchable multi-tab surface：
@@ -2168,11 +2177,11 @@
 - `done`：新增 [docs/51-openport-openwebui-remaining-checklist.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/51-openport-openwebui-remaining-checklist.md)，基于当前 `openport` 代码和本地 `open-webui-main` 真实实现做了一次代码级审计，把剩余差异整理为可继续执行的完成清单。
 - `done`：这次审计不是泛化建议，而是按代码现状把模块拆成：
   - `done`：authenticated root / chat-first entry
-  - `partial`：sidebar shell / projects-as-folders / chat home / model picker / controls / settings modal / search / composer tools / persistence / notes-workspace
+  - `partial`：sidebar shell / projects layer / chat home / model picker / controls / settings modal / search / composer tools / persistence / notes-workspace
   - `missing`：尚无单独独立模块，但 checklist 中已明确补齐项与验收标准
 - `done`：清单里已明确下一阶段的推荐顺序：
   1. app-shell parity
-  2. folder/project parity
+  2. project parity
   3. model and controls parity
   4. composer tool flows
   5. settings/data controls parity
@@ -2203,8 +2212,8 @@
   - [apps/web/src/components/project-modal.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-modal.tsx)
   - [apps/web/src/lib/chat-workspace.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/lib/chat-workspace.ts)
   - [apps/web/src/lib/openport-api.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/lib/openport-api.ts)
-- `done`：新增 [docs/54-openport-folder-project-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/54-openport-folder-project-parity-plan.md)，继续参考本地 `open-webui-main` 的 `Sidebar.svelte / Folders.svelte / backend folders router/model`，把 OpenPort 的 `Projects` 继续收成更强的 folder-like 组织层。
-- `done`：这一轮 `folder/project parity` 已继续补齐：
+- `done`：新增 [docs/54-openport-folder-project-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/54-openport-folder-project-parity-plan.md)，继续参考本地 `open-webui-main` 的 `Sidebar.svelte / Folders.svelte / backend folders router/model`，把 OpenPort 的 `Projects` 继续收成更强的 project 组织层。
+- `done`：这一轮 `project parity` 已继续补齐：
   - project create/update 已接受并持久化 `isExpanded`
   - sidebar expand/collapse 已写回后端，不再只是本地 cache 状态
   - `All chats` 已支持根级 drop target：
@@ -2220,7 +2229,7 @@
   - [apps/web/src/components/project-tree-item.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-tree-item.tsx)
   - [apps/web/src/components/project-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-menu.tsx)
   - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
-- `done`：这轮 folder/project parity 构建验证已通过：
+- `done`：这轮 project parity 构建验证已通过：
   - `npm run build:web`
   - `npm run build:api`
 - `done`：新增 [docs/55-openport-model-and-controls-parity-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/55-openport-model-and-controls-parity-plan.md)，继续参考本地 `open-webui-main` 的 `Controls.svelte / SettingsModal.svelte / PinnedModelList.svelte`，把 chat defaults 和 controls 进一步从“平面表单”升级成 layered per-chat options。
@@ -2404,8 +2413,8 @@
     - [apps/web/src/components/chat-composer-tools-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-composer-tools-menu.tsx)
 - `done`：这轮 `chat ui final alignment` 构建验证已通过：
   - `npm run build:web`
-- `done`：新增 [docs/68-openport-folders-files-data-controls-final-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/68-openport-folders-files-data-controls-final-plan.md)，继续参考本地 `open-webui-main` 的 `folders.py / files.py / Sidebar.svelte / FilesModal.svelte / InputMenu.svelte / AttachWebpageModal.svelte / SettingsModal.svelte / DataControls.svelte`，把剩余的 folder-like project meta、chat files/webpage 全流、以及 data controls 里的 files surface 一次收口。
-- `done`：这一轮 `folders/files/data-controls final` 已完成：
+- `done`：新增 [docs/68-openport-folders-files-data-controls-final-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/68-openport-folders-files-data-controls-final-plan.md)，继续参考本地 `open-webui-main` 的 `folders.py / files.py / Sidebar.svelte / FilesModal.svelte / InputMenu.svelte / AttachWebpageModal.svelte / SettingsModal.svelte / DataControls.svelte`，把剩余的 project meta、chat files/webpage 全流、以及 data controls 里的 files surface 一次收口。
+- `done`：这一轮 `projects/files/data-controls final` 已完成：
   - 共享 contract 已扩展：
     - `OpenPortChatAttachment`
     - `OpenPortChatMessage.attachments`
@@ -2421,7 +2430,7 @@
     - state store normalization 已支持 attachments / richer project meta / richer project assets
     - postgres `openport_project_assets` 已写入 `owner_user_id / source_url / preview_text`
     - [apps/api/src/storage/api-state-store.service.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/storage/api-state-store.service.ts)
-  - project DTO 和 service 已补 richer folder-like meta：
+  - project DTO 和 service 已补 richer project meta：
     - `description / icon / color / hiddenInSidebar`
     - [apps/api/src/projects/dto/create-project.dto.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/projects/dto/create-project.dto.ts)
     - [apps/api/src/projects/dto/update-project.dto.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/projects/dto/update-project.dto.ts)
@@ -2454,10 +2463,10 @@
     - [apps/web/src/components/project-tree-item.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-tree-item.tsx)
     - [apps/web/src/components/workspace-sidebar.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-sidebar.tsx)
     - [apps/web/src/components/project-modal.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/project-modal.tsx)
-- `done`：这轮 `folders/files/data-controls final` 构建验证已通过：
+- `done`：这轮 `projects/files/data-controls final` 构建验证已通过：
   - `npm run build:api`
   - `npm run build:web`
-- `done`：这轮 `folders/files/data-controls final` 运行态验收已通过：
+- `done`：这轮 `projects/files/data-controls final` 运行态验收已通过：
   - `npm run compose:up`
   - `docker compose -f compose/docker-compose.yml ps`
   - 当前 Docker `web / api / reference / postgres` 全部 `healthy`

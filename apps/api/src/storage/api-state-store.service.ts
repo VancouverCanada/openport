@@ -60,6 +60,13 @@ type ProductApiState = {
   workspaceConnectorAuditEventsByWorkspace: Record<string, OpenPortWorkspaceConnectorAuditEvent[]>
   workspaceToolRunsByWorkspace: Record<string, OpenPortWorkspaceToolRun[]>
   searchHistoryByScope: Record<string, OpenPortSearchHistoryItem[]>
+  ollamaConfigByWorkspace: Record<string, OllamaWorkspaceConfig>
+}
+
+type OllamaWorkspaceConfig = {
+  enabled: boolean
+  baseUrls: string[]
+  updatedAt: string
 }
 
 export type ProjectKnowledgeChunkRecord = {
@@ -238,7 +245,8 @@ function createEmptyState(): ProductApiState {
     workspaceConnectorTasksByWorkspace: {},
     workspaceConnectorAuditEventsByWorkspace: {},
     workspaceToolRunsByWorkspace: {},
-    searchHistoryByScope: {}
+    searchHistoryByScope: {},
+    ollamaConfigByWorkspace: {}
   }
 }
 
@@ -1282,6 +1290,14 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS openport_workspace_models_workspace_updated_idx
       ON openport_workspace_models (workspace_id, updated_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_ollama_configs (
+        workspace_id TEXT PRIMARY KEY,
+        enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        base_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
     `)
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS openport_workspace_prompts (
@@ -3068,6 +3084,65 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     this.flush()
   }
 
+  async readOllamaConfig(workspaceId: string): Promise<OllamaWorkspaceConfig | null> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        workspace_id: string
+        enabled: boolean
+        base_urls: string[]
+        updated_at: Date | string
+      }>(
+        `
+          SELECT workspace_id, enabled, base_urls, updated_at
+          FROM openport_ollama_configs
+          WHERE workspace_id = $1
+        `,
+        [workspaceId]
+      )
+      const row = result.rows[0]
+      if (!row) return null
+      return {
+        enabled: Boolean(row.enabled),
+        baseUrls: Array.isArray(row.base_urls) ? row.base_urls : [],
+        updatedAt: new Date(row.updated_at).toISOString()
+      }
+    }
+
+    const entry = this.state.ollamaConfigByWorkspace[workspaceId]
+    if (!entry) return null
+    return structuredClone(entry)
+  }
+
+  async writeOllamaConfig(workspaceId: string, input: Pick<OllamaWorkspaceConfig, 'enabled' | 'baseUrls'>): Promise<OllamaWorkspaceConfig> {
+    const now = new Date().toISOString()
+    const next: OllamaWorkspaceConfig = {
+      enabled: Boolean(input.enabled),
+      baseUrls: Array.isArray(input.baseUrls) ? input.baseUrls.map((url) => String(url).trim()).filter(Boolean).slice(0, 8) : [],
+      updatedAt: now
+    }
+
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      await pool.query(
+        `
+          INSERT INTO openport_ollama_configs (workspace_id, enabled, base_urls, updated_at)
+          VALUES ($1, $2, $3::jsonb, $4)
+          ON CONFLICT (workspace_id) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            base_urls = EXCLUDED.base_urls,
+            updated_at = EXCLUDED.updated_at
+        `,
+        [workspaceId, next.enabled, JSON.stringify(next.baseUrls), next.updatedAt]
+      )
+      return next
+    }
+
+    this.state.ollamaConfigByWorkspace[workspaceId] = next
+    this.flush()
+    return this.readOllamaConfig(workspaceId).then((value) => value || next)
+  }
+
   async readWorkspacePrompts(workspaceId: string): Promise<OpenPortWorkspacePrompt[]> {
     if (this.backend === 'postgres') {
       const pool = this.requirePool()
@@ -4674,6 +4749,10 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
         searchHistoryByScope:
           parsed.searchHistoryByScope && typeof parsed.searchHistoryByScope === 'object'
             ? parsed.searchHistoryByScope
+            : {},
+        ollamaConfigByWorkspace:
+          parsed.ollamaConfigByWorkspace && typeof parsed.ollamaConfigByWorkspace === 'object'
+            ? (parsed.ollamaConfigByWorkspace as Record<string, OllamaWorkspaceConfig>)
             : {}
       }
     } catch (error) {

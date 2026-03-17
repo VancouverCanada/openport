@@ -1,39 +1,48 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { loadSession } from '../lib/openport-api'
+import { clearSession, fetchCurrentUser, loadSession } from '../lib/openport-api'
 
 type HomeEntryGateProps = {
+  authenticated?: ReactNode
   children: ReactNode
 }
 
-export function HomeEntryGate({ children }: HomeEntryGateProps) {
-  const router = useRouter()
+export function HomeEntryGate({ authenticated = null, children }: HomeEntryGateProps) {
   const [status, setStatus] = useState<'checking' | 'anonymous' | 'authenticated'>('checking')
 
   useEffect(() => {
-    const session = loadSession()
-    if (session?.accessToken) {
-      setStatus('authenticated')
-      return
+    let active = true
+
+    async function resolveStatus(): Promise<void> {
+      const session = loadSession()
+      if (!session?.accessToken) {
+        if (active) setStatus('anonymous')
+        return
+      }
+
+      try {
+        await fetchCurrentUser(session)
+        if (active) setStatus('authenticated')
+      } catch {
+        clearSession()
+        if (active) setStatus('anonymous')
+      }
     }
 
-    setStatus('anonymous')
+    void resolveStatus()
+
+    return () => {
+      active = false
+    }
   }, [])
-
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/chat')
-    }
-  }, [router, status])
 
   if (status === 'checking') {
     return <main className="home-entry-redirect" aria-hidden="true" />
   }
 
   if (status === 'authenticated') {
-    return <main className="home-entry-redirect" aria-hidden="true" />
+    return <>{authenticated}</>
   }
 
   return <>{children}</>

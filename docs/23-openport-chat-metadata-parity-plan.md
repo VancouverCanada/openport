@@ -22,7 +22,7 @@ This phase references the local Open WebUI backend:
 The important alignment points are:
 
 - metadata belongs to the backend chat record
-- archive/pin/folder/tag operations are backend mutations
+- archive/pin/project/tag operations are backend mutations
 - list routes support filtered views of chat history
 
 ## OpenPort target

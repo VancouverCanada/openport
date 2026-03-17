@@ -1,8 +1,8 @@
-# OpenPort Folder Project Parity Plan
+# OpenPort Project Parity Plan
 
 ## Goal
 
-Close the next remaining Open WebUI gap by making `Projects` behave more like Open WebUI's folder layer while preserving OpenPort naming.
+Close the next remaining Open WebUI gap by making `Projects` behave more like Open WebUI's organization layer while preserving OpenPort naming.
 
 ## Reference Modules
 
@@ -15,9 +15,9 @@ Primary local references used for this pass:
 
 The implementation in OpenPort follows those ideas without copying the Svelte code directly:
 
-- project/folder state should be durable, not only local UI state
+- project state should be durable, not only local UI state
 - root-level reorganization should be easy from the sidebar
-- folder/project actions should exist in compact context menus rather than separate management screens
+- project actions should exist in compact context menus rather than separate management screens
 
 ## Scope
 
@@ -27,13 +27,13 @@ The implementation in OpenPort follows those ideas without copying the Svelte co
 - persist `isExpanded` in the backend project service
 - update sidebar expand/collapse to write through to API instead of staying cache-only
 
-### 2. Root-level folder/project movement
+### 2. Root-level project movement
 
 - allow dropping a project onto `All chats` to move it back to root
 - allow dropping a chat onto `All chats` to remove its project assignment
 - show root drop feedback in the sidebar
 
-### 3. Richer folder/project context menu
+### 3. Richer project context menu
 
 - add `Move To Root` for nested projects
 - keep create/edit/export/delete in compact sidebar menu form
@@ -58,4 +58,3 @@ The implementation in OpenPort follows those ideas without copying the Svelte co
 - dragging a chat onto `All chats` removes its project assignment
 - `npm run build:web` passes
 - `npm run build:api` passes
-

@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const settingsTabs = [
-  { href: '/settings/workspaces', label: 'Workspaces' }
+  { href: '/settings/workspaces', label: 'Workspaces' },
+  { href: '/settings/connections', label: 'Connections' }
 ] as const
 
 export function SettingsModuleNav() {

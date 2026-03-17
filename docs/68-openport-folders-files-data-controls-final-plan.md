@@ -1,16 +1,16 @@
-# OpenPort Folders, Files, and Data Controls Final Plan
+# OpenPort Projects, Files, and Data Controls Final Plan
 
 ## Goal
 
 Close the remaining deep product gaps between OpenPort chat-first surfaces and Open WebUI in three areas:
 
-1. Folder-like project organization backed by server data
+1. Project organization backed by server data
 2. Full file and webpage attachment flows from chat surfaces
 3. More complete settings and data-controls operations for chat data and attached assets
 
 This wave keeps OpenPort terminology where intentionally different:
 
-- `Projects` stays the organizational term instead of `Folders`
+- `Projects` stays the organizational term
 - `Connections` and `Workspace` remain product-level surfaces
 
 ## Open WebUI References
@@ -37,7 +37,7 @@ Before this wave:
 
 ## Implementation Plan
 
-### 1. Project Metadata and Folder-Like Behavior
+### 1. Project Metadata and Organization Behavior
 
 - expand project meta to support:
   - `description`
@@ -49,7 +49,7 @@ Before this wave:
   - API DTOs
   - API persistence layer
   - client normalization layer
-- use the metadata in the sidebar so projects can behave more like lightweight folder entries
+- use the metadata in the sidebar so projects can behave like lightweight organization entries
 
 ### 2. File and Webpage Asset Flows
 
@@ -127,7 +127,7 @@ Before this wave:
 
 This wave is complete when:
 
-- projects can carry richer folder-like metadata end-to-end
+- projects can carry richer organization metadata end-to-end
 - hidden projects stay out of the sidebar without requiring a second project model
 - chat composer can upload files and attach webpage captures without leaving chat
 - `Settings > Data > Files` behaves like an application surface, not a redirect

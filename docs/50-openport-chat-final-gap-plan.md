@@ -4,12 +4,12 @@
 
 Close the remaining high-value Open WebUI chat parity gaps that still affect the authenticated chat workspace:
 
-- folder-like organization depth
+- project-like organization depth
 - pinned model ordering
 - richer chat settings modal structure
 - fuller input tool flows
 
-This pass keeps OpenPort terminology where it is product-defining (`Projects` instead of `Folders`), but the implementation should continue to mirror Open WebUI architecture when it speeds delivery.
+This pass keeps OpenPort terminology where it is product-defining (`Projects`), but the implementation should continue to mirror Open WebUI architecture when it speeds delivery.
 
 ## Open WebUI References
 
@@ -27,14 +27,14 @@ Primary local references:
 
 ## Gap Breakdown
 
-### 1. Folder-like organization
+### 1. Project-like organization
 
-Current OpenPort `Projects` already support nesting and drag/drop, but the section still feels heavier than Open WebUI `Folders`.
+Current OpenPort `Projects` already support nesting and drag/drop, but the section still feels heavier than Open WebUI organization surfaces.
 
 Target:
 
 - keep `Projects` naming
-- make the section behave like a collapsible lightweight folder layer
+- make the section behave like a collapsible lightweight project layer
 - add an explicit root `All chats` entry
 - preserve recursive structure and drag/drop
 
@@ -79,7 +79,7 @@ Target:
 ## Implementation Plan
 
 1. Extend chat UI preferences to cover sidebar section state and pinned model ordering.
-2. Upgrade sidebar sections to behave more like Open WebUI folders and pinned model groups.
+2. Upgrade sidebar sections to behave more like Open WebUI project organization and pinned model groups.
 3. Expand the chat settings modal into a searchable multi-section configuration surface.
 4. Expand the composer tool menu into a broader root/submenu attachment system.
 5. Validate with `build:web` and Docker rebuild.

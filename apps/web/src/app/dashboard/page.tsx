@@ -40,7 +40,7 @@ export default function DashboardPage() {
             <span className="dashboard-section-label">Overview</span>
             <h2>Live signals</h2>
           </div>
-          <CapsuleButton className="dashboard-inline-action" href="/chat" variant="secondary">Open chat</CapsuleButton>
+          <CapsuleButton className="dashboard-inline-action" href="/" variant="secondary">Open chat</CapsuleButton>
         </div>
 
         <div className="dashboard-data-list">

@@ -43,7 +43,7 @@
 ### 侧栏
 
 - `New chat / Search / Notes / Workspace` 保持应用导航角色。
-- `Projects / Chats` 保留 OpenPort 命名，不引入第二套 `Folders` 术语。
+- `Projects / Chats` 保留 OpenPort 命名，不引入第二套组织层术语别名。
 - `Projects` 的创建和导入动作收轻，不再做成显眼的管理块。
 
 ## 实施步骤

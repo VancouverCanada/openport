@@ -19,7 +19,7 @@ This plan covers three implementation stages:
 
 This plan does not yet include:
 
-- backend persistence for projects/folders
+- backend persistence for projects
 - archived search
 - tag search
 - semantic/vector search

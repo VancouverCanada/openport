@@ -18,7 +18,7 @@ type LandingEntryActionsProps = {
 function resolveActions(hasSession: boolean): EntryActionSet {
   if (hasSession) {
     return {
-      primaryHref: '/chat',
+      primaryHref: '/',
       primaryLabel: 'Open Chat',
       secondaryHref: '/dashboard',
       secondaryLabel: 'Open Status'

@@ -33,6 +33,10 @@ This acceptance is for the OpenPort OSS workspace parity target (Open WebUI-alig
   - `apps/web/src/app/chat/page.tsx`
   - `apps/web/src/app/dashboard/chat/page.tsx`
   - `apps/web/src/components/workspace-search-modal.tsx`
+- Workspace sidebar `Workspace` entry now lands on a real Workspace models page (`/workspace`) instead of an empty redirect shell.
+  - `apps/web/src/app/workspace/page.tsx`
+  - `apps/web/src/app/workspace/models/page.tsx`
+  - `apps/web/src/lib/workspace-permissions.ts`
 - `access` module removed from workspace capability policy surfaces.
   - `packages/openport-product-contracts/src/index.ts`
   - `apps/api/src/workspaces/dto/update-workspace-capability-policy.dto.ts`

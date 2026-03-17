@@ -89,12 +89,12 @@ Still missing or weaker than Open WebUI:
 - resizable desktop sidebar width
 - persistent sidebar open/closed state at shell level
 - stronger mobile sidebar behavior parity
-- richer folder/project context menus
+- richer project context menus
 - drag-and-drop chat reassignment between projects from the sidebar
 - infinite scroll or progressive loading for large chat history
 - tighter parity in user menu positioning and sidebar footer behavior
 
-### 3. Projects as folder-like organization
+### 3. Projects as organization layer
 
 Status: `partial`
 
@@ -112,17 +112,17 @@ Relevant files:
 - `apps/web/src/components/project-tree-item.tsx`
 - `apps/web/src/components/workspace-sidebar.tsx`
 
-Still missing or weaker than Open WebUI folders:
+Still missing or weaker than Open WebUI organization surfaces:
 
-- dedicated backend folder/project router semantics as a first-class top-level concept
-- cleaner folder/project mutation API parity:
+- dedicated backend project router semantics as a first-class top-level concept
+- cleaner project mutation API parity:
   - rename
   - move parent
   - toggle expanded
   - delete subtree
 - full drag-and-drop chat move into project targets from sidebar chat items
 - project-level remembered model route for new chats
-- project-level "attach project to composer" flows comparable to Open WebUI folder context
+- project-level "attach project to composer" flows comparable to Open WebUI organization context
 
 ### 4. Chat home placeholder and empty-state composition
 
@@ -166,7 +166,7 @@ Still missing or weaker than Open WebUI:
 
 - pinned model ordering is local-only, not user/server persisted
 - no model visibility controls from workspace/admin side equivalent to `Hide from Sidebar / Keep in Sidebar`
-- no richer model menu states such as grouping, filtering, or preferred defaults tied to project/folder context
+- no richer model menu states such as grouping, filtering, or preferred defaults tied to project context
 - no project-remembered default model application on new chat creation
 
 ### 6. Chat controls panel
@@ -277,7 +277,7 @@ Still missing or weaker than Open WebUI:
 - no file upload pipeline from composer
 - no media/file management controls in chat controls
 - no richer inline command-based insertion flow
-- no attach-folder/project-as-context behavior
+- no attach-project-as-context behavior
 
 ### 10. Chat persistence and metadata
 
@@ -300,8 +300,8 @@ Relevant files:
 
 Still missing or weaker than Open WebUI:
 
-- no dedicated normalized tables for messages/folders/chat metadata
-- still not a full database-native chat/folder model like Open WebUI
+- no dedicated normalized tables for messages/projects/chat metadata
+- still not a full database-native chat/project model like Open WebUI
 - no richer session-level operations such as share/public link flows
 - limited metadata querying and bulk operations
 
@@ -344,11 +344,11 @@ Acceptance:
 - controls width survives reload
 - mobile open/close behavior does not leave stale overlay state
 
-### Phase 2: Finish folder/project parity
+### Phase 2: Finish project parity
 
 Priority: highest
 
-- [ ] Formalize project folder API operations as first-class endpoints:
+- [ ] Formalize project API operations as first-class endpoints:
   - rename
   - move parent
   - toggle expanded
@@ -356,7 +356,7 @@ Priority: highest
 - [ ] Add sidebar drag/drop to move chats into projects directly
 - [ ] Persist project-level default model route
 - [ ] Apply project-level default model automatically when creating a chat within that project
-- [ ] Add project context actions closer to folder actions in Open WebUI
+- [ ] Add project context actions closer to Open WebUI organization actions
 
 Acceptance:
 
@@ -431,12 +431,12 @@ Acceptance:
 - one modal can search chats, notes, and major workspace resources
 - keyboard-only search flow is complete and predictable
 
-### Phase 7: Finish database-native chat/folder persistence
+### Phase 7: Finish database-native chat/project persistence
 
 Priority: medium
 
 - [ ] Split JSON/blob persistence into clearer database-native models
-- [ ] Add normalized folder/project records where needed
+- [ ] Add normalized project records where needed
 - [ ] Add richer chat metadata operations and querying
 - [ ] Prepare for sharing/public-session-style features
 
@@ -448,7 +448,7 @@ Acceptance:
 ## Recommended Implementation Order
 
 1. App-shell parity
-2. Folder/project parity
+2. Project parity
 3. Model and controls parity
 4. Composer tool flows
 5. Settings/data controls parity
@@ -461,7 +461,7 @@ This order keeps the biggest user-facing chat workflow gaps first, while avoidin
 
 These should not be treated as blockers for the next implementation phase:
 
-- changing `Projects` naming back to `Folders`
+- changing `Projects` naming to an alternate term
 - removing the anonymous landing page entirely
 - 1:1 visual cloning of Open WebUI spacing or tokens
 

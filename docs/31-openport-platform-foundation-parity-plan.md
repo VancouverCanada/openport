@@ -1,6 +1,6 @@
 ## OpenPort 平台基础设施对齐 Open WebUI 实施方案
 
-本方案覆盖 `Projects` 在产品层基本对齐 `Open WebUI folders` 后，仍然落后的四块平台基础设施：
+本方案覆盖 `Projects` 在产品层基本对齐 `Open WebUI projects-layer` 后，仍然落后的四块平台基础设施：
 
 1. 存储 provider
 2. 向量/检索 provider

@@ -6,6 +6,7 @@ import { IconButton } from './ui/icon-button'
 import { TextButton } from './ui/text-button'
 
 export type WorkspaceResourceMenuItem = {
+  type?: 'action' | 'divider'
   danger?: boolean
   disabled?: boolean
   href?: string
@@ -76,8 +77,10 @@ export function WorkspaceResourceMenu({
 
       {open ? (
         <div className={`workspace-resource-menu workspace-resource-menu--${align}`}>
-          {items.map((item) =>
-            item.href ? (
+          {items.map((item, index) =>
+            item.type === 'divider' ? (
+              <div className="workspace-resource-menu-divider" key={`divider-${index}`} />
+            ) : item.href ? (
               item.disabled ? (
                 <button
                   key={item.label}

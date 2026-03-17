@@ -13,7 +13,7 @@ export const primaryWorkspaceTabs: Array<{
   label: string
   module: WorkspaceModuleKey
 }> = [
-  { href: '/workspace/models', label: 'Models', module: 'models' },
+  { href: '/workspace', label: 'Models', module: 'models' },
   { href: '/workspace/knowledge', label: 'Knowledge', module: 'knowledge' },
   { href: '/workspace/prompts', label: 'Prompts', module: 'prompts' },
   { href: '/workspace/tools', label: 'Tools', module: 'tools' },
@@ -25,7 +25,8 @@ const moduleRouteMap: Array<{ prefix: string; module: WorkspaceModuleKey }> = [
   { prefix: '/workspace/knowledge', module: 'knowledge' },
   { prefix: '/workspace/prompts', module: 'prompts' },
   { prefix: '/workspace/tools', module: 'tools' },
-  { prefix: '/workspace/skills', module: 'skills' }
+  { prefix: '/workspace/skills', module: 'skills' },
+  { prefix: '/workspace', module: 'models' }
 ]
 
 export function getWorkspacePermissions(user: OpenPortCurrentUserResponse | null): OpenPortWorkspaceModulePermissions {

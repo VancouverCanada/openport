@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   type CSSProperties,
   type FormEvent,
@@ -46,7 +46,7 @@ import { getChatUiPreferencesEventName, loadChatUiPreferences, togglePinnedModel
 import { getInheritedChatSettings } from '../lib/chat-defaults'
 import { ChatComposerToolsMenu, type ComposerAttachment } from './chat-composer-tools-menu'
 import { ChatControlsPanel } from './chat-controls-panel'
-import { ChatSettingsModal } from './chat-settings-modal'
+import { ChatSettingsModal, type ChatSettingsSection } from './chat-settings-modal'
 import { useAppShellState } from './app-shell-state'
 import { Iconify } from './iconify'
 import { CapsuleButton } from './ui/capsule-button'
@@ -83,7 +83,7 @@ type AccountMenuItem = {
 
 const accountMenuItems: AccountMenuItem[] = [
   { label: 'Settings', icon: 'solar:settings-outline', action: 'showSettings' },
-  { href: '/chat?view=archived', label: 'Archived Chats', icon: 'solar:archive-outline' },
+  { href: '/?view=archived', label: 'Archived Chats', icon: 'solar:archive-outline' },
   { href: '/workspace/models', label: 'Playground', icon: 'solar:code-square-outline' },
   { href: '/dashboard', label: 'Admin Panel', icon: 'solar:user-id-outline' },
   { href: 'https://github.com/open-webui/open-webui#readme', label: 'Documentation', icon: 'solar:question-circle-outline', external: true },
@@ -93,6 +93,7 @@ const accountMenuItems: AccountMenuItem[] = [
 
 export function ChatShell() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const session = useMemo(() => loadSession(), [])
   const [threads, setThreads] = useState<OpenPortChatSession[]>([])
@@ -104,6 +105,7 @@ export function ChatShell() {
   const [pendingSettings, setPendingSettings] = useState(getDefaultChatSettings(null))
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [settingsInitialSection, setSettingsInitialSection] = useState<ChatSettingsSection>('general')
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
   const [modelMenuMounted, setModelMenuMounted] = useState(false)
@@ -121,6 +123,9 @@ export function ChatShell() {
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
   const toolsMenuRef = useRef<HTMLDivElement | null>(null)
+  const speechRecognitionRef = useRef<any>(null)
+  const speechBaseDraftRef = useRef('')
+  const speechModeRef = useRef<'dictation' | 'voice' | null>(null)
   const { controlsWidth, isMobile, setControlsWidth, showControls, setShowControls, toggleControls } = useAppShellState()
   const [controlsMounted, setControlsMounted] = useState(showControls)
   const [controlsVisible, setControlsVisible] = useState(showControls)
@@ -129,6 +134,7 @@ export function ChatShell() {
   const seededPrompt = searchParams.get('q')?.trim() || ''
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
+  const [speechMode, setSpeechMode] = useState<'dictation' | 'voice' | null>(null)
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -184,11 +190,97 @@ export function ChatShell() {
     return next
   }, [currentModel, currentModelRoute, models])
   function buildChatHref(params?: URLSearchParams): string {
+    const chatHomePath = pathname === '/' ? '/' : '/chat'
     const suffix = params?.toString()
-    return suffix ? `/chat?${suffix}` : '/chat'
+    return suffix ? `${chatHomePath}?${suffix}` : chatHomePath
   }
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
+
+  function openSettings(section: ChatSettingsSection): void {
+    setSettingsInitialSection(section)
+    setShowSettingsModal(true)
+  }
+
+  function stopSpeechRecognition(): void {
+    const recognition = speechRecognitionRef.current
+    speechRecognitionRef.current = null
+    speechModeRef.current = null
+    setSpeechMode(null)
+    if (!recognition) return
+    try {
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      recognition.stop()
+    } catch {
+      // ignore
+    }
+  }
+
+  function startSpeechRecognition(mode: 'dictation' | 'voice'): void {
+    if (typeof window === 'undefined') return
+
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognitionCtor) {
+      setError('Dictation is not supported in this browser.')
+      return
+    }
+
+    stopSpeechRecognition()
+    speechBaseDraftRef.current = draft.trim()
+    const recognition = new SpeechRecognitionCtor()
+    recognition.lang = 'en-US'
+    recognition.interimResults = true
+    recognition.continuous = mode === 'voice'
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results || [])
+        .map((result: any) => result?.[0]?.transcript ?? '')
+        .join(' ')
+        .trim()
+
+      if (!transcript) return
+
+      const base = speechBaseDraftRef.current
+      const nextDraft = base ? `${base} ${transcript}` : transcript
+      setDraft(nextDraft)
+
+      if (mode === 'voice') {
+        // For voice mode, send on a "final" result when possible.
+        const last = event.results?.[event.results.length - 1]
+        if (last?.isFinal) {
+          stopSpeechRecognition()
+          submitMessage(nextDraft)
+        }
+      }
+    }
+
+    recognition.onerror = () => {
+      stopSpeechRecognition()
+      setError(mode === 'voice' ? 'Voice mode failed to start.' : 'Dictation failed to start.')
+    }
+
+    recognition.onend = () => {
+      if (speechModeRef.current !== mode) return
+      stopSpeechRecognition()
+    }
+
+    try {
+      recognition.start()
+      speechRecognitionRef.current = recognition
+      speechModeRef.current = mode
+      setSpeechMode(mode)
+    } catch {
+      stopSpeechRecognition()
+      setError(mode === 'voice' ? 'Voice mode failed to start.' : 'Dictation failed to start.')
+    }
+  }
+
+  useEffect(() => {
+    return () => stopSpeechRecognition()
+  }, [])
 
   function onControlsResizeStart(startEvent: ReactMouseEvent<HTMLDivElement>): void {
     if (isMobile) return
@@ -717,7 +809,7 @@ export function ChatShell() {
         >
         <textarea
           aria-label="Message composer"
-          className={`workspace-composer-input chat-composer-input${variant === 'empty' ? ' chat-hero-composer-input' : ''}`}
+          className={`chat-composer-input${variant === 'empty' ? ' chat-hero-composer-input' : ''}`}
           id="chat-input"
           onChange={(event) => setDraft(event.target.value)}
           placeholder={
@@ -753,23 +845,64 @@ export function ChatShell() {
               }}
               open={showToolsMenu}
             />
-            <IconButton className="chat-composer-tool" disabled size="md" variant="toolbar">
-              <Iconify icon="solar:sparkles-outline" size={17} />
+            <span aria-hidden="true" className="chat-composer-divider" />
+            <IconButton
+              aria-label="Open integrations"
+              className="chat-composer-tool"
+              onClick={() => openSettings('integrations')}
+              size="md"
+              type="button"
+              variant="toolbar"
+            >
+              <Iconify icon="solar:widget-5-outline" size={17} />
+            </IconButton>
+            <IconButton
+              aria-label="More options"
+              className="chat-composer-tool"
+              onClick={() => openSettings('general')}
+              size="md"
+              type="button"
+              variant="toolbar"
+            >
+              <Iconify icon="solar:menu-dots-outline" size={18} />
             </IconButton>
           </div>
           <div className="chat-composer-toolbar-end">
-            <IconButton className="chat-composer-tool" disabled size="md" variant="toolbar">
+            <IconButton
+              active={speechMode === 'dictation'}
+              aria-label="Dictate"
+              className="chat-composer-tool"
+              onClick={() => (speechMode === 'dictation' ? stopSpeechRecognition() : startSpeechRecognition('dictation'))}
+              size="md"
+              type="button"
+              variant="toolbar"
+            >
               <Iconify icon="solar:microphone-3-outline" size={17} />
             </IconButton>
-            <CapsuleButton
-              className="chat-send-button"
-              disabled={isPending || (!draft.trim() && composerAttachments.length === 0)}
-              size="icon"
-              type="submit"
-              variant="primary"
-            >
-              <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:arrow-up-outline'} size={17} />
-            </CapsuleButton>
+
+            {!draft.trim() && composerAttachments.length === 0 ? (
+              <IconButton
+                active={speechMode === 'voice'}
+                aria-label="Voice mode"
+                className="chat-voice-button"
+                onClick={() => (speechMode === 'voice' ? stopSpeechRecognition() : startSpeechRecognition('voice'))}
+                size="md"
+                type="button"
+                variant="toolbar"
+              >
+                <Iconify icon="solar:soundwave-outline" size={18} />
+              </IconButton>
+            ) : (
+              <CapsuleButton
+                className="chat-send-button"
+                disabled={isPending || (!draft.trim() && composerAttachments.length === 0)}
+                size="icon"
+                type="submit"
+                variant="primary"
+              >
+                <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:arrow-up-outline'} size={17} />
+              </CapsuleButton>
+            )}
           </div>
         </div>
         </form>
@@ -813,11 +946,10 @@ export function ChatShell() {
     setUiPreferences(togglePinnedModelRoute(route))
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    if (!draft.trim() && composerAttachments.length === 0) return
+  function submitMessage(rawContent: string): void {
+    if (!rawContent.trim() && composerAttachments.length === 0) return
 
-    const content = draft.trim() || 'Use the attached context.'
+    const content = rawContent.trim() || 'Use the attached context.'
     const messageAttachments = composerAttachments.map((attachment) => ({
       id: attachment.id,
       type: attachment.type,
@@ -873,6 +1005,11 @@ export function ChatShell() {
       }
       })()
     })
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    submitMessage(draft)
   }
 
   return (
@@ -975,30 +1112,32 @@ export function ChatShell() {
 
         {showEmptyStage ? (
           <div className="chat-empty-stage">
-            <div className="chat-empty-head chat-empty-stage-item chat-empty-stage-item--head">{renderModelSelector('hero')}</div>
+            <div className="chat-empty-frame">
+              <div className="chat-empty-head chat-empty-stage-item chat-empty-stage-item--head">{renderModelSelector('hero')}</div>
 
-            <div className="chat-empty-stage-item chat-empty-stage-item--composer">{renderComposer('empty')}</div>
+              <div className="chat-empty-stage-item chat-empty-stage-item--composer">{renderComposer('empty')}</div>
 
-            <div className="chat-suggestion-list chat-empty-stage-item chat-empty-stage-item--suggestions">
-              <span className="chat-suggestion-label">
-                <Iconify icon="solar:bolt-outline" size={14} />
-                <span>Suggested</span>
-              </span>
-              {suggestions.map((suggestion) => (
-                <TextButton
-                  key={suggestion.title}
-                  className="chat-suggestion"
-                  onClick={() => setDraft(suggestion.prompt)}
-                  size="md"
-                  type="button"
-                  variant="inline"
-                >
-                  <div className="chat-suggestion-copy">
-                    <strong>{suggestion.title}</strong>
-                    <span>{suggestion.description}</span>
-                  </div>
-                </TextButton>
-              ))}
+              <div className="chat-suggestion-list chat-empty-stage-item chat-empty-stage-item--suggestions">
+                <span className="chat-suggestion-label">
+                  <Iconify icon="solar:bolt-outline" size={14} />
+                  <span>Suggested</span>
+                </span>
+                {suggestions.map((suggestion) => (
+                  <TextButton
+                    key={suggestion.title}
+                    className="chat-suggestion"
+                    onClick={() => setDraft(suggestion.prompt)}
+                    size="md"
+                    type="button"
+                    variant="inline"
+                  >
+                    <div className="chat-suggestion-copy">
+                      <strong>{suggestion.title}</strong>
+                      <span>{suggestion.description}</span>
+                    </div>
+                  </TextButton>
+                ))}
+              </div>
             </div>
           </div>
         ) : activeThread ? (
@@ -1090,6 +1229,7 @@ export function ChatShell() {
       ) : null}
 
       <ChatSettingsModal
+        initialSection={settingsInitialSection}
         onClose={() => setShowSettingsModal(false)}
         onOpenShortcuts={() => window.dispatchEvent(new Event(WORKSPACE_SHORTCUT_EVENT))}
         open={showSettingsModal}

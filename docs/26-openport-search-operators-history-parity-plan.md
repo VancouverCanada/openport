@@ -4,7 +4,7 @@
 
 Close the remaining non-1:1 gaps against Open WebUI search by completing three tracks in one implementation pass:
 
-1. operator parity (`folder:` / `shared:` included)
+1. operator parity (`project:` / `shared:` included)
 2. service-side history and recommendation system
 3. modal result organization and preview alignment
 
@@ -24,14 +24,14 @@ Close the remaining non-1:1 gaps against Open WebUI search by completing three t
   - `pinned:`
   - `shared:`
   - `project:`
-  - `folder:` (mapped to OpenPort project scope)
+  - `project:` (mapped to OpenPort project scope)
 - Frontend operator autocomplete supports:
   - `tag:`
   - `archived:`
   - `pinned:`
   - `shared:`
   - `project:`
-  - `folder:`
+  - `project:`
   - `type:`
 
 ### Track B: Service-side history and recommendation
@@ -78,14 +78,14 @@ Close the remaining non-1:1 gaps against Open WebUI search by completing three t
   - `OpenPortSearchHistoryItem`
   - `OpenPortSearchRecommendation`
   - `OpenPortSearchTagFacet`
-- [x] Backend `/search` supports `folder:` and `shared:` filters.
+- [x] Backend `/search` supports `project:` and `shared:` filters.
 - [x] Added backend search context + history endpoints in `SearchController`.
 - [x] Added persisted search history in `ApiStateStoreService`:
   - file backend: `searchHistoryByScope`
   - postgres backend: `openport_search_history` table and indexes
 - [x] Frontend search modal now uses server-backed context/history APIs.
 - [x] Removed frontend localStorage history dependency in workspace search flow.
-- [x] Operator hint and autocomplete updated to include `folder:` and `shared:`.
+- [x] Operator hint and autocomplete updated to include `project:` and `shared:`.
 - [x] Result grouping adjusted to time-range sectioning for chat/note entries.
 - [x] Promoted chat `shared` / `folderId` to first-class persisted fields:
   - API contract: `OpenPortChatSession.shared`, `OpenPortChatSession.folderId`
@@ -94,7 +94,7 @@ Close the remaining non-1:1 gaps against Open WebUI search by completing three t
   - File persistence normalization includes both fields
 - [x] Search backend now evaluates:
   - `shared:` using `session.shared` first, with legacy tag fallback
-  - `folder:` / `project:` against `session.folderId` scope
+  - `project:` (兼容 `folder:`) against `session.folderId` scope
 - [x] Search modal was re-aligned to Open WebUI chat-first structure:
   - removed workspace resource mixed-search (models/prompts/tools/skills/knowledge)
   - kept actions + chat/note results + right-side preview

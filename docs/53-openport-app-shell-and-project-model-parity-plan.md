@@ -17,7 +17,7 @@ OpenPort does not copy those files directly. The goal is to reuse the same struc
 - a shell-owned sidebar/control state instead of per-page local toggles
 - mobile drawer behavior for sidebar and controls
 - persistent shell widths/open state
-- project/folder-level defaults that influence newly created chats
+- project-level defaults that influence newly created chats
 
 ## Scope
 
@@ -65,4 +65,3 @@ OpenPort does not copy those files directly. The goal is to reuse the same struc
 - selecting a project and creating a new chat inherits that project model route unless an explicit chat route override is present
 - `npm run build:web` passes
 - `npm run build:api` passes
-

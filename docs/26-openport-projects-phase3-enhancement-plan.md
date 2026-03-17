@@ -1,6 +1,6 @@
 ## OpenPort Projects Phase 3 Enhancement Plan
 
-This document defines the next implementation phase after `Projects` reached functional parity with Open WebUI `Folders`.
+This document defines the next implementation phase after `Projects` reached functional parity with Open WebUI organization surfaces.
 
 The goal of this phase is not visual parity. The goal is to close the heavier product gaps that still exist between the current `openport` implementation and the broader `Open WebUI` workspace stack:
 
@@ -199,7 +199,7 @@ Upgrade `Workspace` page to:
 
 After this phase:
 
-- `Projects` remain the OpenPort name for the Open WebUI `Folders` concept
+- `Projects` remain the OpenPort organizational concept name
 - project files and images are real backend assets
 - project knowledge is searchable and consumable in chat
 - project changes propagate across tabs/devices
