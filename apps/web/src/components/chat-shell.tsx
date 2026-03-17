@@ -26,6 +26,7 @@ import {
   importChatSessions,
   loadSession,
   postChatMessage,
+  postChatMessageStream,
   searchProjectKnowledge,
   updateChatSessionMeta,
   updateChatSessionSettings,
@@ -142,6 +143,7 @@ export function ChatShell() {
   const [knowledgeMatches, setKnowledgeMatches] = useState<OpenPortProjectKnowledgeMatch[]>([])
   const [isSearchingKnowledge, setIsSearchingKnowledge] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [isGenerating, setIsGenerating] = useState(false)
   const collaborationModeRef = useRef<'viewing' | 'editing'>('viewing')
   const projectRealtimeRef = useRef<OpenPortProjectRealtime | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
@@ -161,6 +163,8 @@ export function ChatShell() {
   const [speechMode, setSpeechMode] = useState<'dictation' | 'voice' | null>(null)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
   const [assistantThoughtSeconds, setAssistantThoughtSeconds] = useState<Record<string, number>>({})
+  const [streamingAssistantIds, setStreamingAssistantIds] = useState<Record<string, true>>({})
+  const [assistantLiveStatusById, setAssistantLiveStatusById] = useState<Record<string, string>>({})
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -1213,7 +1217,7 @@ export function ChatShell() {
             if ((event.nativeEvent as any)?.isComposing) return
 
             event.preventDefault()
-            if (isPending) return
+            if (isGenerating) return
             submitMessage(draft)
           }}
           placeholder={
@@ -1299,12 +1303,12 @@ export function ChatShell() {
             ) : (
               <CapsuleButton
                 className="chat-send-button"
-                disabled={isPending || (!draft.trim() && composerAttachments.length === 0)}
+                disabled={isGenerating || (!draft.trim() && composerAttachments.length === 0)}
                 size="icon"
                 type="submit"
                 variant="primary"
               >
-                <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:arrow-up-outline'} size={17} />
+                <Iconify icon={isGenerating ? 'solar:refresh-outline' : 'solar:arrow-up-outline'} size={17} />
               </CapsuleButton>
             )}
           </div>
@@ -1418,6 +1422,10 @@ export function ChatShell() {
           content: '',
           createdAt: new Date(Date.now() + 1).toISOString()
         }
+        const optimisticAssistantId = optimisticAssistantMessage.id
+        setIsGenerating(true)
+        setStreamingAssistantIds((current) => ({ ...current, [optimisticAssistantId]: true }))
+        setAssistantLiveStatusById((current) => ({ ...current, [optimisticAssistantId]: 'Thinking…' }))
 
         // Optimistic render: show the user message immediately and a placeholder assistant "Thinking..." bubble.
         if (createdSession) {
@@ -1444,48 +1452,87 @@ export function ChatShell() {
           })
         }
 
-        startTransition(() => {
-          void postChatMessage(sessionId!, content, messageAttachments, loadSession())
-            .then((response) => {
-              const assistant = Array.isArray(response.messages)
-                ? response.messages.find((message) => message.role === 'assistant')
-                : null
-              if (assistant) {
-                const seconds = Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000))
-                setAssistantThoughtSeconds((current) => ({ ...current, [assistant.id]: seconds }))
-              }
-              setThreads((current) => {
-                const nextThreads = current.map((thread) => {
-                  if (thread.id !== response.session.id) return thread
-
-                  const serverMessages = Array.isArray(response.session.messages) ? response.session.messages : []
-                  const responseMessages = Array.isArray(response.messages) ? response.messages : []
-
-                  // Some backends return session metadata quickly and stream messages later.
-                  // Never replace a fuller local thread with a shorter server payload.
-                  const mergedMessages =
-                    serverMessages.length >= thread.messages.length
-                      ? serverMessages
-                      : responseMessages.length > 0
-                        ? [...thread.messages, ...responseMessages].filter((msg, idx, all) => all.findIndex((m) => m.id === msg.id) === idx)
-                        : thread.messages
-
-                  return {
-                    ...thread,
-                    ...response.session,
-                    messages: mergedMessages
-                  }
-                })
-                return sortThreads(nextThreads)
+        const abort = new AbortController()
+        const onEvent = (evt: any) => {
+          if (!evt || !evt.event) return
+          if (evt.event === 'status' && typeof evt.data?.description === 'string') {
+            setAssistantLiveStatusById((current) => ({ ...current, [optimisticAssistantId]: evt.data.description }))
+            return
+          }
+          if (evt.event === 'delta' && typeof evt.data?.delta === 'string') {
+            const delta = evt.data.delta
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== sessionId) return thread
+                const nextMessages = thread.messages.map((msg) =>
+                  msg.id === optimisticAssistantId ? { ...msg, content: `${msg.content}${delta}` } : msg
+                )
+                return { ...thread, messages: nextMessages }
               })
-              setComposerAttachments([])
+              return sortThreads(nextThreads)
             })
-            .catch((submitError) => {
-              setDraft(content)
-              setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
-              notify('error', 'Unable to send message.')
-            })
+          }
+        }
+
+        // Prefer streaming (OpenWebUI parity). Fall back to JSON if streaming fails (older deployments).
+        void postChatMessageStream(sessionId!, content, messageAttachments, loadSession(), {
+          signal: abort.signal,
+          onEvent
         })
+          .catch(async () => postChatMessage(sessionId!, content, messageAttachments, loadSession()))
+          .then((response) => {
+            const assistant = Array.isArray(response.messages)
+              ? response.messages.find((message) => message.role === 'assistant')
+              : null
+            if (assistant) {
+              const seconds = Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000))
+              setAssistantThoughtSeconds((current) => ({ ...current, [assistant.id]: seconds }))
+            }
+
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== response.session.id) return thread
+
+                const serverMessages = Array.isArray(response.session.messages) ? response.session.messages : []
+                const responseMessages = Array.isArray(response.messages) ? response.messages : []
+
+                const mergedMessages =
+                  serverMessages.length >= thread.messages.length
+                    ? serverMessages
+                    : responseMessages.length > 0
+                      ? [...thread.messages, ...responseMessages].filter(
+                          (msg, idx, all) => all.findIndex((m) => m.id === msg.id) === idx
+                        )
+                      : thread.messages
+
+                return {
+                  ...thread,
+                  ...response.session,
+                  messages: mergedMessages
+                }
+              })
+              return sortThreads(nextThreads)
+            })
+            setComposerAttachments([])
+          })
+          .catch((submitError) => {
+            setDraft(content)
+            setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
+            notify('error', 'Unable to send message.')
+          })
+          .finally(() => {
+            setIsGenerating(false)
+            setStreamingAssistantIds((current) => {
+              const next = { ...current }
+              delete next[optimisticAssistantId]
+              return next
+            })
+            setAssistantLiveStatusById((current) => {
+              const next = { ...current }
+              delete next[optimisticAssistantId]
+              return next
+            })
+          })
       } catch (submitError) {
         setDraft(content)
         setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
@@ -1656,7 +1703,8 @@ export function ChatShell() {
                 const attachments = Array.isArray(message.attachments) ? message.attachments : []
                 const modelLabel = currentModel?.name || currentModelRoute
                 const thoughtSeconds = message.role === 'assistant' ? assistantThoughtSeconds[message.id] : undefined
-                const isAssistantPending = message.role === 'assistant' && !message.content.trim()
+                const isAssistantPending = message.role === 'assistant' && Boolean(streamingAssistantIds[message.id])
+                const showAssistantThinkingPlaceholder = isAssistantPending && !message.content.trim()
                 const assistantThought =
                   message.role === 'assistant' && !isAssistantPending ? extractThinkBlocks(message.content) : null
                 const assistantTimestamp =
@@ -1689,7 +1737,7 @@ export function ChatShell() {
                             {isAssistantPending ? (
                               <span className="owui-assistant-status">
                                 <span className="owui-assistant-live-dot" aria-hidden="true" />
-                                <span>Thinking...</span>
+                                <span>{assistantLiveStatusById[message.id] || 'Thinking…'}</span>
                               </span>
                             ) : thoughtSeconds ? (
                               assistantThought?.thought ? (
@@ -1737,7 +1785,7 @@ export function ChatShell() {
                         ) : null}
 
                         <div className="owui-message-content" data-copy-response-source>
-                          {isAssistantPending ? (
+                          {showAssistantThinkingPlaceholder ? (
                             <span className="owui-thinking">
                               <span className="owui-thinking-dots" aria-hidden="true">
                                 <span />

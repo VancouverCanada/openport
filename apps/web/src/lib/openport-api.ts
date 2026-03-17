@@ -581,6 +581,101 @@ export async function postChatMessage(
   }, session)
 }
 
+type OpenPortChatStreamEvent =
+  | { event: 'status'; data: { done: boolean; action: string; description: string; urls?: string[]; query?: string } }
+  | { event: 'delta'; data: { delta: string } }
+  | { event: 'final'; data: OpenPortChatMessagesResponse }
+  | { event: 'error'; data: { message?: string } }
+
+function parseSseChunk(raw: string): OpenPortChatStreamEvent | null {
+  const lines = raw.split('\n')
+  let eventName = 'message'
+  const dataLines: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice('event:'.length).trim()
+      continue
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trim())
+    }
+  }
+  if (dataLines.length === 0) return null
+  const dataRaw = dataLines.join('\n')
+  try {
+    const data = JSON.parse(dataRaw)
+    return { event: eventName as any, data } as OpenPortChatStreamEvent
+  } catch {
+    return null
+  }
+}
+
+export async function postChatMessageStream(
+  sessionId: string,
+  content: string,
+  attachmentsOrSession: OpenPortChatMessage['attachments'] | OpenPortSession | null = [],
+  maybeSession?: OpenPortSession | null,
+  options?: {
+    signal?: AbortSignal
+    onEvent?: (event: OpenPortChatStreamEvent) => void
+  }
+): Promise<OpenPortChatMessagesResponse> {
+  const attachments = Array.isArray(attachmentsOrSession) ? attachmentsOrSession : []
+  const session = Array.isArray(attachmentsOrSession) ? maybeSession : attachmentsOrSession
+  const headers = new Headers(buildHeaders(session))
+
+  const response = await fetch(`${getPublicApiBaseUrl()}/ai/sessions/${sessionId}/messages?stream=1`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content, attachments }),
+    cache: 'no-store',
+    signal: options?.signal
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(text || `Request failed: ${response.status}`)
+  }
+
+  if (!response.body) {
+    throw new Error('Stream unavailable')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalPayload: OpenPortChatMessagesResponse | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let idx: number
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const block = buffer.slice(0, idx).trim()
+      buffer = buffer.slice(idx + 2)
+      if (!block) continue
+
+      const parsed = parseSseChunk(block)
+      if (!parsed) continue
+      options?.onEvent?.(parsed)
+      if (parsed.event === 'final' && parsed.data) {
+        finalPayload = parsed.data
+      }
+      if (parsed.event === 'error') {
+        throw new Error(parsed.data?.message || 'Stream failed')
+      }
+    }
+  }
+
+  if (!finalPayload) {
+    throw new Error('Stream ended without final payload')
+  }
+
+  return finalPayload
+}
+
 export async function updateChatSessionSettings(
   sessionId: string,
   settings: OpenPortChatSettings,

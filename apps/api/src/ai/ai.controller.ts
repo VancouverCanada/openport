@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common'
-import type { FastifyRequest } from 'fastify'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { resolveActor } from '../common/request-context.js'
 import { AiService } from './ai.service.js'
 import { CreateChatSessionDto } from './dto/create-chat-session.dto.js'
@@ -79,13 +79,54 @@ export class AiController {
   }
 
   @Post('sessions/:id/messages')
-  postMessage(
+  async postMessage(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
-    @Body() dto: PostMessageDto
-  ): Promise<Record<string, unknown>> {
+    @Body() dto: PostMessageDto,
+    @Query('stream') stream: string | boolean | undefined,
+    @Res() reply: FastifyReply
+  ): Promise<void> {
     const actor = resolveActor(req.headers)
-    return this.ai.postMessage(actor, id, dto)
+    const wantsStream = stream === true || stream === '1' || stream === 'true'
+
+    if (!wantsStream) {
+      const payload = await this.ai.postMessage(actor, id, dto)
+      void reply.send(payload)
+      return
+    }
+
+    // SSE stream: token deltas + status updates, terminated by a final JSON payload.
+    const controller = new AbortController()
+    req.raw.on('close', () => controller.abort())
+
+    reply
+      .header('content-type', 'text/event-stream; charset=utf-8')
+      .header('cache-control', 'no-cache, no-transform')
+      .header('connection', 'keep-alive')
+      .code(200)
+
+    // Some runtimes support explicit flushing (safe to ignore when absent).
+    try {
+      ;(reply.raw as any).flushHeaders?.()
+    } catch {
+      // ignore
+    }
+
+    const writeEvent = (event: string, data: unknown) => {
+      const json = JSON.stringify(data ?? null)
+      reply.raw.write(`event: ${event}\n`)
+      reply.raw.write(`data: ${json}\n\n`)
+    }
+
+    try {
+      for await (const chunk of this.ai.postMessageStream(actor, id, dto, { signal: controller.signal })) {
+        writeEvent(chunk.event, chunk.data)
+      }
+    } catch (error) {
+      writeEvent('error', { message: error instanceof Error ? error.message : 'Stream failed' })
+    } finally {
+      reply.raw.end()
+    }
   }
 
   @Delete('sessions')
