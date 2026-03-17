@@ -16,12 +16,14 @@ import {
   buildProjectEventsUrl,
   clearSession,
   createChatSession,
+  deleteChatSession,
   fetchChatSession,
   fetchChatSessions,
   fetchProjectCollaboration,
   fetchProjects,
   fetchOllamaTags,
   fetchWorkspaceModels,
+  importChatSessions,
   loadSession,
   postChatMessage,
   searchProjectKnowledge,
@@ -50,11 +52,13 @@ import { ChatControlsPanel } from './chat-controls-panel'
 import { ChatSettingsModal, type ChatSettingsSection } from './chat-settings-modal'
 import { useAppShellState } from './app-shell-state'
 import { Iconify } from './iconify'
+import { WorkspaceResourceMenu, type WorkspaceResourceMenuItem } from './workspace-resource-menu'
 import { CapsuleButton } from './ui/capsule-button'
 import { FeedbackBanner } from './ui/feedback-banner'
 import { IconButton } from './ui/icon-button'
-import { MessageBubble } from './ui/message-bubble'
 import { TextButton } from './ui/text-button'
+
+type OpenPortChatAttachment = NonNullable<OpenPortChatMessage['attachments']>[number]
 
 function slugifyOllamaName(name: string): string {
   return name
@@ -146,6 +150,7 @@ export function ChatShell() {
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
   const [speechMode, setSpeechMode] = useState<'dictation' | 'voice' | null>(null)
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -219,6 +224,47 @@ export function ChatShell() {
   function openSettings(section: ChatSettingsSection): void {
     setSettingsInitialSection(section)
     setShowSettingsModal(true)
+  }
+
+  async function copyToClipboard(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text)
+      notify('success', 'Copied.')
+    } catch {
+      notify('error', 'Unable to copy.')
+    }
+  }
+
+  function stopSpeaking(): void {
+    try {
+      window.speechSynthesis?.cancel()
+    } catch {
+      // ignore
+    }
+    setSpeakingMessageId(null)
+  }
+
+  function speakMessage(messageId: string, text: string): void {
+    if (typeof window === 'undefined') return
+    if (!text.trim()) return
+
+    if (speakingMessageId === messageId) {
+      stopSpeaking()
+      return
+    }
+
+    stopSpeaking()
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.onend = () => {
+      setSpeakingMessageId((current) => (current === messageId ? null : current))
+    }
+    utterance.onerror = () => {
+      setSpeakingMessageId((current) => (current === messageId ? null : current))
+    }
+
+    setSpeakingMessageId(messageId)
+    window.speechSynthesis?.speak(utterance)
   }
 
   function stopSpeechRecognition(): void {
@@ -299,6 +345,10 @@ export function ChatShell() {
 
   useEffect(() => {
     return () => stopSpeechRecognition()
+  }, [])
+
+  useEffect(() => {
+    return () => stopSpeaking()
   }, [])
 
   function onControlsResizeStart(startEvent: ReactMouseEvent<HTMLDivElement>): void {
@@ -720,6 +770,137 @@ export function ChatShell() {
       })
   }
 
+  async function shareThread(threadId: string): Promise<void> {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const url = `${origin}/c/${threadId}`
+    try {
+      await updateChatSessionMeta(threadId, { shared: true }, loadSession()).catch(() => undefined)
+      await navigator.clipboard.writeText(url)
+      notify('success', 'Share link copied.')
+    } catch {
+      notify('error', 'Unable to copy share link.')
+    }
+  }
+
+  async function downloadThread(threadId: string): Promise<void> {
+    try {
+      const { session } = await fetchChatSession(threadId, loadSession())
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        items: [session]
+      }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `chat-${(session.title || 'chat').replace(/\\s+/g, '-').toLowerCase()}-${Date.now()}.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      notify('success', 'Chat downloaded.')
+    } catch {
+      notify('error', 'Unable to download chat.')
+    }
+  }
+
+  async function cloneThread(threadId: string): Promise<void> {
+    const beforeIds = new Set(threads.map((thread) => thread.id))
+    try {
+      const { session } = await fetchChatSession(threadId, loadSession())
+      const now = new Date().toISOString()
+      const clonePayload = {
+        ...session,
+        id: '',
+        title: `Copy of ${session.title || 'Chat'}`,
+        createdAt: now,
+        updatedAt: now,
+        archived: false,
+        pinned: false,
+        shared: false
+      }
+
+      await importChatSessions([clonePayload], loadSession())
+      const after = await fetchChatSessions({ archived: isArchivedView }, loadSession())
+      setThreads(sortThreads(after.items))
+
+      const created = after.items.find((thread) => !beforeIds.has(thread.id))
+      if (created) {
+        onSelectThread(created.id)
+      }
+
+      notify('success', 'Chat cloned.')
+    } catch {
+      notify('error', 'Unable to clone chat.')
+    }
+  }
+
+  function getThreadMenuItems(thread: OpenPortChatSession): WorkspaceResourceMenuItem[] {
+    return [
+      {
+        icon: 'solar:share-outline',
+        label: 'Share',
+        onClick: () => {
+          void shareThread(thread.id)
+        }
+      },
+      {
+        icon: 'solar:download-minimalistic-outline',
+        label: 'Download',
+        onClick: () => {
+          void downloadThread(thread.id)
+        }
+      },
+      {
+        icon: 'solar:pen-outline',
+        label: 'Rename',
+        onClick: () => {
+          const next = window.prompt('Rename chat', thread.title || '')
+          if (!next?.trim()) return
+          void updateChatSessionMeta(thread.id, { title: next.trim() }, loadSession())
+            .then(({ session }) => {
+              setThreads((current) => sortThreads(current.map((t) => (t.id === session.id ? session : t))))
+              notify('success', 'Chat renamed.')
+            })
+            .catch(() => notify('error', 'Unable to rename chat.'))
+        }
+      },
+      { type: 'divider', icon: '', label: '' },
+      {
+        icon: thread.pinned ? 'solar:pin-bold' : 'solar:pin-outline',
+        label: thread.pinned ? 'Unpin' : 'Pin',
+        onClick: () => updateThreadMeta({ pinned: !(thread.pinned ?? false) })
+      },
+      {
+        icon: 'solar:copy-outline',
+        label: 'Clone',
+        onClick: () => {
+          void cloneThread(thread.id)
+        }
+      },
+      { type: 'divider', icon: '', label: '' },
+      {
+        icon: thread.archived ? 'solar:archive-up-outline' : 'solar:archive-outline',
+        label: thread.archived ? 'Restore' : 'Archive',
+        onClick: () => updateThreadMeta({ archived: !(thread.archived ?? false) })
+      },
+      {
+        danger: true,
+        icon: 'solar:trash-bin-trash-outline',
+        label: 'Delete',
+        onClick: () => {
+          if (!window.confirm('Delete this chat?')) return
+          void deleteChatSession(thread.id, loadSession())
+            .then(() => {
+              setThreads((current) => current.filter((t) => t.id !== thread.id))
+              setActiveThreadId(null)
+              router.push(buildChatHref())
+              notify('success', 'Chat deleted.')
+            })
+            .catch(() => notify('error', 'Unable to delete chat.'))
+        }
+      }
+    ]
+  }
+
   function renderModelSelector(placement: 'header' | 'hero') {
     return (
       <div className={`chat-model-menu-wrap${placement === 'hero' ? ' is-hero' : ''}`} ref={modelMenuRef}>
@@ -1107,9 +1288,32 @@ export function ChatShell() {
         className={`chat-main-stage${projectBackgroundImage ? ' has-project-background' : ''}`}
         style={chatMainStageStyle}
       >
-        <div className="chat-main-header">
-          <div className="chat-main-header-copy">{showEmptyStage ? null : renderModelSelector('header')}</div>
+        <div className={`chat-main-header${activeThread ? ' has-thread' : ''}`}>
+          <div className="chat-main-header-copy">{renderModelSelector('header')}</div>
           <div className="chat-topbar">
+            <IconButton
+              aria-label="New chat"
+              className="chat-topbar-icon"
+              onClick={() => {
+                // Mirror OpenWebUI's top-right quick action: start a new chat from anywhere.
+                setActiveThreadId(null)
+                const params = new URLSearchParams()
+                if (selectedProjectId) params.set('project', selectedProjectId)
+                if (isArchivedView) params.set('view', 'archived')
+                router.push(buildChatHref(params))
+              }}
+              size="md"
+              variant="topbar"
+            >
+              <Iconify icon="solar:chat-round-line-outline" size={19} />
+            </IconButton>
+
+            {activeThread ? (
+              <WorkspaceResourceMenu
+                ariaLabel="Open chat menu"
+                items={getThreadMenuItems(activeThread)}
+              />
+            ) : null}
             <IconButton
               active={showControls}
               aria-label="Toggle controls"
@@ -1187,8 +1391,6 @@ export function ChatShell() {
         {showEmptyStage ? (
           <div className="chat-empty-stage">
             <div className="chat-empty-frame">
-              <div className="chat-empty-head chat-empty-stage-item chat-empty-stage-item--head">{renderModelSelector('hero')}</div>
-
               <div className="chat-empty-stage-item chat-empty-stage-item--composer">{renderComposer('empty')}</div>
 
               <div className="chat-suggestion-list chat-empty-stage-item chat-empty-stage-item--suggestions">
@@ -1217,16 +1419,109 @@ export function ChatShell() {
         ) : activeThread ? (
           <>
             <div className="chat-conversation-flow">
-              {messages.map((message, index) => (
-                <MessageBubble
-                  attachments={message.attachments}
-                  key={message.id}
-                  role={message.role}
-                  style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
-                >
-                  <p data-copy-response-source>{message.content}</p>
-                </MessageBubble>
-              ))}
+              {messages.map((message, index) => {
+                const isLast = index === messages.length - 1
+                const attachments = Array.isArray(message.attachments) ? message.attachments : []
+                const modelLabel = currentModel?.name || currentModelRoute
+
+                return (
+                  <article
+                    className={`owui-message owui-message--${message.role}`}
+                    data-message-role={message.role}
+                    key={message.id}
+                    style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
+                  >
+                    <div className="owui-message-inner">
+                      {message.role === 'assistant' ? (
+                        <div className="owui-assistant-head">
+                          <div className="owui-assistant-model">
+                            <span className="owui-assistant-mark">OI</span>
+                            <span className="owui-assistant-model-name">{modelLabel}</span>
+                          </div>
+                          <div className="owui-assistant-meta">{modelLabel}</div>
+                        </div>
+                      ) : null}
+
+                      <div className={`owui-message-card${message.role === 'assistant' ? ' is-assistant' : ' is-user'}`}>
+                        {attachments.length > 0 ? (
+                          <div className="owui-message-attachments">
+                            {attachments.map((attachment: OpenPortChatAttachment) =>
+                              attachment.contentUrl ? (
+                                <a
+                                  className="owui-message-attachment"
+                                  href={attachment.contentUrl}
+                                  key={attachment.id}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  <Iconify
+                                    icon={attachment.type === 'web' ? 'solar:global-outline' : 'solar:folder-with-files-outline'}
+                                    size={13}
+                                  />
+                                  <span>{attachment.label}</span>
+                                </a>
+                              ) : (
+                                <span className="owui-message-attachment" key={attachment.id}>
+                                  <Iconify
+                                    icon={attachment.type === 'web' ? 'solar:global-outline' : 'solar:folder-with-files-outline'}
+                                    size={13}
+                                  />
+                                  <span>{attachment.label}</span>
+                                </span>
+                              )
+                            )}
+                          </div>
+                        ) : null}
+
+                        <div className="owui-message-content" data-copy-response-source>
+                          {message.content}
+                        </div>
+                      </div>
+
+                      {message.role === 'assistant' ? (
+                        <div className={`owui-assistant-actions${isLast ? ' is-visible' : ''}`}>
+                          <button
+                            className="owui-assistant-action"
+                            onClick={() => {
+                              void copyToClipboard(message.content)
+                            }}
+                            type="button"
+                          >
+                            <Iconify icon="solar:copy-outline" size={16} />
+                          </button>
+                          <button
+                            className={`owui-assistant-action${speakingMessageId === message.id ? ' is-active' : ''}`}
+                            onClick={() => speakMessage(message.id, message.content)}
+                            type="button"
+                          >
+                            <Iconify icon={speakingMessageId === message.id ? 'solar:stop-outline' : 'solar:volume-loud-outline'} size={16} />
+                          </button>
+                          <button className="owui-assistant-action" disabled type="button">
+                            <Iconify icon="solar:like-outline" size={16} />
+                          </button>
+                          <button className="owui-assistant-action" disabled type="button">
+                            <Iconify icon="solar:dislike-outline" size={16} />
+                          </button>
+                          <button
+                            className="owui-assistant-action"
+                            onClick={() => {
+                              const messageIndex = messages.findIndex((entry) => entry.id === message.id)
+                              const prompt = messages
+                                .slice(0, messageIndex)
+                                .reverse()
+                                .find((entry) => entry.role === 'user')?.content
+                              if (prompt) submitMessage(prompt)
+                            }}
+                            type="button"
+                          >
+                            <Iconify icon="solar:refresh-outline" size={16} />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
             </div>
 
             <div className="chat-main-composer">{renderComposer('thread')}</div>
