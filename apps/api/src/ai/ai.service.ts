@@ -28,6 +28,73 @@ type Actor = {
 
 type ActorInput = Actor | string
 
+type ChatStreamChunk =
+  | { event: 'status'; data: { done: boolean; action: string; description: string; urls?: string[]; query?: string } }
+  | { event: 'delta'; data: { delta: string } }
+  | { event: 'final'; data: OpenPortChatMessagesResponse }
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(resolve, ms)
+    const onAbort = () => {
+      clearTimeout(id)
+      reject(new Error('Aborted'))
+    }
+    if (signal) {
+      if (signal.aborted) return onAbort()
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  })
+}
+
+async function* streamOllamaChat(
+  baseUrl: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model, messages, stream: true }),
+    signal
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(text || `Ollama request failed: ${response.status}`)
+  }
+
+  if (!response.body) return
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let idx: number
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim()
+      buffer = buffer.slice(idx + 1)
+      if (!line) continue
+
+      try {
+        const payload = JSON.parse(line) as any
+        const delta = typeof payload?.message?.content === 'string' ? payload.message.content : ''
+        if (delta) yield delta
+        if (payload?.done === true) return
+      } catch {
+        // ignore malformed lines
+      }
+    }
+  }
+}
+
 @Injectable()
 export class AiService {
   constructor(
@@ -419,6 +486,116 @@ export class AiService {
       session,
       messages: [userMessage, assistantMessage]
     }
+  }
+
+  async *postMessageStream(
+    actorInput: ActorInput,
+    sessionId: string,
+    dto: PostMessageDto,
+    options: { signal?: AbortSignal } = {}
+  ): AsyncGenerator<ChatStreamChunk> {
+    const actor = typeof actorInput === 'string'
+      ? { userId: actorInput, workspaceId: 'ws_user_demo' }
+      : actorInput
+    const sessions = await this.readUserSessions(actor.userId)
+    const session = sessions.find((item) => item.id === sessionId)
+    if (!session) {
+      throw new NotFoundException('Chat session not found')
+    }
+
+    const normalizedContent = dto.content.trim()
+    const attachments: OpenPortChatAttachment[] = Array.isArray(dto.attachments)
+      ? dto.attachments
+          .filter((attachment) => attachment && typeof attachment.id === 'string' && typeof attachment.label === 'string')
+          .slice(0, 16)
+          .map((attachment) => ({
+            id: attachment.id.trim() || `att_${randomUUID()}`,
+            type: attachment.type,
+            label: attachment.label.trim() || 'Attachment',
+            meta: attachment.meta?.trim() || undefined,
+            payload: attachment.payload.trim(),
+            assetId: attachment.assetId ?? null,
+            contentUrl: attachment.contentUrl ?? null
+          }))
+      : []
+
+    const createdAt = new Date().toISOString()
+    const userMessage: OpenPortChatMessage = {
+      id: `msg_${randomUUID()}`,
+      role: 'user',
+      content: normalizedContent,
+      createdAt,
+      attachments
+    }
+
+    yield { event: 'status', data: { done: false, action: 'thinking', description: 'Thinking…' } }
+
+    const projectContext =
+      session.settings.projectId && normalizedContent
+        ? await this.projects.getKnowledgeContextForProject(actor, session.settings.projectId, normalizedContent).catch(() => '')
+        : ''
+    const attachmentContext =
+      attachments.length > 0
+        ? attachments
+            .map((attachment) => `- [${attachment.type}] ${attachment.label}${attachment.meta ? ` (${attachment.meta})` : ''}${attachment.payload ? `: ${attachment.payload.slice(0, 240)}` : ''}`)
+            .join('\n')
+        : ''
+
+    const systemPrompt = session.settings?.systemPrompt?.trim() || ''
+    const history = [...session.messages, userMessage].slice(-32).map((message) => ({
+      role: message.role,
+      content: message.content
+    }))
+    const chatMessages = systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : history
+
+    const startedAt = Date.now()
+    let assistantContent = ''
+
+    const modelRoute = session.settings?.valves?.modelRoute || 'openport/local'
+    if (modelRoute.startsWith('ollama/')) {
+      const modelName = modelRoute.slice('ollama/'.length).trim()
+      if (modelName) {
+        yield { event: 'status', data: { done: false, action: 'model', description: `Calling ${modelName}…` } }
+        const baseUrl = await this.ollama.resolveBaseUrl(actor.workspaceId, 0)
+        for await (const delta of streamOllamaChat(baseUrl, modelName, chatMessages, options.signal)) {
+          assistantContent += delta
+          yield { event: 'delta', data: { delta } }
+        }
+      }
+    }
+
+    if (!assistantContent.trim()) {
+      const shell = [
+        `OpenPort API shell received: ${normalizedContent}`,
+        attachmentContext ? `Attached context:\n${attachmentContext}` : '',
+        projectContext ? `Project context:\n${projectContext}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+
+      yield { event: 'status', data: { done: false, action: 'model', description: 'Generating…' } }
+      const chunks = shell.match(/.{1,24}/gs) || [shell]
+      for (const chunk of chunks) {
+        assistantContent += chunk
+        yield { event: 'delta', data: { delta: chunk } }
+        await sleep(12, options.signal).catch(() => undefined)
+      }
+    }
+
+    const assistantMessage: OpenPortChatMessage = {
+      id: `msg_${randomUUID()}`,
+      role: 'assistant',
+      content: assistantContent,
+      createdAt: new Date().toISOString()
+    }
+
+    session.messages.push(userMessage, assistantMessage)
+    session.updatedAt = assistantMessage.createdAt
+    await this.writeUserSessions(actor.userId, sessions)
+
+    const durationSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    yield { event: 'status', data: { done: true, action: 'done', description: `Thought for ${durationSeconds} seconds` } }
+    yield { event: 'final', data: { session, messages: [userMessage, assistantMessage] } }
   }
 
   async archiveAllSessions(userId: string): Promise<OpenPortListResponse<OpenPortChatSession>> {
