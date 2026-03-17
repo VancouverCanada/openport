@@ -1,6 +1,15 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import type {
   OpenPortListResponse,
+  OpenPortWorkspaceConnector,
+  OpenPortWorkspaceConnectorAdapter,
+  OpenPortWorkspaceConnectorAuditEvent,
+  OpenPortWorkspaceConnectorCredential,
+  OpenPortWorkspaceConnectorResponse,
+  OpenPortWorkspaceConnectorCredentialResponse,
+  OpenPortWorkspaceConnectorTask,
+  OpenPortWorkspaceConnectorTaskResponse,
+  OpenPortWorkspaceConnectorSyncMode,
   OpenPortWorkspaceModel,
   OpenPortWorkspacePromptSuggestion,
   OpenPortWorkspaceModelResponse,
@@ -17,6 +26,8 @@ import type {
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceSkillResponse,
   OpenPortWorkspaceTool,
+  OpenPortWorkspaceToolRun,
+  OpenPortWorkspaceToolRunResponse,
   OpenPortWorkspaceToolExecutionChain,
   OpenPortWorkspaceToolPackage,
   OpenPortWorkspaceToolPackageImportResponse,
@@ -39,9 +50,16 @@ import type { CreateWorkspaceToolDto } from './dto/create-workspace-tool.dto.js'
 import type { UpdateWorkspaceToolDto } from './dto/update-workspace-tool.dto.js'
 import type { ValidateWorkspaceToolDto } from './dto/validate-workspace-tool.dto.js'
 import type { ImportWorkspaceToolPackageDto } from './dto/import-workspace-tool-package.dto.js'
+import type { RunWorkspaceToolOrchestrationDto } from './dto/run-workspace-tool-orchestration.dto.js'
+import type { ReplayWorkspaceToolOrchestrationRunDto } from './dto/replay-workspace-tool-orchestration-run.dto.js'
 import type { CreateWorkspaceSkillDto } from './dto/create-workspace-skill.dto.js'
 import type { UpdateWorkspaceSkillDto } from './dto/update-workspace-skill.dto.js'
 import type { ShareWorkspaceResourceDto } from './dto/share-workspace-resource.dto.js'
+import type { CreateWorkspaceConnectorDto } from './dto/create-workspace-connector.dto.js'
+import type { UpdateWorkspaceConnectorDto } from './dto/update-workspace-connector.dto.js'
+import type { CreateWorkspaceConnectorCredentialDto } from './dto/create-workspace-connector-credential.dto.js'
+import type { UpdateWorkspaceConnectorCredentialDto } from './dto/update-workspace-connector-credential.dto.js'
+import type { TriggerWorkspaceConnectorSyncDto } from './dto/trigger-workspace-connector-sync.dto.js'
 
 function slugifySegment(value: string): string {
   return value
@@ -77,12 +95,31 @@ function rankResourcePermission(permission: OpenPortWorkspaceResourcePermission)
 }
 
 @Injectable()
-export class WorkspaceResourcesService {
+export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy {
+  private connectorScheduler: ReturnType<typeof setInterval> | null = null
+  private connectorRunner: Promise<void> | null = null
+  private toolRunner: Promise<void> | null = null
+
   constructor(
     private readonly workspaces: WorkspacesService,
     private readonly groups: GroupsService,
     private readonly stateStore: ApiStateStoreService
   ) {}
+
+  onModuleInit(): void {
+    this.connectorScheduler = setInterval(() => {
+      void this.runConnectorSchedulerTick()
+      void this.runConnectorQueueTick()
+      void this.runToolQueueTick()
+    }, 15_000)
+  }
+
+  onModuleDestroy(): void {
+    if (this.connectorScheduler) {
+      clearInterval(this.connectorScheduler)
+      this.connectorScheduler = null
+    }
+  }
 
   async listModels(actor: Actor): Promise<OpenPortListResponse<OpenPortWorkspaceModel>> {
     this.assertModuleRead(actor, 'models')
@@ -1050,6 +1087,1177 @@ export class WorkspaceResourcesService {
     item.accessGrants = this.removeResourceGrant(actor.workspaceId, 'skill', id, item.accessGrants, grantId)
     await this.stateStore.writeWorkspaceSkills(actor.workspaceId, items)
     return { ok: true }
+  }
+
+  async listConnectorCredentials(actor: Actor): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorCredential>> {
+    this.assertModuleRead(actor, 'knowledge')
+    const items = await this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId)
+    return { items }
+  }
+
+  async createConnectorCredential(
+    actor: Actor,
+    dto: CreateWorkspaceConnectorCredentialDto
+  ): Promise<OpenPortWorkspaceConnectorCredentialResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const items = await this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId)
+    const id = dto.id?.trim() || `connector_credential_${randomUUID()}`
+    if (items.some((entry) => entry.id === id)) {
+      throw new BadRequestException('Connector credential id already exists')
+    }
+    const now = new Date().toISOString()
+    const item: OpenPortWorkspaceConnectorCredential = {
+      id,
+      workspaceId: actor.workspaceId,
+      name: dto.name.trim(),
+      provider: this.normalizeConnectorAdapter(dto.provider),
+      description: dto.description?.trim() || '',
+      fields: this.normalizeCredentialFields(dto.provider, dto.fields, []),
+      createdAt: now,
+      updatedAt: now
+    }
+    await this.stateStore.writeWorkspaceConnectorCredentials(actor.workspaceId, [item, ...items])
+    return { item }
+  }
+
+  async updateConnectorCredential(
+    actor: Actor,
+    id: string,
+    dto: UpdateWorkspaceConnectorCredentialDto
+  ): Promise<OpenPortWorkspaceConnectorCredentialResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const items = await this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId)
+    const item = items.find((entry) => entry.id === id)
+    if (!item) throw new NotFoundException('Connector credential not found')
+
+    const provider = this.normalizeConnectorAdapter(dto.provider || item.provider)
+    const updated: OpenPortWorkspaceConnectorCredential = {
+      ...item,
+      name: dto.name?.trim() || item.name,
+      provider,
+      description: dto.description?.trim() ?? item.description,
+      fields: dto.fields ? this.normalizeCredentialFields(provider, dto.fields, item.fields) : item.fields,
+      updatedAt: new Date().toISOString()
+    }
+    await this.stateStore.writeWorkspaceConnectorCredentials(
+      actor.workspaceId,
+      items.map((entry) => (entry.id === id ? updated : entry))
+    )
+    return { item: updated }
+  }
+
+  async deleteConnectorCredential(actor: Actor, id: string): Promise<{ ok: true }> {
+    this.assertModuleManage(actor, 'knowledge')
+    const [credentials, connectors] = await Promise.all([
+      this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectors(actor.workspaceId)
+    ])
+    if (!credentials.some((entry) => entry.id === id)) {
+      throw new NotFoundException('Connector credential not found')
+    }
+    if (connectors.some((connector) => connector.credentialId === id)) {
+      throw new BadRequestException('Credential is used by one or more connectors')
+    }
+    await this.stateStore.writeWorkspaceConnectorCredentials(
+      actor.workspaceId,
+      credentials.filter((entry) => entry.id !== id)
+    )
+    return { ok: true }
+  }
+
+  async listConnectors(actor: Actor): Promise<OpenPortListResponse<OpenPortWorkspaceConnector>> {
+    this.assertModuleRead(actor, 'knowledge')
+    const items = await this.stateStore.readWorkspaceConnectors(actor.workspaceId)
+    return { items }
+  }
+
+  async getConnector(actor: Actor, id: string): Promise<OpenPortWorkspaceConnectorResponse> {
+    this.assertModuleRead(actor, 'knowledge')
+    const item = (await this.stateStore.readWorkspaceConnectors(actor.workspaceId)).find((entry) => entry.id === id)
+    if (!item) throw new NotFoundException('Connector not found')
+    return { item }
+  }
+
+  async createConnector(actor: Actor, dto: CreateWorkspaceConnectorDto): Promise<OpenPortWorkspaceConnectorResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const [items, credentials] = await Promise.all([
+      this.stateStore.readWorkspaceConnectors(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId)
+    ])
+    const id = dto.id?.trim() || `connector_${randomUUID()}`
+    if (items.some((entry) => entry.id === id)) {
+      throw new BadRequestException('Connector id already exists')
+    }
+    const adapter = this.normalizeConnectorAdapter(dto.adapter)
+    const credentialId = dto.credentialId?.trim() || null
+    if (credentialId && !credentials.some((entry) => entry.id === credentialId)) {
+      throw new BadRequestException('Connector credential not found')
+    }
+    const now = new Date().toISOString()
+    const schedule = this.normalizeConnectorSchedule(dto.schedule)
+    const item: OpenPortWorkspaceConnector = {
+      id,
+      workspaceId: actor.workspaceId,
+      name: dto.name.trim(),
+      adapter,
+      description: dto.description?.trim() || '',
+      enabled: dto.enabled ?? true,
+      credentialId,
+      tags: this.normalizeStringList(dto.tags),
+      schedule,
+      syncPolicy: this.normalizeConnectorSyncPolicy(dto.syncPolicy),
+      sourceConfig: this.normalizeConnectorSourceConfig(dto.sourceConfig),
+      status: {
+        health: 'idle',
+        lastRunAt: null,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        lastTaskId: null,
+        lastErrorMessage: null
+      },
+      createdAt: now,
+      updatedAt: now
+    }
+    await this.stateStore.writeWorkspaceConnectors(actor.workspaceId, [item, ...items])
+    await this.appendConnectorAuditEvent(actor.workspaceId, {
+      connectorId: item.id,
+      taskId: null,
+      level: 'info',
+      action: 'connector.created',
+      message: `Connector "${item.name}" created.`,
+      detail: JSON.stringify({ adapter: item.adapter })
+    })
+    return { item }
+  }
+
+  async updateConnector(
+    actor: Actor,
+    id: string,
+    dto: UpdateWorkspaceConnectorDto
+  ): Promise<OpenPortWorkspaceConnectorResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const [items, credentials] = await Promise.all([
+      this.stateStore.readWorkspaceConnectors(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectorCredentials(actor.workspaceId)
+    ])
+    const item = items.find((entry) => entry.id === id)
+    if (!item) throw new NotFoundException('Connector not found')
+
+    const credentialId = dto.credentialId === undefined ? item.credentialId : dto.credentialId?.trim() || null
+    if (credentialId && !credentials.some((entry) => entry.id === credentialId)) {
+      throw new BadRequestException('Connector credential not found')
+    }
+
+    const updated: OpenPortWorkspaceConnector = {
+      ...item,
+      name: dto.name?.trim() || item.name,
+      adapter: this.normalizeConnectorAdapter(dto.adapter || item.adapter),
+      description: dto.description?.trim() ?? item.description,
+      enabled: dto.enabled ?? item.enabled,
+      credentialId,
+      tags: dto.tags ? this.normalizeStringList(dto.tags) : item.tags,
+      schedule: dto.schedule ? this.normalizeConnectorSchedule(dto.schedule, item.schedule) : item.schedule,
+      syncPolicy: dto.syncPolicy ? this.normalizeConnectorSyncPolicy(dto.syncPolicy, item.syncPolicy) : item.syncPolicy,
+      sourceConfig: dto.sourceConfig ? this.normalizeConnectorSourceConfig(dto.sourceConfig, item.sourceConfig) : item.sourceConfig,
+      updatedAt: new Date().toISOString()
+    }
+    await this.stateStore.writeWorkspaceConnectors(
+      actor.workspaceId,
+      items.map((entry) => (entry.id === id ? updated : entry))
+    )
+    await this.appendConnectorAuditEvent(actor.workspaceId, {
+      connectorId: id,
+      taskId: null,
+      level: 'info',
+      action: 'connector.updated',
+      message: `Connector "${updated.name}" updated.`,
+      detail: JSON.stringify({ adapter: updated.adapter })
+    })
+    return { item: updated }
+  }
+
+  async deleteConnector(actor: Actor, id: string): Promise<{ ok: true }> {
+    this.assertModuleManage(actor, 'knowledge')
+    const [items, tasks, audits] = await Promise.all([
+      this.stateStore.readWorkspaceConnectors(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectorTasks(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectorAuditEvents(actor.workspaceId)
+    ])
+    const item = items.find((entry) => entry.id === id)
+    if (!item) throw new NotFoundException('Connector not found')
+    await this.stateStore.writeWorkspaceConnectors(
+      actor.workspaceId,
+      items.filter((entry) => entry.id !== id)
+    )
+    await this.stateStore.writeWorkspaceConnectorTasks(
+      actor.workspaceId,
+      tasks.filter((entry) => entry.connectorId !== id)
+    )
+    await this.stateStore.writeWorkspaceConnectorAuditEvents(
+      actor.workspaceId,
+      audits.filter((entry) => entry.connectorId !== id)
+    )
+    return { ok: true }
+  }
+
+  async triggerConnectorSync(
+    actor: Actor,
+    id: string,
+    dto: TriggerWorkspaceConnectorSyncDto
+  ): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const connector = (await this.stateStore.readWorkspaceConnectors(actor.workspaceId)).find((entry) => entry.id === id)
+    if (!connector) throw new NotFoundException('Connector not found')
+    const mode: OpenPortWorkspaceConnectorSyncMode = dto.mode === 'full' ? 'full' : dto.mode === 'incremental' ? 'incremental' : connector.schedule.incremental ? 'incremental' : 'full'
+    const task = await this.enqueueConnectorTask(actor.workspaceId, connector, {
+      trigger: 'manual',
+      mode,
+      attempt: 1,
+      maxAttempts: Math.max(1, connector.syncPolicy.maxRetries + 1),
+      scheduledAt: new Date().toISOString(),
+      retryOfTaskId: null
+    })
+    void this.runConnectorQueueTick()
+    return { item: task }
+  }
+
+  async listConnectorTasks(actor: Actor, connectorId: string): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorTask>> {
+    this.assertModuleRead(actor, 'knowledge')
+    const connector = (await this.stateStore.readWorkspaceConnectors(actor.workspaceId)).find((entry) => entry.id === connectorId)
+    if (!connector) throw new NotFoundException('Connector not found')
+    const items = await this.stateStore.readWorkspaceConnectorTasks(actor.workspaceId)
+    return {
+      items: items
+        .filter((entry) => entry.connectorId === connectorId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    }
+  }
+
+  async getConnectorTask(actor: Actor, taskId: string): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+    this.assertModuleRead(actor, 'knowledge')
+    const task = (await this.stateStore.readWorkspaceConnectorTasks(actor.workspaceId)).find((entry) => entry.id === taskId)
+    if (!task) throw new NotFoundException('Connector task not found')
+    return { item: task }
+  }
+
+  async retryConnectorTask(actor: Actor, taskId: string): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+    this.assertModuleManage(actor, 'knowledge')
+    const [tasks, connectors] = await Promise.all([
+      this.stateStore.readWorkspaceConnectorTasks(actor.workspaceId),
+      this.stateStore.readWorkspaceConnectors(actor.workspaceId)
+    ])
+    const task = tasks.find((entry) => entry.id === taskId)
+    if (!task) throw new NotFoundException('Connector task not found')
+    const connector = connectors.find((entry) => entry.id === task.connectorId)
+    if (!connector) throw new NotFoundException('Connector not found')
+    const nextAttempt = Math.min(task.maxAttempts, task.attempt + 1)
+    const queued = await this.enqueueConnectorTask(actor.workspaceId, connector, {
+      trigger: 'retry',
+      mode: task.mode,
+      attempt: nextAttempt,
+      maxAttempts: task.maxAttempts,
+      scheduledAt: new Date().toISOString(),
+      retryOfTaskId: task.id
+    })
+    void this.runConnectorQueueTick()
+    return { item: queued }
+  }
+
+  async listConnectorAudit(actor: Actor, connectorId: string): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorAuditEvent>> {
+    this.assertModuleRead(actor, 'knowledge')
+    const connector = (await this.stateStore.readWorkspaceConnectors(actor.workspaceId)).find((entry) => entry.id === connectorId)
+    if (!connector) throw new NotFoundException('Connector not found')
+    const items = await this.stateStore.readWorkspaceConnectorAuditEvents(actor.workspaceId)
+    return {
+      items: items
+        .filter((entry) => entry.connectorId === connectorId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    }
+  }
+
+  async runToolOrchestration(
+    actor: Actor,
+    id: string,
+    dto: RunWorkspaceToolOrchestrationDto
+  ): Promise<OpenPortWorkspaceToolRunResponse> {
+    this.assertModuleManage(actor, 'tools')
+    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
+    if (!tool) throw new NotFoundException('Tool not found')
+    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
+
+    const run = await this.enqueueToolRun(actor.workspaceId, tool, {
+      trigger: 'manual',
+      replayOfRunId: null,
+      debug: Boolean(dto.debug),
+      inputPayload: dto.inputPayload ?? '',
+      stepLimit: dto.stepLimit
+    })
+    void this.runToolQueueTick()
+    return { item: run }
+  }
+
+  async listToolOrchestrationRuns(actor: Actor, id: string): Promise<OpenPortListResponse<OpenPortWorkspaceToolRun>> {
+    this.assertModuleRead(actor, 'tools')
+    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
+    if (!tool) throw new NotFoundException('Tool not found')
+    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
+    const items = await this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
+    return {
+      items: items
+        .filter((entry) => entry.toolId === id)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    }
+  }
+
+  async getToolOrchestrationRun(actor: Actor, id: string, runId: string): Promise<OpenPortWorkspaceToolRunResponse> {
+    this.assertModuleRead(actor, 'tools')
+    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
+    if (!tool) throw new NotFoundException('Tool not found')
+    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
+    const run = (await this.stateStore.readWorkspaceToolRuns(actor.workspaceId)).find(
+      (entry) => entry.id === runId && entry.toolId === id
+    )
+    if (!run) throw new NotFoundException('Tool orchestration run not found')
+    return { item: run }
+  }
+
+  async replayToolOrchestrationRun(
+    actor: Actor,
+    id: string,
+    runId: string,
+    dto: ReplayWorkspaceToolOrchestrationRunDto
+  ): Promise<OpenPortWorkspaceToolRunResponse> {
+    this.assertModuleManage(actor, 'tools')
+    const [tools, runs] = await Promise.all([
+      this.stateStore.readWorkspaceTools(actor.workspaceId),
+      this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
+    ])
+    const tool = tools.find((entry) => entry.id === id)
+    if (!tool) throw new NotFoundException('Tool not found')
+    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
+    const sourceRun = runs.find((entry) => entry.id === runId && entry.toolId === id)
+    if (!sourceRun) throw new NotFoundException('Tool orchestration run not found')
+
+    const run = await this.enqueueToolRun(actor.workspaceId, tool, {
+      trigger: 'replay',
+      replayOfRunId: sourceRun.id,
+      debug: dto.debug ?? sourceRun.debug,
+      inputPayload: dto.inputPayload ?? sourceRun.inputPayload,
+      stepLimit: undefined
+    })
+    void this.runToolQueueTick()
+    return { item: run }
+  }
+
+  async cancelToolOrchestrationRun(actor: Actor, id: string, runId: string): Promise<OpenPortWorkspaceToolRunResponse> {
+    this.assertModuleManage(actor, 'tools')
+    const [tools, runs] = await Promise.all([
+      this.stateStore.readWorkspaceTools(actor.workspaceId),
+      this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
+    ])
+    const tool = tools.find((entry) => entry.id === id)
+    if (!tool) throw new NotFoundException('Tool not found')
+    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
+    const run = runs.find((entry) => entry.id === runId && entry.toolId === id)
+    if (!run) throw new NotFoundException('Tool orchestration run not found')
+    if (run.status !== 'queued' && run.status !== 'running') {
+      return { item: run }
+    }
+    const updated: OpenPortWorkspaceToolRun = {
+      ...run,
+      status: 'cancelled',
+      finishedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    await this.stateStore.writeWorkspaceToolRuns(
+      actor.workspaceId,
+      runs.map((entry) => (entry.id === runId ? updated : entry))
+    )
+    return { item: updated }
+  }
+
+  private normalizeConnectorAdapter(input: string): OpenPortWorkspaceConnectorAdapter {
+    if (input === 'web' || input === 's3' || input === 'github' || input === 'notion' || input === 'rss') {
+      return input
+    }
+    return 'directory'
+  }
+
+  private maskCredentialValue(value: string, secret: boolean): string {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (secret) {
+      if (trimmed.length <= 4) return '****'
+      return `${trimmed.slice(0, 2)}****${trimmed.slice(-2)}`
+    }
+    if (trimmed.length <= 8) return trimmed
+    return `${trimmed.slice(0, 8)}…`
+  }
+
+  private connectorCredentialTemplate(
+    provider: OpenPortWorkspaceConnectorAdapter
+  ): Array<{ key: string; label: string; secret: boolean }> {
+    if (provider === 's3') {
+      return [
+        { key: 'accessKeyId', label: 'Access key id', secret: false },
+        { key: 'secretAccessKey', label: 'Secret access key', secret: true },
+        { key: 'region', label: 'Region', secret: false }
+      ]
+    }
+    if (provider === 'github') {
+      return [{ key: 'token', label: 'GitHub token', secret: true }]
+    }
+    if (provider === 'notion') {
+      return [{ key: 'token', label: 'Notion token', secret: true }]
+    }
+    if (provider === 'rss') {
+      return [{ key: 'apiKey', label: 'Feed auth token', secret: true }]
+    }
+    if (provider === 'web') {
+      return [{ key: 'bearerToken', label: 'Bearer token', secret: true }]
+    }
+    return [{ key: 'localAccess', label: 'Local access confirmation', secret: false }]
+  }
+
+  private normalizeCredentialFields(
+    providerInput: string,
+    input: Array<{ key?: string; label?: string; secret?: boolean; value?: string }>,
+    existing: OpenPortWorkspaceConnectorCredential['fields']
+  ): OpenPortWorkspaceConnectorCredential['fields'] {
+    const provider = this.normalizeConnectorAdapter(providerInput)
+    const template = this.connectorCredentialTemplate(provider)
+    const existingByKey = new Map(existing.map((field) => [field.key, field] as const))
+    const inputByKey = new Map(
+      (Array.isArray(input) ? input : [])
+        .map((field) => ({
+          key: field.key?.trim() || '',
+          label: field.label?.trim() || '',
+          secret: Boolean(field.secret),
+          value: field.value?.trim() || ''
+        }))
+        .filter((field) => field.key.length > 0)
+        .map((field) => [field.key, field] as const)
+    )
+
+    const allKeys = new Set<string>([
+      ...template.map((field) => field.key),
+      ...existing.map((field) => field.key),
+      ...Array.from(inputByKey.keys())
+    ])
+
+    return Array.from(allKeys).map((key) => {
+      const templateField = template.find((field) => field.key === key)
+      const existingField = existingByKey.get(key)
+      const inputField = inputByKey.get(key)
+      const secret = inputField?.secret ?? templateField?.secret ?? existingField?.secret ?? true
+      const rawValue = inputField?.value || ''
+      const configured = rawValue.length > 0 ? true : existingField?.configured ?? false
+      const valuePreview = rawValue.length > 0 ? this.maskCredentialValue(rawValue, secret) : existingField?.valuePreview || ''
+      return {
+        key,
+        label: inputField?.label || templateField?.label || existingField?.label || key,
+        secret,
+        configured,
+        valuePreview
+      }
+    })
+  }
+
+  private normalizeConnectorSchedule(
+    input: {
+      enabled?: boolean
+      intervalMinutes?: number
+      timezone?: string
+      incremental?: boolean
+    } | undefined,
+    existing?: OpenPortWorkspaceConnector['schedule']
+  ): OpenPortWorkspaceConnector['schedule'] {
+    const base = existing || {
+      enabled: false,
+      intervalMinutes: 60,
+      timezone: 'UTC',
+      incremental: true,
+      nextRunAt: null
+    }
+    const enabled = input?.enabled ?? base.enabled
+    const intervalMinutes = Math.max(
+      5,
+      Math.min(7 * 24 * 60, Number(input?.intervalMinutes ?? (base.intervalMinutes || 60)))
+    )
+    const nextRunAt =
+      enabled && (!base.nextRunAt || !existing || (input?.enabled === true && existing.enabled === false))
+        ? new Date(Date.now() + intervalMinutes * 60_000).toISOString()
+        : enabled
+          ? base.nextRunAt
+          : null
+    return {
+      enabled,
+      intervalMinutes,
+      timezone: input?.timezone?.trim() || base.timezone || 'UTC',
+      incremental: input?.incremental ?? base.incremental,
+      nextRunAt
+    }
+  }
+
+  private normalizeConnectorSyncPolicy(
+    input:
+      | {
+          autoRetry?: boolean
+          maxRetries?: number
+          retryBackoffSeconds?: number
+          maxDocumentsPerRun?: number
+        }
+      | undefined,
+    existing?: OpenPortWorkspaceConnector['syncPolicy']
+  ): OpenPortWorkspaceConnector['syncPolicy'] {
+    const base = existing || {
+      autoRetry: true,
+      maxRetries: 3,
+      retryBackoffSeconds: 30,
+      maxDocumentsPerRun: 500
+    }
+    return {
+      autoRetry: input?.autoRetry ?? base.autoRetry,
+      maxRetries: Math.max(0, Math.min(10, Number(input?.maxRetries ?? (base.maxRetries || 0)))),
+      retryBackoffSeconds: Math.max(
+        5,
+        Math.min(3600, Number(input?.retryBackoffSeconds ?? (base.retryBackoffSeconds || 30)))
+      ),
+      maxDocumentsPerRun: Math.max(
+        10,
+        Math.min(10_000, Number(input?.maxDocumentsPerRun ?? (base.maxDocumentsPerRun || 500)))
+      )
+    }
+  }
+
+  private normalizeConnectorSourceConfig(
+    input:
+      | {
+          directoryPath?: string
+          urls?: string[]
+          bucket?: string
+          prefix?: string
+          repository?: string
+          branch?: string
+          notionDatabaseId?: string
+          rssFeedUrls?: string[]
+          includePatterns?: string[]
+          excludePatterns?: string[]
+        }
+      | undefined,
+    existing?: OpenPortWorkspaceConnector['sourceConfig']
+  ): OpenPortWorkspaceConnector['sourceConfig'] {
+    const base = existing || {
+      directoryPath: '',
+      urls: [],
+      bucket: '',
+      prefix: '',
+      repository: '',
+      branch: 'main',
+      notionDatabaseId: '',
+      rssFeedUrls: [],
+      includePatterns: [],
+      excludePatterns: []
+    }
+    return {
+      directoryPath: input?.directoryPath?.trim() ?? base.directoryPath,
+      urls: this.normalizeStringList(input?.urls ?? base.urls),
+      bucket: input?.bucket?.trim() ?? base.bucket,
+      prefix: input?.prefix?.trim() ?? base.prefix,
+      repository: input?.repository?.trim() ?? base.repository,
+      branch: input?.branch?.trim() || base.branch || 'main',
+      notionDatabaseId: input?.notionDatabaseId?.trim() ?? base.notionDatabaseId,
+      rssFeedUrls: this.normalizeStringList(input?.rssFeedUrls ?? base.rssFeedUrls),
+      includePatterns: this.normalizeStringList(input?.includePatterns ?? base.includePatterns),
+      excludePatterns: this.normalizeStringList(input?.excludePatterns ?? base.excludePatterns)
+    }
+  }
+
+  private async appendConnectorAuditEvent(
+    workspaceId: string,
+    input: {
+      connectorId: string
+      taskId: string | null
+      level: OpenPortWorkspaceConnectorAuditEvent['level']
+      action: string
+      message: string
+      detail?: string
+    }
+  ): Promise<void> {
+    const audits = await this.stateStore.readWorkspaceConnectorAuditEvents(workspaceId)
+    const item: OpenPortWorkspaceConnectorAuditEvent = {
+      id: `connector_audit_${randomUUID()}`,
+      workspaceId,
+      connectorId: input.connectorId,
+      taskId: input.taskId,
+      level: input.level,
+      action: input.action,
+      message: input.message,
+      detail: input.detail || '',
+      createdAt: new Date().toISOString()
+    }
+    await this.stateStore.writeWorkspaceConnectorAuditEvents(workspaceId, [item, ...audits].slice(0, 1000))
+  }
+
+  private async enqueueConnectorTask(
+    workspaceId: string,
+    connector: OpenPortWorkspaceConnector,
+    input: {
+      trigger: OpenPortWorkspaceConnectorTask['trigger']
+      mode: OpenPortWorkspaceConnectorSyncMode
+      attempt: number
+      maxAttempts: number
+      scheduledAt: string
+      retryOfTaskId: string | null
+    }
+  ): Promise<OpenPortWorkspaceConnectorTask> {
+    const tasks = await this.stateStore.readWorkspaceConnectorTasks(workspaceId)
+    const now = new Date().toISOString()
+    const item: OpenPortWorkspaceConnectorTask = {
+      id: `connector_task_${randomUUID()}`,
+      workspaceId,
+      connectorId: connector.id,
+      trigger: input.trigger,
+      mode: input.mode,
+      status: 'queued',
+      attempt: input.attempt,
+      maxAttempts: input.maxAttempts,
+      scheduledAt: input.scheduledAt,
+      startedAt: null,
+      finishedAt: null,
+      retryOfTaskId: input.retryOfTaskId,
+      nextRetryAt: null,
+      errorMessage: null,
+      summary: {
+        scanned: 0,
+        created: 0,
+        updated: 0,
+        removed: 0,
+        errors: 0
+      },
+      createdAt: now,
+      updatedAt: now
+    }
+    await this.stateStore.writeWorkspaceConnectorTasks(workspaceId, [item, ...tasks].slice(0, 1000))
+    await this.appendConnectorAuditEvent(workspaceId, {
+      connectorId: connector.id,
+      taskId: item.id,
+      level: 'info',
+      action: 'task.queued',
+      message: `Sync task queued (${item.trigger}/${item.mode}).`,
+      detail: JSON.stringify({ attempt: item.attempt, maxAttempts: item.maxAttempts })
+    })
+    return item
+  }
+
+  private estimateConnectorScanCount(connector: OpenPortWorkspaceConnector, mode: OpenPortWorkspaceConnectorSyncMode): number {
+    const base =
+      connector.adapter === 'directory'
+        ? 80
+        : connector.adapter === 'web'
+          ? 40
+          : connector.adapter === 's3'
+            ? 120
+            : connector.adapter === 'github'
+              ? 90
+              : connector.adapter === 'notion'
+                ? 60
+                : 30
+    const incrementalFactor = mode === 'incremental' ? 0.35 : 1
+    return Math.max(1, Math.round(base * incrementalFactor))
+  }
+
+  private resolveConnectorReadinessError(
+    connector: OpenPortWorkspaceConnector,
+    credentials: OpenPortWorkspaceConnectorCredential[]
+  ): string | null {
+    if (!connector.enabled) {
+      return 'Connector is disabled.'
+    }
+    if (connector.adapter === 'directory' && !connector.sourceConfig.directoryPath.trim()) {
+      return 'Directory connector requires sourceConfig.directoryPath.'
+    }
+    if (connector.adapter === 'web' && connector.sourceConfig.urls.length === 0) {
+      return 'Web connector requires at least one source URL.'
+    }
+    if (connector.adapter === 's3' && (!connector.sourceConfig.bucket.trim() || !connector.sourceConfig.prefix.trim())) {
+      return 'S3 connector requires bucket and prefix.'
+    }
+    if (connector.adapter === 'github' && !connector.sourceConfig.repository.trim()) {
+      return 'GitHub connector requires repository.'
+    }
+    if (connector.adapter === 'notion' && !connector.sourceConfig.notionDatabaseId.trim()) {
+      return 'Notion connector requires notionDatabaseId.'
+    }
+    if (connector.adapter === 'rss' && connector.sourceConfig.rssFeedUrls.length === 0) {
+      return 'RSS connector requires at least one feed URL.'
+    }
+    if (connector.credentialId) {
+      const credential = credentials.find((entry) => entry.id === connector.credentialId)
+      if (!credential) {
+        return 'Connector credential was not found.'
+      }
+      if (credential.fields.some((field) => field.secret && !field.configured)) {
+        return 'Connector credential has missing secret fields.'
+      }
+    }
+    return null
+  }
+
+  private async runConnectorSchedulerTick(): Promise<void> {
+    const workspaceIds = await this.stateStore.listWorkspaceIdsWithConnectors()
+    const now = new Date()
+    for (const workspaceId of workspaceIds) {
+      const connectors = await this.stateStore.readWorkspaceConnectors(workspaceId)
+      const dueConnectors = connectors.filter(
+        (connector) =>
+          connector.enabled &&
+          connector.schedule.enabled &&
+          connector.schedule.nextRunAt &&
+          new Date(connector.schedule.nextRunAt).getTime() <= now.getTime()
+      )
+      if (dueConnectors.length === 0) continue
+
+      for (const connector of dueConnectors) {
+        await this.enqueueConnectorTask(workspaceId, connector, {
+          trigger: 'schedule',
+          mode: connector.schedule.incremental ? 'incremental' : 'full',
+          attempt: 1,
+          maxAttempts: Math.max(1, connector.syncPolicy.maxRetries + 1),
+          scheduledAt: now.toISOString(),
+          retryOfTaskId: null
+        })
+      }
+
+      await this.stateStore.writeWorkspaceConnectors(
+        workspaceId,
+        connectors.map((connector) => {
+          if (!dueConnectors.some((entry) => entry.id === connector.id)) return connector
+          return {
+            ...connector,
+            schedule: {
+              ...connector.schedule,
+              nextRunAt: new Date(now.getTime() + connector.schedule.intervalMinutes * 60_000).toISOString()
+            },
+            updatedAt: now.toISOString()
+          }
+        })
+      )
+    }
+  }
+
+  private async runConnectorQueueTick(): Promise<void> {
+    if (this.connectorRunner) return
+    this.connectorRunner = (async () => {
+      while (true) {
+        const workspaceIds = await this.stateStore.listWorkspaceIdsWithConnectorTasks()
+        let target: { workspaceId: string; task: OpenPortWorkspaceConnectorTask } | null = null
+        for (const workspaceId of workspaceIds) {
+          const tasks = await this.stateStore.readWorkspaceConnectorTasks(workspaceId)
+          const dueTask = tasks
+            .filter((task) => task.status === 'queued' && new Date(task.scheduledAt).getTime() <= Date.now())
+            .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]
+          if (!dueTask) continue
+          if (!target || dueTask.createdAt < target.task.createdAt) {
+            target = { workspaceId, task: dueTask }
+          }
+        }
+        if (!target) {
+          return
+        }
+        await this.executeConnectorTask(target.workspaceId, target.task.id)
+      }
+    })().finally(() => {
+      this.connectorRunner = null
+    })
+    await this.connectorRunner
+  }
+
+  private async executeConnectorTask(workspaceId: string, taskId: string): Promise<void> {
+    const [tasks, connectors, credentials] = await Promise.all([
+      this.stateStore.readWorkspaceConnectorTasks(workspaceId),
+      this.stateStore.readWorkspaceConnectors(workspaceId),
+      this.stateStore.readWorkspaceConnectorCredentials(workspaceId)
+    ])
+    const task = tasks.find((entry) => entry.id === taskId)
+    if (!task || task.status !== 'queued') return
+    const connector = connectors.find((entry) => entry.id === task.connectorId)
+    if (!connector) return
+
+    const startedAt = new Date().toISOString()
+    const runningTask: OpenPortWorkspaceConnectorTask = {
+      ...task,
+      status: 'running',
+      startedAt,
+      updatedAt: startedAt
+    }
+    await this.stateStore.writeWorkspaceConnectorTasks(
+      workspaceId,
+      tasks.map((entry) => (entry.id === taskId ? runningTask : entry))
+    )
+    await this.appendConnectorAuditEvent(workspaceId, {
+      connectorId: connector.id,
+      taskId,
+      level: 'info',
+      action: 'task.started',
+      message: `Sync task started for connector "${connector.name}".`
+    })
+
+    const readinessError = this.resolveConnectorReadinessError(connector, credentials)
+    if (readinessError) {
+      const failedAt = new Date().toISOString()
+      const failedTask: OpenPortWorkspaceConnectorTask = {
+        ...runningTask,
+        status: 'failed',
+        finishedAt: failedAt,
+        errorMessage: readinessError,
+        summary: { ...runningTask.summary, errors: Math.max(1, runningTask.summary.errors) },
+        updatedAt: failedAt
+      }
+      const nextTasks = tasks.map((entry) => (entry.id === taskId ? failedTask : entry))
+      await this.stateStore.writeWorkspaceConnectorTasks(workspaceId, nextTasks)
+      await this.stateStore.writeWorkspaceConnectors(
+        workspaceId,
+        connectors.map((entry) =>
+          entry.id === connector.id
+            ? {
+                ...entry,
+                status: {
+                  ...entry.status,
+                  health: 'error',
+                  lastRunAt: failedAt,
+                  lastFailureAt: failedAt,
+                  lastTaskId: taskId,
+                  lastErrorMessage: readinessError
+                },
+                updatedAt: failedAt
+              }
+            : entry
+        )
+      )
+      await this.appendConnectorAuditEvent(workspaceId, {
+        connectorId: connector.id,
+        taskId,
+        level: 'error',
+        action: 'task.failed',
+        message: readinessError
+      })
+      if (connector.syncPolicy.autoRetry && task.attempt < task.maxAttempts) {
+        const retryDelaySeconds = connector.syncPolicy.retryBackoffSeconds * task.attempt
+        const scheduledAt = new Date(Date.now() + retryDelaySeconds * 1000).toISOString()
+        await this.enqueueConnectorTask(workspaceId, connector, {
+          trigger: 'retry',
+          mode: task.mode,
+          attempt: task.attempt + 1,
+          maxAttempts: task.maxAttempts,
+          scheduledAt,
+          retryOfTaskId: task.id
+        })
+      }
+      return
+    }
+
+    const scanned = Math.min(connector.syncPolicy.maxDocumentsPerRun, this.estimateConnectorScanCount(connector, task.mode))
+    const created = Math.max(1, Math.round(scanned * (task.mode === 'full' ? 0.45 : 0.2)))
+    const updated = Math.max(0, Math.round(scanned * 0.22))
+    const removed = task.mode === 'incremental' ? Math.round(scanned * 0.08) : Math.round(scanned * 0.04)
+    const finishedAt = new Date().toISOString()
+    const successTask: OpenPortWorkspaceConnectorTask = {
+      ...runningTask,
+      status: 'success',
+      finishedAt,
+      errorMessage: null,
+      summary: {
+        scanned,
+        created,
+        updated,
+        removed,
+        errors: 0
+      },
+      updatedAt: finishedAt
+    }
+    await this.stateStore.writeWorkspaceConnectorTasks(
+      workspaceId,
+      tasks.map((entry) => (entry.id === taskId ? successTask : entry))
+    )
+    await this.stateStore.writeWorkspaceConnectors(
+      workspaceId,
+      connectors.map((entry) =>
+        entry.id === connector.id
+          ? {
+              ...entry,
+              status: {
+                ...entry.status,
+                health: 'ok',
+                lastRunAt: finishedAt,
+                lastSuccessAt: finishedAt,
+                lastTaskId: taskId,
+                lastErrorMessage: null
+              },
+              updatedAt: finishedAt
+            }
+          : entry
+      )
+    )
+    await this.appendConnectorAuditEvent(workspaceId, {
+      connectorId: connector.id,
+      taskId,
+      level: 'info',
+      action: 'task.completed',
+      message: 'Sync task completed successfully.',
+      detail: JSON.stringify(successTask.summary)
+    })
+  }
+
+  private async enqueueToolRun(
+    workspaceId: string,
+    tool: OpenPortWorkspaceTool,
+    input: {
+      trigger: OpenPortWorkspaceToolRun['trigger']
+      replayOfRunId: string | null
+      debug: boolean
+      inputPayload: string
+      stepLimit?: number
+    }
+  ): Promise<OpenPortWorkspaceToolRun> {
+    const tools = await this.stateStore.readWorkspaceTools(workspaceId)
+    const toolNameById = new Map(tools.map((entry) => [entry.id, entry.name] as const))
+    const limitedSteps =
+      typeof input.stepLimit === 'number' && input.stepLimit > 0
+        ? tool.executionChain.steps.slice(0, Math.floor(input.stepLimit))
+        : tool.executionChain.steps
+    const steps: OpenPortWorkspaceToolRun['steps'] = limitedSteps.map((step, index) => ({
+      id: `tool_run_step_${randomUUID()}`,
+      chainStepId: step.id,
+      toolId: step.toolId,
+      toolName: toolNameById.get(step.toolId) || step.toolId,
+      mode: step.mode,
+      when: step.when,
+      condition: step.condition,
+      conditionMatched: false,
+      branchPath: `step-${index + 1}`,
+      outputKey: step.outputKey,
+      status: 'pending',
+      inputSnapshot: '',
+      outputSnapshot: '',
+      errorMessage: null,
+      startedAt: null,
+      finishedAt: null
+    }))
+    const now = new Date().toISOString()
+    const run: OpenPortWorkspaceToolRun = {
+      id: `tool_run_${randomUUID()}`,
+      workspaceId,
+      toolId: tool.id,
+      trigger: input.trigger,
+      status: 'queued',
+      debug: input.debug,
+      replayOfRunId: input.replayOfRunId,
+      inputPayload: input.inputPayload,
+      outputPayload: '',
+      errorMessage: null,
+      steps,
+      startedAt: null,
+      finishedAt: null,
+      createdAt: now,
+      updatedAt: now
+    }
+    const runs = await this.stateStore.readWorkspaceToolRuns(workspaceId)
+    await this.stateStore.writeWorkspaceToolRuns(workspaceId, [run, ...runs].slice(0, 1000))
+    return run
+  }
+
+  private evaluateStepCondition(
+    condition: string,
+    context: {
+      inputPayload: string
+      previousError: string | null
+      previousOutput: string
+    }
+  ): boolean {
+    const trimmed = condition.trim()
+    if (!trimmed) return true
+    if (trimmed === 'prev_error') return Boolean(context.previousError)
+    if (trimmed === 'prev_success') return !context.previousError
+    if (trimmed.startsWith('contains:')) {
+      const expected = trimmed.slice('contains:'.length).trim()
+      if (!expected) return true
+      return context.inputPayload.toLowerCase().includes(expected.toLowerCase())
+    }
+    if (trimmed.startsWith('output_contains:')) {
+      const expected = trimmed.slice('output_contains:'.length).trim()
+      if (!expected) return true
+      return context.previousOutput.toLowerCase().includes(expected.toLowerCase())
+    }
+    return true
+  }
+
+  private async runToolQueueTick(): Promise<void> {
+    if (this.toolRunner) return
+    this.toolRunner = (async () => {
+      while (true) {
+        const workspaceIds = await this.stateStore.listWorkspaceIdsWithToolRuns()
+        let target: { workspaceId: string; run: OpenPortWorkspaceToolRun } | null = null
+        for (const workspaceId of workspaceIds) {
+          const runs = await this.stateStore.readWorkspaceToolRuns(workspaceId)
+          const run = runs
+            .filter((entry) => entry.status === 'queued')
+            .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]
+          if (!run) continue
+          if (!target || run.createdAt < target.run.createdAt) {
+            target = { workspaceId, run }
+          }
+        }
+        if (!target) {
+          return
+        }
+        await this.executeToolRun(target.workspaceId, target.run.id)
+      }
+    })().finally(() => {
+      this.toolRunner = null
+    })
+    await this.toolRunner
+  }
+
+  private async executeToolRun(workspaceId: string, runId: string): Promise<void> {
+    const [runs, tools] = await Promise.all([
+      this.stateStore.readWorkspaceToolRuns(workspaceId),
+      this.stateStore.readWorkspaceTools(workspaceId)
+    ])
+    const run = runs.find((entry) => entry.id === runId)
+    if (!run || run.status !== 'queued') return
+    const tool = tools.find((entry) => entry.id === run.toolId)
+    if (!tool) {
+      const failed: OpenPortWorkspaceToolRun = {
+        ...run,
+        status: 'failed',
+        errorMessage: 'Tool not found.',
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      await this.stateStore.writeWorkspaceToolRuns(
+        workspaceId,
+        runs.map((entry) => (entry.id === runId ? failed : entry))
+      )
+      return
+    }
+
+    let previousError: string | null = null
+    let previousOutput = ''
+    let hasFailure = false
+    const startedAt = new Date().toISOString()
+    const stepRuns = run.steps.map((step) => ({ ...step }))
+    const running: OpenPortWorkspaceToolRun = {
+      ...run,
+      status: 'running',
+      startedAt,
+      updatedAt: startedAt,
+      steps: stepRuns
+    }
+    await this.stateStore.writeWorkspaceToolRuns(
+      workspaceId,
+      runs.map((entry) => (entry.id === runId ? running : entry))
+    )
+
+    for (let index = 0; index < stepRuns.length; index += 1) {
+      const step = stepRuns[index]
+      const whenAllowed =
+        step.when === 'always' ||
+        (step.when === 'on_success' && !hasFailure) ||
+        (step.when === 'on_error' && hasFailure)
+      const conditionMatched = whenAllowed && this.evaluateStepCondition(step.condition, {
+        inputPayload: run.inputPayload,
+        previousError,
+        previousOutput
+      })
+      if (!conditionMatched) {
+        stepRuns[index] = {
+          ...step,
+          conditionMatched: false,
+          status: 'skipped',
+          branchPath: `step-${index + 1}:skip`,
+          startedAt: null,
+          finishedAt: new Date().toISOString()
+        }
+        continue
+      }
+
+      const stepStart = new Date().toISOString()
+      const triggerFailure = step.condition.toLowerCase().includes('force_fail')
+      const outputPayload = JSON.stringify(
+        {
+          step: index + 1,
+          toolId: step.toolId,
+          mode: step.mode,
+          outputKey: step.outputKey || `step_${index + 1}`,
+          debug: run.debug
+        },
+        null,
+        2
+      )
+
+      if (triggerFailure) {
+        hasFailure = true
+        previousError = `Step ${index + 1} forced failure by condition.`
+        stepRuns[index] = {
+          ...step,
+          conditionMatched: true,
+          status: 'failed',
+          branchPath: `step-${index + 1}:failed`,
+          inputSnapshot: run.inputPayload,
+          outputSnapshot: '',
+          errorMessage: previousError,
+          startedAt: stepStart,
+          finishedAt: new Date().toISOString()
+        }
+        if (step.mode !== 'fallback') {
+          break
+        }
+      } else {
+        previousOutput = outputPayload
+        previousError = null
+        stepRuns[index] = {
+          ...step,
+          conditionMatched: true,
+          status: 'success',
+          branchPath: `step-${index + 1}:${step.mode}`,
+          inputSnapshot: run.inputPayload,
+          outputSnapshot: outputPayload,
+          errorMessage: null,
+          startedAt: stepStart,
+          finishedAt: new Date().toISOString()
+        }
+      }
+    }
+
+    const finishedAt = new Date().toISOString()
+    const status: OpenPortWorkspaceToolRun['status'] = hasFailure ? 'failed' : 'success'
+    const outputPayload = JSON.stringify(
+      {
+        toolId: tool.id,
+        toolName: tool.name,
+        status,
+        executedSteps: stepRuns.filter((step) => step.status === 'success').length,
+        skippedSteps: stepRuns.filter((step) => step.status === 'skipped').length,
+        failedSteps: stepRuns.filter((step) => step.status === 'failed').length
+      },
+      null,
+      2
+    )
+    const completed: OpenPortWorkspaceToolRun = {
+      ...running,
+      status,
+      outputPayload,
+      errorMessage: hasFailure ? (previousError || 'Execution failed.') : null,
+      steps: stepRuns,
+      finishedAt,
+      updatedAt: finishedAt
+    }
+    await this.stateStore.writeWorkspaceToolRuns(
+      workspaceId,
+      runs.map((entry) => (entry.id === runId ? completed : entry))
+    )
   }
 
   private defaultResourceAccessGrants(

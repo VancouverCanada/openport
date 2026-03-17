@@ -106,9 +106,17 @@ Close the remaining non-1:1 gaps against Open WebUI search by completing three t
   - removed recent/recommended sections from UI
   - switched to `500ms` debounce search cadence
 - [x] Action routes now carry query payload:
-  - `/chat?q=...`
-  - `/dashboard/notes/new?content=...`
+  - `/?q=...`
+  - `/notes?content=...`
 - [x] Chat and notes bootstrap routes now consume seeded query content.
+- [x] Added `/notes` compatibility route:
+  - `content` query is forwarded to `/dashboard/notes/new?content=...`
+  - no `content` query falls back to `/dashboard/notes`
+- [x] Removed `project:` alias from strict operator surface (frontend suggestion/parser + backend operator context).
+- [x] Locked `/chats` and `/chats/search` to chat-only semantics even when query text contains `type:` tokens.
+- [x] Search result rows aligned closer to Open WebUI list rhythm:
+  - actions with icon + label
+  - chat rows as `title + date` with preview on the right
 
 ## Verification
 

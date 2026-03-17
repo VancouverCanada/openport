@@ -91,7 +91,7 @@ export class SearchService {
       recentSearches,
       recommendations: this.buildRecommendations(recentSearches, signals),
       tags: signals.tags,
-      operators: ['tag:', 'folder:', 'project:', 'pinned:', 'shared:', 'archived:', 'type:']
+      operators: ['tag:', 'folder:', 'pinned:', 'shared:', 'archived:', 'type:']
     }
   }
 
@@ -126,20 +126,12 @@ export class SearchService {
     for (const token of tokens) {
       const lowered = token.toLowerCase()
 
-      if (lowered.startsWith('type:')) {
+      if (!dto.type && lowered.startsWith('type:')) {
         const value = lowered.slice('type:'.length)
         if (value === 'chat' || value === 'note') {
           type = value
           continue
         }
-      }
-
-      if (lowered.startsWith('project:')) {
-        const value = normalizeProjectToken(token.slice('project:'.length))
-        if (value) {
-          projectQuery = value
-        }
-        continue
       }
 
       if (lowered.startsWith('folder:')) {
@@ -326,7 +318,7 @@ export class SearchService {
       type: 'chat',
       title: chat.title,
       excerpt,
-      href: `/chat?thread=${chat.id}`,
+      href: `/?thread=${chat.id}`,
       updatedAt: chat.updatedAt,
       metadata: 'Chat',
       projectId: chat.folderId ?? chat.settings.projectId ?? null,

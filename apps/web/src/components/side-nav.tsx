@@ -1,7 +1,7 @@
 const items = [
   { href: '/dashboard', label: 'Overview', meta: 'Workspace pulse' },
   { href: '/dashboard/integrations', label: 'Integrations', meta: 'Keys, drafts, audit' },
-  { href: '/chat', label: 'AI Workspace', meta: 'Conversations and actions' }
+  { href: '/', label: 'AI Workspace', meta: 'Conversations and actions' }
 ]
 
 export function SideNav() {

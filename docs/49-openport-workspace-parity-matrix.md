@@ -3,6 +3,8 @@
 This matrix tracks the 16 previously `部分对齐` items against Open WebUI workspace patterns.
 Status here is now based on implemented code paths in `apps/web` + `apps/api` + `packages/openport-product-contracts`.
 
+Final acceptance record: `docs/72-openport-workspace-parity-final-acceptance.md`.
+
 ## Status legend
 
 - `已对齐`: implemented and wired end-to-end for current OpenPort OSS scope
@@ -51,3 +53,10 @@ Status here is now based on implemented code paths in `apps/web` + `apps/api` + 
 | Access interaction as resource modal primary path | 已对齐 | `workspace-model/prompt/tool/skill-*` menus + `workspace-resource-access-modal.tsx` + `workspace-knowledge-access-modal.tsx` |
 | Entry route semantics (`/` as authenticated workspace home) | 已对齐 | `apps/web/src/components/home-entry-gate.tsx`, `apps/web/src/components/auth/login-form.tsx`, `apps/web/src/components/auth/register-form.tsx` |
 | Build-level closure validation | 已对齐 | API + Web production build both pass |
+
+## Wave Extension (Connectors + Orchestration Runtime)
+
+| Item | Status | Evidence | 范围说明 |
+| --- | --- | --- | --- |
+| External connector lifecycle (credential/schedule/incremental/retry/status/audit) | 已对齐 | `workspace-resources.controller.ts`, `workspace-resources.service.ts`, `api-state-store.service.ts`, `workspace-knowledge-connectors.tsx`, `workspace/knowledge/connectors/page.tsx` | OSS scope implements local control-plane lifecycle; future cloud connectors can extend adapter implementations |
+| Toolkit orchestration runtime (run/replay/cancel + step debug/branch visibility) | 已对齐 | `workspace-resources.controller.ts`, `workspace-resources.service.ts`, `openport-api.ts`, `workspace-tool-editor.tsx`, contracts `OpenPortWorkspaceToolRun*` | Provides Open WebUI-style runtime control panel behavior for chain execution in OSS scope |

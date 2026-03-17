@@ -5,8 +5,8 @@ class WorkspaceCapabilityPolicyChangeDto {
   @IsIn(['admin', 'member', 'viewer'])
   role!: 'admin' | 'member' | 'viewer'
 
-  @IsIn(['models', 'knowledge', 'prompts', 'tools', 'skills', 'access'])
-  module!: 'models' | 'knowledge' | 'prompts' | 'tools' | 'skills' | 'access'
+  @IsIn(['models', 'knowledge', 'prompts', 'tools', 'skills'])
+  module!: 'models' | 'knowledge' | 'prompts' | 'tools' | 'skills'
 
   @IsIn(['read', 'manage', 'import', 'export', 'publish', 'share', 'validate'])
   action!: 'read' | 'manage' | 'import' | 'export' | 'publish' | 'share' | 'validate'
@@ -27,4 +27,3 @@ export class UpdateWorkspaceCapabilityPolicyDto {
   @Type(() => WorkspaceCapabilityPolicyChangeDto)
   changes?: WorkspaceCapabilityPolicyChangeDto[]
 }
-

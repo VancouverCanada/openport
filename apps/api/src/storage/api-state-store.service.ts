@@ -11,6 +11,10 @@ import type {
   OpenPortProjectKnowledgeChunkPreview,
   OpenPortProjectKnowledgeItem,
   OpenPortProjectKnowledgeSource,
+  OpenPortWorkspaceConnector,
+  OpenPortWorkspaceConnectorAuditEvent,
+  OpenPortWorkspaceConnectorCredential,
+  OpenPortWorkspaceConnectorTask,
   OpenPortProjectMeta,
   OpenPortWorkspaceModelCapabilities,
   OpenPortWorkspaceModel,
@@ -22,6 +26,7 @@ import type {
   OpenPortWorkspaceResourcePrincipalType,
   OpenPortWorkspaceResourceType,
   OpenPortWorkspaceSkill,
+  OpenPortWorkspaceToolRun,
   OpenPortWorkspaceGroup,
   OpenPortWorkspaceToolExample,
   OpenPortWorkspaceTool,
@@ -33,7 +38,7 @@ import path from 'node:path'
 import { Pool } from 'pg'
 
 type ProductApiState = {
-  version: 17
+  version: 18
   chatSessionsByUser: Record<string, OpenPortChatSession[]>
   projectsByWorkspace: Record<string, OpenPortProject[]>
   knowledgeItemsByWorkspace: Record<string, OpenPortProjectKnowledgeItem[]>
@@ -49,6 +54,11 @@ type ProductApiState = {
   workspacePromptVersionsByWorkspace: Record<string, OpenPortWorkspacePromptVersion[]>
   workspaceSkillsByWorkspace: Record<string, OpenPortWorkspaceSkill[]>
   workspaceToolsByWorkspace: Record<string, OpenPortWorkspaceTool[]>
+  workspaceConnectorCredentialsByWorkspace: Record<string, OpenPortWorkspaceConnectorCredential[]>
+  workspaceConnectorsByWorkspace: Record<string, OpenPortWorkspaceConnector[]>
+  workspaceConnectorTasksByWorkspace: Record<string, OpenPortWorkspaceConnectorTask[]>
+  workspaceConnectorAuditEventsByWorkspace: Record<string, OpenPortWorkspaceConnectorAuditEvent[]>
+  workspaceToolRunsByWorkspace: Record<string, OpenPortWorkspaceToolRun[]>
   searchHistoryByScope: Record<string, OpenPortSearchHistoryItem[]>
 }
 
@@ -207,7 +217,7 @@ function buildSearchHistoryScopeKey(workspaceId: string, userId: string): string
 
 function createEmptyState(): ProductApiState {
   return {
-    version: 17,
+    version: 18,
     chatSessionsByUser: {},
     projectsByWorkspace: {},
     knowledgeItemsByWorkspace: {},
@@ -223,6 +233,11 @@ function createEmptyState(): ProductApiState {
     workspacePromptVersionsByWorkspace: {},
     workspaceSkillsByWorkspace: {},
     workspaceToolsByWorkspace: {},
+    workspaceConnectorCredentialsByWorkspace: {},
+    workspaceConnectorsByWorkspace: {},
+    workspaceConnectorTasksByWorkspace: {},
+    workspaceConnectorAuditEventsByWorkspace: {},
+    workspaceToolRunsByWorkspace: {},
     searchHistoryByScope: {}
   }
 }
@@ -691,6 +706,215 @@ function normalizeWorkspaceGroup(group: OpenPortWorkspaceGroup): OpenPortWorkspa
       : [],
     createdAt: group.createdAt,
     updatedAt: group.updatedAt
+  }
+}
+
+function normalizeWorkspaceConnectorCredential(
+  credential: OpenPortWorkspaceConnectorCredential
+): OpenPortWorkspaceConnectorCredential {
+  return {
+    id: credential.id,
+    workspaceId: credential.workspaceId,
+    name: credential.name.trim() || 'Connector credential',
+    provider:
+      credential.provider === 'web' ||
+      credential.provider === 's3' ||
+      credential.provider === 'github' ||
+      credential.provider === 'notion' ||
+      credential.provider === 'rss'
+        ? credential.provider
+        : 'directory',
+    description: credential.description ?? '',
+    fields: Array.isArray(credential.fields)
+      ? credential.fields
+          .map((field) => ({
+            key: field?.key?.trim() || '',
+            label: field?.label?.trim() || '',
+            secret: Boolean(field?.secret),
+            configured: Boolean(field?.configured),
+            valuePreview: field?.valuePreview?.trim() || ''
+          }))
+          .filter((field) => field.key.length > 0)
+      : [],
+    createdAt: credential.createdAt,
+    updatedAt: credential.updatedAt
+  }
+}
+
+function normalizeWorkspaceConnector(connector: OpenPortWorkspaceConnector): OpenPortWorkspaceConnector {
+  const adapter =
+    connector.adapter === 'web' ||
+    connector.adapter === 's3' ||
+    connector.adapter === 'github' ||
+    connector.adapter === 'notion' ||
+    connector.adapter === 'rss'
+      ? connector.adapter
+      : 'directory'
+  return {
+    id: connector.id,
+    workspaceId: connector.workspaceId,
+    name: connector.name.trim() || 'Connector',
+    adapter,
+    description: connector.description ?? '',
+    enabled: Boolean(connector.enabled),
+    credentialId: connector.credentialId?.trim() || null,
+    tags: Array.isArray(connector.tags) ? connector.tags.filter((entry) => typeof entry === 'string') : [],
+    schedule: {
+      enabled: Boolean(connector.schedule?.enabled),
+      intervalMinutes: Math.max(5, Number(connector.schedule?.intervalMinutes || 60)),
+      timezone: connector.schedule?.timezone?.trim() || 'UTC',
+      incremental: connector.schedule?.incremental ?? true,
+      nextRunAt: connector.schedule?.nextRunAt?.trim() || null
+    },
+    syncPolicy: {
+      autoRetry: connector.syncPolicy?.autoRetry ?? true,
+      maxRetries: Math.max(0, Number(connector.syncPolicy?.maxRetries || 0)),
+      retryBackoffSeconds: Math.max(5, Number(connector.syncPolicy?.retryBackoffSeconds || 30)),
+      maxDocumentsPerRun: Math.max(10, Number(connector.syncPolicy?.maxDocumentsPerRun || 500))
+    },
+    sourceConfig: {
+      directoryPath: connector.sourceConfig?.directoryPath?.trim() || '',
+      urls: Array.isArray(connector.sourceConfig?.urls)
+        ? connector.sourceConfig.urls.filter((entry) => typeof entry === 'string')
+        : [],
+      bucket: connector.sourceConfig?.bucket?.trim() || '',
+      prefix: connector.sourceConfig?.prefix?.trim() || '',
+      repository: connector.sourceConfig?.repository?.trim() || '',
+      branch: connector.sourceConfig?.branch?.trim() || 'main',
+      notionDatabaseId: connector.sourceConfig?.notionDatabaseId?.trim() || '',
+      rssFeedUrls: Array.isArray(connector.sourceConfig?.rssFeedUrls)
+        ? connector.sourceConfig.rssFeedUrls.filter((entry) => typeof entry === 'string')
+        : [],
+      includePatterns: Array.isArray(connector.sourceConfig?.includePatterns)
+        ? connector.sourceConfig.includePatterns.filter((entry) => typeof entry === 'string')
+        : [],
+      excludePatterns: Array.isArray(connector.sourceConfig?.excludePatterns)
+        ? connector.sourceConfig.excludePatterns.filter((entry) => typeof entry === 'string')
+        : []
+    },
+    status: {
+      health:
+        connector.status?.health === 'running' ||
+        connector.status?.health === 'ok' ||
+        connector.status?.health === 'error'
+          ? connector.status.health
+          : 'idle',
+      lastRunAt: connector.status?.lastRunAt?.trim() || null,
+      lastSuccessAt: connector.status?.lastSuccessAt?.trim() || null,
+      lastFailureAt: connector.status?.lastFailureAt?.trim() || null,
+      lastTaskId: connector.status?.lastTaskId?.trim() || null,
+      lastErrorMessage: connector.status?.lastErrorMessage?.trim() || null
+    },
+    createdAt: connector.createdAt,
+    updatedAt: connector.updatedAt
+  }
+}
+
+function normalizeWorkspaceConnectorTask(task: OpenPortWorkspaceConnectorTask): OpenPortWorkspaceConnectorTask {
+  return {
+    id: task.id,
+    workspaceId: task.workspaceId,
+    connectorId: task.connectorId,
+    trigger: task.trigger === 'schedule' ? 'schedule' : task.trigger === 'retry' ? 'retry' : 'manual',
+    mode: task.mode === 'incremental' ? 'incremental' : 'full',
+    status:
+      task.status === 'queued' ||
+      task.status === 'running' ||
+      task.status === 'success' ||
+      task.status === 'failed' ||
+      task.status === 'cancelled'
+        ? task.status
+        : 'queued',
+    attempt: Math.max(1, Number(task.attempt || 1)),
+    maxAttempts: Math.max(1, Number(task.maxAttempts || 1)),
+    scheduledAt: task.scheduledAt,
+    startedAt: task.startedAt || null,
+    finishedAt: task.finishedAt || null,
+    retryOfTaskId: task.retryOfTaskId || null,
+    nextRetryAt: task.nextRetryAt || null,
+    errorMessage: task.errorMessage || null,
+    summary: {
+      scanned: Math.max(0, Number(task.summary?.scanned || 0)),
+      created: Math.max(0, Number(task.summary?.created || 0)),
+      updated: Math.max(0, Number(task.summary?.updated || 0)),
+      removed: Math.max(0, Number(task.summary?.removed || 0)),
+      errors: Math.max(0, Number(task.summary?.errors || 0))
+    },
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt
+  }
+}
+
+function normalizeWorkspaceConnectorAuditEvent(
+  event: OpenPortWorkspaceConnectorAuditEvent
+): OpenPortWorkspaceConnectorAuditEvent {
+  return {
+    id: event.id,
+    workspaceId: event.workspaceId,
+    connectorId: event.connectorId,
+    taskId: event.taskId || null,
+    level: event.level === 'warn' ? 'warn' : event.level === 'error' ? 'error' : 'info',
+    action: event.action,
+    message: event.message,
+    detail: event.detail ?? '',
+    createdAt: event.createdAt
+  }
+}
+
+function normalizeWorkspaceToolRunStep(
+  step: OpenPortWorkspaceToolRun['steps'][number],
+  index: number
+): OpenPortWorkspaceToolRun['steps'][number] {
+  return {
+    id: step.id || `tool_run_step_${index}`,
+    chainStepId: step.chainStepId || `chain_step_${index}`,
+    toolId: step.toolId || '',
+    toolName: step.toolName || step.toolId || 'unknown',
+    mode: step.mode === 'parallel' || step.mode === 'fallback' ? step.mode : 'sequential',
+    when: step.when === 'on_success' || step.when === 'on_error' ? step.when : 'always',
+    condition: step.condition ?? '',
+    conditionMatched: Boolean(step.conditionMatched),
+    branchPath: step.branchPath || `step-${index + 1}`,
+    outputKey: step.outputKey ?? '',
+    status:
+      step.status === 'running' ||
+      step.status === 'success' ||
+      step.status === 'failed' ||
+      step.status === 'skipped'
+        ? step.status
+        : 'pending',
+    inputSnapshot: step.inputSnapshot ?? '',
+    outputSnapshot: step.outputSnapshot ?? '',
+    errorMessage: step.errorMessage || null,
+    startedAt: step.startedAt || null,
+    finishedAt: step.finishedAt || null
+  }
+}
+
+function normalizeWorkspaceToolRun(run: OpenPortWorkspaceToolRun): OpenPortWorkspaceToolRun {
+  return {
+    id: run.id,
+    workspaceId: run.workspaceId,
+    toolId: run.toolId,
+    trigger: run.trigger === 'replay' ? 'replay' : run.trigger === 'api' ? 'api' : 'manual',
+    status:
+      run.status === 'queued' ||
+      run.status === 'running' ||
+      run.status === 'success' ||
+      run.status === 'failed' ||
+      run.status === 'cancelled'
+        ? run.status
+        : 'queued',
+    debug: Boolean(run.debug),
+    replayOfRunId: run.replayOfRunId || null,
+    inputPayload: run.inputPayload ?? '',
+    outputPayload: run.outputPayload ?? '',
+    errorMessage: run.errorMessage || null,
+    steps: Array.isArray(run.steps) ? run.steps.map((step, index) => normalizeWorkspaceToolRunStep(step, index)) : [],
+    startedAt: run.startedAt || null,
+    finishedAt: run.finishedAt || null,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt
   }
 }
 
@@ -1169,6 +1393,117 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS openport_workspace_tools_workspace_updated_idx
       ON openport_workspace_tools (workspace_id, updated_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_workspace_connector_credentials (
+        credential_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_connector_credentials_workspace_updated_idx
+      ON openport_workspace_connector_credentials (workspace_id, updated_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_workspace_connectors (
+        connector_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        adapter TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        credential_id TEXT,
+        tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        schedule JSONB NOT NULL DEFAULT '{}'::jsonb,
+        sync_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+        source_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        status JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_connectors_workspace_updated_idx
+      ON openport_workspace_connectors (workspace_id, updated_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_workspace_connector_tasks (
+        task_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        connector_id TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempt INTEGER NOT NULL DEFAULT 1,
+        max_attempts INTEGER NOT NULL DEFAULT 1,
+        scheduled_at TIMESTAMPTZ NOT NULL,
+        started_at TIMESTAMPTZ,
+        finished_at TIMESTAMPTZ,
+        retry_of_task_id TEXT,
+        next_retry_at TIMESTAMPTZ,
+        error_message TEXT,
+        summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_connector_tasks_workspace_created_idx
+      ON openport_workspace_connector_tasks (workspace_id, created_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_connector_tasks_workspace_status_scheduled_idx
+      ON openport_workspace_connector_tasks (workspace_id, status, scheduled_at ASC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_workspace_connector_audit_events (
+        event_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        connector_id TEXT NOT NULL,
+        task_id TEXT,
+        level TEXT NOT NULL,
+        action TEXT NOT NULL,
+        message TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_connector_audit_events_workspace_created_idx
+      ON openport_workspace_connector_audit_events (workspace_id, created_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_workspace_tool_runs (
+        run_id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        tool_id TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        status TEXT NOT NULL,
+        debug BOOLEAN NOT NULL DEFAULT FALSE,
+        replay_of_run_id TEXT,
+        input_payload TEXT NOT NULL DEFAULT '',
+        output_payload TEXT NOT NULL DEFAULT '',
+        error_message TEXT,
+        steps JSONB NOT NULL DEFAULT '[]'::jsonb,
+        started_at TIMESTAMPTZ,
+        finished_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_tool_runs_workspace_created_idx
+      ON openport_workspace_tool_runs (workspace_id, created_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_workspace_tool_runs_workspace_status_created_idx
+      ON openport_workspace_tool_runs (workspace_id, status, created_at ASC)
     `)
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS openport_workspace_skills (
@@ -3301,6 +3636,723 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     this.flush()
   }
 
+  async listWorkspaceIdsWithConnectors(): Promise<string[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{ workspace_id: string }>(
+        `
+          SELECT DISTINCT workspace_id
+          FROM openport_workspace_connectors
+          ORDER BY workspace_id
+        `
+      )
+      return result.rows.map((row) => row.workspace_id)
+    }
+
+    return Object.keys(this.state.workspaceConnectorsByWorkspace)
+  }
+
+  async listWorkspaceIdsWithConnectorTasks(): Promise<string[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{ workspace_id: string }>(
+        `
+          SELECT DISTINCT workspace_id
+          FROM openport_workspace_connector_tasks
+          ORDER BY workspace_id
+        `
+      )
+      return result.rows.map((row) => row.workspace_id)
+    }
+
+    return Object.keys(this.state.workspaceConnectorTasksByWorkspace)
+  }
+
+  async listWorkspaceIdsWithToolRuns(): Promise<string[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{ workspace_id: string }>(
+        `
+          SELECT DISTINCT workspace_id
+          FROM openport_workspace_tool_runs
+          ORDER BY workspace_id
+        `
+      )
+      return result.rows.map((row) => row.workspace_id)
+    }
+
+    return Object.keys(this.state.workspaceToolRunsByWorkspace)
+  }
+
+  async readWorkspaceConnectorCredentials(workspaceId: string): Promise<OpenPortWorkspaceConnectorCredential[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        credential_id: string
+        workspace_id: string
+        name: string
+        provider: OpenPortWorkspaceConnectorCredential['provider']
+        description: string
+        fields: OpenPortWorkspaceConnectorCredential['fields']
+        created_at: Date | string
+        updated_at: Date | string
+      }>(
+        `
+          SELECT credential_id, workspace_id, name, provider, description, fields, created_at, updated_at
+          FROM openport_workspace_connector_credentials
+          WHERE workspace_id = $1
+          ORDER BY updated_at DESC
+        `,
+        [workspaceId]
+      )
+      return result.rows.map((row) =>
+        normalizeWorkspaceConnectorCredential({
+          id: row.credential_id,
+          workspaceId: row.workspace_id,
+          name: row.name,
+          provider: row.provider,
+          description: row.description,
+          fields: row.fields,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString()
+        })
+      )
+    }
+    return structuredClone(this.state.workspaceConnectorCredentialsByWorkspace[workspaceId] || []).map((item) =>
+      normalizeWorkspaceConnectorCredential(item)
+    )
+  }
+
+  async writeWorkspaceConnectorCredentials(
+    workspaceId: string,
+    items: OpenPortWorkspaceConnectorCredential[]
+  ): Promise<void> {
+    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceConnectorCredential(item))
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const ids = normalizedItems.map((item) => item.id)
+        if (ids.length > 0) {
+          await client.query(
+            `
+              DELETE FROM openport_workspace_connector_credentials
+              WHERE workspace_id = $1
+                AND NOT (credential_id = ANY($2::text[]))
+            `,
+            [workspaceId, ids]
+          )
+        } else {
+          await client.query('DELETE FROM openport_workspace_connector_credentials WHERE workspace_id = $1', [workspaceId])
+        }
+
+        for (const item of normalizedItems) {
+          await client.query(
+            `
+              INSERT INTO openport_workspace_connector_credentials (
+                credential_id,
+                workspace_id,
+                name,
+                provider,
+                description,
+                fields,
+                created_at,
+                updated_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+              ON CONFLICT (credential_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                name = EXCLUDED.name,
+                provider = EXCLUDED.provider,
+                description = EXCLUDED.description,
+                fields = EXCLUDED.fields,
+                created_at = EXCLUDED.created_at,
+                updated_at = EXCLUDED.updated_at
+            `,
+            [
+              item.id,
+              item.workspaceId,
+              item.name,
+              item.provider,
+              item.description,
+              JSON.stringify(item.fields),
+              item.createdAt,
+              item.updatedAt
+            ]
+          )
+        }
+
+        await client.query('COMMIT')
+        return
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+
+    this.state.workspaceConnectorCredentialsByWorkspace[workspaceId] = normalizedItems
+    this.flush()
+  }
+
+  async readWorkspaceConnectors(workspaceId: string): Promise<OpenPortWorkspaceConnector[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        connector_id: string
+        workspace_id: string
+        name: string
+        adapter: OpenPortWorkspaceConnector['adapter']
+        description: string
+        enabled: boolean
+        credential_id: string | null
+        tags: string[]
+        schedule: OpenPortWorkspaceConnector['schedule']
+        sync_policy: OpenPortWorkspaceConnector['syncPolicy']
+        source_config: OpenPortWorkspaceConnector['sourceConfig']
+        status: OpenPortWorkspaceConnector['status']
+        created_at: Date | string
+        updated_at: Date | string
+      }>(
+        `
+          SELECT connector_id, workspace_id, name, adapter, description, enabled, credential_id, tags, schedule, sync_policy, source_config, status, created_at, updated_at
+          FROM openport_workspace_connectors
+          WHERE workspace_id = $1
+          ORDER BY updated_at DESC
+        `,
+        [workspaceId]
+      )
+      return result.rows.map((row) =>
+        normalizeWorkspaceConnector({
+          id: row.connector_id,
+          workspaceId: row.workspace_id,
+          name: row.name,
+          adapter: row.adapter,
+          description: row.description,
+          enabled: row.enabled,
+          credentialId: row.credential_id,
+          tags: row.tags,
+          schedule: row.schedule,
+          syncPolicy: row.sync_policy,
+          sourceConfig: row.source_config,
+          status: row.status,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString()
+        })
+      )
+    }
+
+    return structuredClone(this.state.workspaceConnectorsByWorkspace[workspaceId] || []).map((item) =>
+      normalizeWorkspaceConnector(item)
+    )
+  }
+
+  async writeWorkspaceConnectors(workspaceId: string, items: OpenPortWorkspaceConnector[]): Promise<void> {
+    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceConnector(item))
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const ids = normalizedItems.map((item) => item.id)
+        if (ids.length > 0) {
+          await client.query(
+            `
+              DELETE FROM openport_workspace_connectors
+              WHERE workspace_id = $1
+                AND NOT (connector_id = ANY($2::text[]))
+            `,
+            [workspaceId, ids]
+          )
+        } else {
+          await client.query('DELETE FROM openport_workspace_connectors WHERE workspace_id = $1', [workspaceId])
+        }
+
+        for (const item of normalizedItems) {
+          await client.query(
+            `
+              INSERT INTO openport_workspace_connectors (
+                connector_id,
+                workspace_id,
+                name,
+                adapter,
+                description,
+                enabled,
+                credential_id,
+                tags,
+                schedule,
+                sync_policy,
+                source_config,
+                status,
+                created_at,
+                updated_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14)
+              ON CONFLICT (connector_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                name = EXCLUDED.name,
+                adapter = EXCLUDED.adapter,
+                description = EXCLUDED.description,
+                enabled = EXCLUDED.enabled,
+                credential_id = EXCLUDED.credential_id,
+                tags = EXCLUDED.tags,
+                schedule = EXCLUDED.schedule,
+                sync_policy = EXCLUDED.sync_policy,
+                source_config = EXCLUDED.source_config,
+                status = EXCLUDED.status,
+                created_at = EXCLUDED.created_at,
+                updated_at = EXCLUDED.updated_at
+            `,
+            [
+              item.id,
+              item.workspaceId,
+              item.name,
+              item.adapter,
+              item.description,
+              item.enabled,
+              item.credentialId,
+              JSON.stringify(item.tags),
+              JSON.stringify(item.schedule),
+              JSON.stringify(item.syncPolicy),
+              JSON.stringify(item.sourceConfig),
+              JSON.stringify(item.status),
+              item.createdAt,
+              item.updatedAt
+            ]
+          )
+        }
+        await client.query('COMMIT')
+        return
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+
+    this.state.workspaceConnectorsByWorkspace[workspaceId] = normalizedItems
+    this.flush()
+  }
+
+  async readWorkspaceConnectorTasks(workspaceId: string): Promise<OpenPortWorkspaceConnectorTask[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        task_id: string
+        workspace_id: string
+        connector_id: string
+        trigger: OpenPortWorkspaceConnectorTask['trigger']
+        mode: OpenPortWorkspaceConnectorTask['mode']
+        status: OpenPortWorkspaceConnectorTask['status']
+        attempt: number
+        max_attempts: number
+        scheduled_at: Date | string
+        started_at: Date | string | null
+        finished_at: Date | string | null
+        retry_of_task_id: string | null
+        next_retry_at: Date | string | null
+        error_message: string | null
+        summary: OpenPortWorkspaceConnectorTask['summary']
+        created_at: Date | string
+        updated_at: Date | string
+      }>(
+        `
+          SELECT task_id, workspace_id, connector_id, trigger, mode, status, attempt, max_attempts, scheduled_at, started_at, finished_at, retry_of_task_id, next_retry_at, error_message, summary, created_at, updated_at
+          FROM openport_workspace_connector_tasks
+          WHERE workspace_id = $1
+          ORDER BY created_at DESC
+        `,
+        [workspaceId]
+      )
+      return result.rows.map((row) =>
+        normalizeWorkspaceConnectorTask({
+          id: row.task_id,
+          workspaceId: row.workspace_id,
+          connectorId: row.connector_id,
+          trigger: row.trigger,
+          mode: row.mode,
+          status: row.status,
+          attempt: row.attempt,
+          maxAttempts: row.max_attempts,
+          scheduledAt: new Date(row.scheduled_at).toISOString(),
+          startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
+          finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null,
+          retryOfTaskId: row.retry_of_task_id,
+          nextRetryAt: row.next_retry_at ? new Date(row.next_retry_at).toISOString() : null,
+          errorMessage: row.error_message,
+          summary: row.summary,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString()
+        })
+      )
+    }
+
+    return structuredClone(this.state.workspaceConnectorTasksByWorkspace[workspaceId] || []).map((item) =>
+      normalizeWorkspaceConnectorTask(item)
+    )
+  }
+
+  async writeWorkspaceConnectorTasks(workspaceId: string, items: OpenPortWorkspaceConnectorTask[]): Promise<void> {
+    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceConnectorTask(item))
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const ids = normalizedItems.map((item) => item.id)
+        if (ids.length > 0) {
+          await client.query(
+            `
+              DELETE FROM openport_workspace_connector_tasks
+              WHERE workspace_id = $1
+                AND NOT (task_id = ANY($2::text[]))
+            `,
+            [workspaceId, ids]
+          )
+        } else {
+          await client.query('DELETE FROM openport_workspace_connector_tasks WHERE workspace_id = $1', [workspaceId])
+        }
+        for (const item of normalizedItems) {
+          await client.query(
+            `
+              INSERT INTO openport_workspace_connector_tasks (
+                task_id,
+                workspace_id,
+                connector_id,
+                trigger,
+                mode,
+                status,
+                attempt,
+                max_attempts,
+                scheduled_at,
+                started_at,
+                finished_at,
+                retry_of_task_id,
+                next_retry_at,
+                error_message,
+                summary,
+                created_at,
+                updated_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16, $17)
+              ON CONFLICT (task_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                connector_id = EXCLUDED.connector_id,
+                trigger = EXCLUDED.trigger,
+                mode = EXCLUDED.mode,
+                status = EXCLUDED.status,
+                attempt = EXCLUDED.attempt,
+                max_attempts = EXCLUDED.max_attempts,
+                scheduled_at = EXCLUDED.scheduled_at,
+                started_at = EXCLUDED.started_at,
+                finished_at = EXCLUDED.finished_at,
+                retry_of_task_id = EXCLUDED.retry_of_task_id,
+                next_retry_at = EXCLUDED.next_retry_at,
+                error_message = EXCLUDED.error_message,
+                summary = EXCLUDED.summary,
+                created_at = EXCLUDED.created_at,
+                updated_at = EXCLUDED.updated_at
+            `,
+            [
+              item.id,
+              item.workspaceId,
+              item.connectorId,
+              item.trigger,
+              item.mode,
+              item.status,
+              item.attempt,
+              item.maxAttempts,
+              item.scheduledAt,
+              item.startedAt,
+              item.finishedAt,
+              item.retryOfTaskId,
+              item.nextRetryAt,
+              item.errorMessage,
+              JSON.stringify(item.summary),
+              item.createdAt,
+              item.updatedAt
+            ]
+          )
+        }
+        await client.query('COMMIT')
+        return
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+
+    this.state.workspaceConnectorTasksByWorkspace[workspaceId] = normalizedItems
+    this.flush()
+  }
+
+  async readWorkspaceConnectorAuditEvents(workspaceId: string): Promise<OpenPortWorkspaceConnectorAuditEvent[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        event_id: string
+        workspace_id: string
+        connector_id: string
+        task_id: string | null
+        level: OpenPortWorkspaceConnectorAuditEvent['level']
+        action: string
+        message: string
+        detail: string
+        created_at: Date | string
+      }>(
+        `
+          SELECT event_id, workspace_id, connector_id, task_id, level, action, message, detail, created_at
+          FROM openport_workspace_connector_audit_events
+          WHERE workspace_id = $1
+          ORDER BY created_at DESC
+        `,
+        [workspaceId]
+      )
+      return result.rows.map((row) =>
+        normalizeWorkspaceConnectorAuditEvent({
+          id: row.event_id,
+          workspaceId: row.workspace_id,
+          connectorId: row.connector_id,
+          taskId: row.task_id,
+          level: row.level,
+          action: row.action,
+          message: row.message,
+          detail: row.detail,
+          createdAt: new Date(row.created_at).toISOString()
+        })
+      )
+    }
+
+    return structuredClone(this.state.workspaceConnectorAuditEventsByWorkspace[workspaceId] || []).map((item) =>
+      normalizeWorkspaceConnectorAuditEvent(item)
+    )
+  }
+
+  async writeWorkspaceConnectorAuditEvents(
+    workspaceId: string,
+    items: OpenPortWorkspaceConnectorAuditEvent[]
+  ): Promise<void> {
+    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceConnectorAuditEvent(item))
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const ids = normalizedItems.map((item) => item.id)
+        if (ids.length > 0) {
+          await client.query(
+            `
+              DELETE FROM openport_workspace_connector_audit_events
+              WHERE workspace_id = $1
+                AND NOT (event_id = ANY($2::text[]))
+            `,
+            [workspaceId, ids]
+          )
+        } else {
+          await client.query('DELETE FROM openport_workspace_connector_audit_events WHERE workspace_id = $1', [workspaceId])
+        }
+        for (const item of normalizedItems) {
+          await client.query(
+            `
+              INSERT INTO openport_workspace_connector_audit_events (
+                event_id,
+                workspace_id,
+                connector_id,
+                task_id,
+                level,
+                action,
+                message,
+                detail,
+                created_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              ON CONFLICT (event_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                connector_id = EXCLUDED.connector_id,
+                task_id = EXCLUDED.task_id,
+                level = EXCLUDED.level,
+                action = EXCLUDED.action,
+                message = EXCLUDED.message,
+                detail = EXCLUDED.detail,
+                created_at = EXCLUDED.created_at
+            `,
+            [
+              item.id,
+              item.workspaceId,
+              item.connectorId,
+              item.taskId,
+              item.level,
+              item.action,
+              item.message,
+              item.detail,
+              item.createdAt
+            ]
+          )
+        }
+        await client.query('COMMIT')
+        return
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+
+    this.state.workspaceConnectorAuditEventsByWorkspace[workspaceId] = normalizedItems
+    this.flush()
+  }
+
+  async readWorkspaceToolRuns(workspaceId: string): Promise<OpenPortWorkspaceToolRun[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const result = await pool.query<{
+        run_id: string
+        workspace_id: string
+        tool_id: string
+        trigger: OpenPortWorkspaceToolRun['trigger']
+        status: OpenPortWorkspaceToolRun['status']
+        debug: boolean
+        replay_of_run_id: string | null
+        input_payload: string
+        output_payload: string
+        error_message: string | null
+        steps: OpenPortWorkspaceToolRun['steps']
+        started_at: Date | string | null
+        finished_at: Date | string | null
+        created_at: Date | string
+        updated_at: Date | string
+      }>(
+        `
+          SELECT run_id, workspace_id, tool_id, trigger, status, debug, replay_of_run_id, input_payload, output_payload, error_message, steps, started_at, finished_at, created_at, updated_at
+          FROM openport_workspace_tool_runs
+          WHERE workspace_id = $1
+          ORDER BY created_at DESC
+        `,
+        [workspaceId]
+      )
+      return result.rows.map((row) =>
+        normalizeWorkspaceToolRun({
+          id: row.run_id,
+          workspaceId: row.workspace_id,
+          toolId: row.tool_id,
+          trigger: row.trigger,
+          status: row.status,
+          debug: row.debug,
+          replayOfRunId: row.replay_of_run_id,
+          inputPayload: row.input_payload,
+          outputPayload: row.output_payload,
+          errorMessage: row.error_message,
+          steps: row.steps,
+          startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
+          finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString()
+        })
+      )
+    }
+
+    return structuredClone(this.state.workspaceToolRunsByWorkspace[workspaceId] || []).map((item) =>
+      normalizeWorkspaceToolRun(item)
+    )
+  }
+
+  async writeWorkspaceToolRuns(workspaceId: string, items: OpenPortWorkspaceToolRun[]): Promise<void> {
+    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceToolRun(item))
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const ids = normalizedItems.map((item) => item.id)
+        if (ids.length > 0) {
+          await client.query(
+            `
+              DELETE FROM openport_workspace_tool_runs
+              WHERE workspace_id = $1
+                AND NOT (run_id = ANY($2::text[]))
+            `,
+            [workspaceId, ids]
+          )
+        } else {
+          await client.query('DELETE FROM openport_workspace_tool_runs WHERE workspace_id = $1', [workspaceId])
+        }
+
+        for (const item of normalizedItems) {
+          await client.query(
+            `
+              INSERT INTO openport_workspace_tool_runs (
+                run_id,
+                workspace_id,
+                tool_id,
+                trigger,
+                status,
+                debug,
+                replay_of_run_id,
+                input_payload,
+                output_payload,
+                error_message,
+                steps,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
+              ON CONFLICT (run_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                tool_id = EXCLUDED.tool_id,
+                trigger = EXCLUDED.trigger,
+                status = EXCLUDED.status,
+                debug = EXCLUDED.debug,
+                replay_of_run_id = EXCLUDED.replay_of_run_id,
+                input_payload = EXCLUDED.input_payload,
+                output_payload = EXCLUDED.output_payload,
+                error_message = EXCLUDED.error_message,
+                steps = EXCLUDED.steps,
+                started_at = EXCLUDED.started_at,
+                finished_at = EXCLUDED.finished_at,
+                created_at = EXCLUDED.created_at,
+                updated_at = EXCLUDED.updated_at
+            `,
+            [
+              item.id,
+              item.workspaceId,
+              item.toolId,
+              item.trigger,
+              item.status,
+              item.debug,
+              item.replayOfRunId,
+              item.inputPayload,
+              item.outputPayload,
+              item.errorMessage,
+              JSON.stringify(item.steps),
+              item.startedAt,
+              item.finishedAt,
+              item.createdAt,
+              item.updatedAt
+            ]
+          )
+        }
+        await client.query('COMMIT')
+        return
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
+
+    this.state.workspaceToolRunsByWorkspace[workspaceId] = normalizedItems
+    this.flush()
+  }
+
   async readSearchHistory(workspaceId: string, userId: string, limit = 12): Promise<OpenPortSearchHistoryItem[]> {
     const cappedLimit = Math.max(1, Math.min(limit, 50))
 
@@ -3516,7 +4568,7 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
       const parsed = JSON.parse(raw) as Partial<ProductApiState>
 
       return {
-        version: 17,
+        version: 18,
         chatSessionsByUser:
           parsed.chatSessionsByUser && typeof parsed.chatSessionsByUser === 'object'
             ? parsed.chatSessionsByUser
@@ -3576,6 +4628,26 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
         workspaceToolsByWorkspace:
           parsed.workspaceToolsByWorkspace && typeof parsed.workspaceToolsByWorkspace === 'object'
             ? parsed.workspaceToolsByWorkspace
+            : {},
+        workspaceConnectorCredentialsByWorkspace:
+          parsed.workspaceConnectorCredentialsByWorkspace && typeof parsed.workspaceConnectorCredentialsByWorkspace === 'object'
+            ? parsed.workspaceConnectorCredentialsByWorkspace
+            : {},
+        workspaceConnectorsByWorkspace:
+          parsed.workspaceConnectorsByWorkspace && typeof parsed.workspaceConnectorsByWorkspace === 'object'
+            ? parsed.workspaceConnectorsByWorkspace
+            : {},
+        workspaceConnectorTasksByWorkspace:
+          parsed.workspaceConnectorTasksByWorkspace && typeof parsed.workspaceConnectorTasksByWorkspace === 'object'
+            ? parsed.workspaceConnectorTasksByWorkspace
+            : {},
+        workspaceConnectorAuditEventsByWorkspace:
+          parsed.workspaceConnectorAuditEventsByWorkspace && typeof parsed.workspaceConnectorAuditEventsByWorkspace === 'object'
+            ? parsed.workspaceConnectorAuditEventsByWorkspace
+            : {},
+        workspaceToolRunsByWorkspace:
+          parsed.workspaceToolRunsByWorkspace && typeof parsed.workspaceToolRunsByWorkspace === 'object'
+            ? parsed.workspaceToolRunsByWorkspace
             : {},
         searchHistoryByScope:
           parsed.searchHistoryByScope && typeof parsed.searchHistoryByScope === 'object'

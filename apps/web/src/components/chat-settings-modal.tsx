@@ -34,7 +34,7 @@ type ChatSettingsModalProps = {
   session: OpenPortSession | null
 }
 
-type SettingsSection = 'general' | 'interface' | 'personalization' | 'connections' | 'integrations' | 'workspace' | 'data' | 'about'
+type SettingsSection = 'general' | 'interface' | 'personalization' | 'connections' | 'integrations' | 'data' | 'about'
 
 type SettingsTab = {
   id: SettingsSection
@@ -49,7 +49,6 @@ const settingsTabs: SettingsTab[] = [
   { id: 'personalization', icon: 'solar:palette-outline', title: 'Personalization', keywords: ['personalization', 'sidebar', 'home', 'models', 'sections'] },
   { id: 'connections', icon: 'solar:link-outline', title: 'Connections', keywords: ['connections', 'providers', 'routing', 'runtime', 'models'] },
   { id: 'integrations', icon: 'solar:widget-5-outline', title: 'Integrations', keywords: ['integrations', 'tools', 'knowledge', 'prompts', 'workspace'] },
-  { id: 'workspace', icon: 'solar:folder-with-files-outline', title: 'Workspace', keywords: ['workspace', 'models', 'knowledge', 'prompts', 'tools', 'notes'] },
   { id: 'data', icon: 'solar:database-outline', title: 'Data', keywords: ['data', 'archive', 'export', 'sessions', 'history'] },
   { id: 'about', icon: 'solar:info-circle-outline', title: 'About', keywords: ['about', 'openwebui', 'reference', 'releases'] }
 ]
@@ -271,7 +270,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
               </div>
 
               <div className="chat-settings-actions">
-                <TextButton href="/settings/workspaces" variant="menu"><span>Workspace settings</span></TextButton>
+                <TextButton href="/chat" variant="menu"><span>Open chat</span></TextButton>
                 <TextButton onClick={onOpenShortcuts} type="button" variant="menu"><span>Keyboard shortcuts</span></TextButton>
               </div>
             </section>
@@ -281,7 +280,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>Interface</strong>
-                <span>Configure the default chat behavior before a session becomes a chat-level override.</span>
+                <span>Configure the chat home, composer, and default model behavior before a conversation overrides it.</span>
               </div>
 
               <div className="chat-settings-stats">
@@ -379,7 +378,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>Personalization</strong>
-                <span>Adjust the surfaces that shape the first screen after authentication.</span>
+                <span>Adjust the surfaces that shape the chat-first app shell after sign in.</span>
               </div>
 
               <div className="chat-settings-stats">
@@ -420,32 +419,15 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>Integrations</strong>
-                <span>Open the attached knowledge, prompt, and tool surfaces used by composer flows and workspace actions.</span>
+                <span>Open the knowledge, prompts, tools, skills, and workspace surfaces used by chat attachments and actions.</span>
               </div>
 
               <div className="chat-settings-actions">
+                <TextButton href="/workspace" variant="menu"><span>Workspace overview</span></TextButton>
                 <TextButton href="/workspace/knowledge" variant="menu"><span>Knowledge</span></TextButton>
                 <TextButton href="/workspace/prompts" variant="menu"><span>Prompts</span></TextButton>
                 <TextButton href="/workspace/tools" variant="menu"><span>Tools</span></TextButton>
                 <TextButton href="/workspace/skills" variant="menu"><span>Skills</span></TextButton>
-              </div>
-            </section>
-          ) : null}
-
-          {section === 'workspace' ? (
-            <section className="chat-settings-section">
-              <div className="chat-settings-copy">
-                <strong>Workspace modules</strong>
-                <span>Open the same core modules that Open WebUI surfaces from Workspace.</span>
-              </div>
-
-              <div className="chat-settings-actions">
-                <TextButton href="/workspace/models" variant="menu"><span>Models</span></TextButton>
-                <TextButton href="/workspace/knowledge" variant="menu"><span>Knowledge</span></TextButton>
-                <TextButton href="/workspace/prompts" variant="menu"><span>Prompts</span></TextButton>
-                <TextButton href="/workspace/tools" variant="menu"><span>Tools</span></TextButton>
-                <TextButton href="/workspace/skills" variant="menu"><span>Skills</span></TextButton>
-                <TextButton href="/dashboard/notes" variant="menu"><span>Notes</span></TextButton>
               </div>
             </section>
           ) : null}
@@ -453,8 +435,8 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
           {section === 'data' ? (
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
-                <strong>Chat data</strong>
-                <span>Import, export, archive, or remove persisted chat sessions from the API-backed store.</span>
+                <strong>Data controls</strong>
+                <span>Import, export, archive, inspect, or remove persisted chat sessions and attached files.</span>
               </div>
 
               <div className="chat-settings-stats">
@@ -554,7 +536,7 @@ export function ChatSettingsModal({ onClose, onOpenShortcuts, open, session }: C
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>OpenPort chat workspace</strong>
-                <span>Chat-first self-hosted UI aligned with the Open WebUI application structure.</span>
+                <span>Chat-first self-hosted UI shaped by the Open WebUI application structure.</span>
               </div>
 
               <div className="chat-settings-actions">

@@ -2464,3 +2464,75 @@
     - [apps/web/src/components/chat-settings-modal.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-settings-modal.tsx)
     - [apps/web/src/components/chat-composer-tools-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-composer-tools-menu.tsx)
     - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
+
+- `done`：新增 [docs/71-openport-connectors-orchestration-final-closure-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/71-openport-connectors-orchestration-final-closure-plan.md)，一次性补齐 `external connectors lifecycle + toolkit orchestration runtime`。
+- `done`：这轮 connectors + orchestration 已完成后端闭环：
+  - contracts 扩展了 connectors / connector tasks+audit / tool orchestration runs：
+    - [packages/openport-product-contracts/src/index.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/packages/openport-product-contracts/src/index.ts)
+  - `WorkspaceResources` 新增 API：
+    - connectors credentials CRUD
+    - connectors CRUD
+    - sync trigger / task list / task retry / audit list
+    - tool orchestration run / list / detail / replay / cancel
+    - [apps/api/src/workspace-resources/workspace-resources.controller.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/workspace-resources/workspace-resources.controller.ts)
+    - [apps/api/src/workspace-resources/workspace-resources.service.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/workspace-resources/workspace-resources.service.ts)
+  - state store 已新增 file+postgres 持久化：
+    - connectors / credentials / tasks / audits / tool runs
+    - scheduler 和 run queue 所需 workspace index 读取
+    - [apps/api/src/storage/api-state-store.service.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/storage/api-state-store.service.ts)
+  - 新增 DTO：
+    - `create/update-workspace-connector*.dto.ts`
+    - `trigger-workspace-connector-sync.dto.ts`
+    - `run/replay-workspace-tool-orchestration*.dto.ts`
+    - [apps/api/src/workspace-resources/dto](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/api/src/workspace-resources/dto)
+- `done`：这轮 connectors + orchestration 已完成前端接入：
+  - API client wrappers：
+    - [apps/web/src/lib/openport-api.ts](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/lib/openport-api.ts)
+  - 新增 `Knowledge > Connectors` 页面：
+    - credentials 管理
+    - connector 管理
+    - manual/incremental sync
+    - task + audit 面板
+    - [apps/web/src/components/workspace-knowledge-connectors.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-knowledge-connectors.tsx)
+    - [apps/web/src/app/workspace/knowledge/connectors/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/workspace/knowledge/connectors/page.tsx)
+  - `WorkspaceToolEditor` 已新增 runtime orchestration control panel：
+    - run/replay/cancel
+    - step status + branch path 视图
+    - [apps/web/src/components/workspace-tool-editor.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-tool-editor.tsx)
+  - `Knowledge` 主页导航补了 connectors 入口：
+    - [apps/web/src/components/workspace-knowledge.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-knowledge.tsx)
+- `done`：这轮构建验证已通过：
+  - `npm run build:api`
+  - `npm run build:web`
+- `done`：新增 [docs/73-openport-openwebui-auth-shell-final-closure-plan.md](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/docs/73-openport-openwebui-auth-shell-final-closure-plan.md)，按本地 `open-webui-main` 的 `+page.svelte / Sidebar.svelte / ChatPlaceholder.svelte / Controls.svelte / SettingsModal.svelte / InputMenu.svelte`，一次性补齐匿名入口、canonical `/chat`、sidebar 轻量化、chat 空态纯化、controls 去表单化、settings/tools IA 收口。
+- `done`：这轮 `openwebui auth shell final closure` 已完成：
+  - 匿名根页已改成更轻的 auth-first shell：
+    - [apps/web/src/app/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/page.tsx)
+    - [apps/web/src/app/globals.css](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/globals.css)
+  - `/chat` 已成为真实主聊天页，已登录 `/` 只做 hand-off，`/dashboard/chat` 继续兼容跳转：
+    - [apps/web/src/app/chat/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/chat/page.tsx)
+    - [apps/web/src/components/home-entry-gate.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/home-entry-gate.tsx)
+    - [apps/web/src/app/dashboard/chat/page.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/app/dashboard/chat/page.tsx)
+    - [apps/web/src/components/landing-entry-actions.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/landing-entry-actions.tsx)
+  - sidebar 已继续压轻并让 `Chats` 高于 `Projects`：
+    - 去掉 sidebar workspace switcher
+    - `Projects` 移到 `Chats` 之后，create action 改成更轻的 section action
+    - chat root links 全部改为 `/chat`
+    - [apps/web/src/components/workspace-sidebar.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/workspace-sidebar.tsx)
+  - chat 空态进一步收成更纯的 model + composer + suggestions：
+    - hero 模型选择器整合了 avatar mark / title / subtitle
+    - project hint 改成更轻的 inline context
+    - [apps/web/src/components/chat-shell.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-shell.tsx)
+  - controls 已继续去表单化：
+    - `Model route` 呈现改成 `Model`
+    - `Context` 只在存在上下文时显示
+    - copy 改成更轻的 conversation/options 语义
+    - [apps/web/src/components/chat-controls-panel.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-controls-panel.tsx)
+  - settings 和 composer tools 的 IA 已进一步向 Open WebUI 收敛：
+    - settings 去掉单独 `Workspace` tab，`Integrations` 吞并 workspace 导航
+    - data/archive/chat home links 全部改成 `/chat`
+    - tools root menu 改成 `upload / capture / webpage / notes / knowledge / chats / prompts / recent files`
+    - [apps/web/src/components/chat-settings-modal.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-settings-modal.tsx)
+    - [apps/web/src/components/chat-composer-tools-menu.tsx](/Users/Sebastian/Fidelock-Multiple-%20Platform/openport/apps/web/src/components/chat-composer-tools-menu.tsx)
+- `done`：这轮构建验证已通过：
+  - `npm run build:web`

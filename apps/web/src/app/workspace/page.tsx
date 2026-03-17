@@ -20,7 +20,7 @@ export default function WorkspaceIndexPage() {
         router.replace(getFirstAccessibleWorkspaceHref(getWorkspacePermissions(currentUser)))
       })
       .catch(() => {
-        router.replace('/chat')
+        router.replace('/')
       })
   }, [router])
 

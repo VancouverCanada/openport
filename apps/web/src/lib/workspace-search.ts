@@ -34,7 +34,6 @@ export type WorkspaceSearchTagFacet = {
 
 export type WorkspaceSearchRecommendation = OpenPortSearchRecommendation
 
-const PROJECT_PREFIX = 'project:'
 const FOLDER_PREFIX = 'folder:'
 const TAG_PREFIX = 'tag:'
 const ARCHIVED_PREFIX = 'archived:'
@@ -60,9 +59,8 @@ export function parseWorkspaceSearchQuery(
   tokens.forEach((token) => {
     const lowered = token.toLowerCase()
 
-    if (lowered.startsWith(PROJECT_PREFIX) || lowered.startsWith(FOLDER_PREFIX)) {
-      const prefix = lowered.startsWith(FOLDER_PREFIX) ? FOLDER_PREFIX : PROJECT_PREFIX
-      const rawProjectName = normalizeProjectName(token.slice(prefix.length))
+    if (lowered.startsWith(FOLDER_PREFIX)) {
+      const rawProjectName = normalizeProjectName(token.slice(FOLDER_PREFIX.length))
       const matchedProject = projects.find((project) => {
         const normalizedName = normalizeProjectName(project.name)
         return normalizedName.includes(rawProjectName) || project.id.toLowerCase() === rawProjectName
@@ -184,9 +182,8 @@ export function getSearchOperatorSuggestions(
       }))
   }
 
-  if (lowered.startsWith(PROJECT_PREFIX) || lowered.startsWith(FOLDER_PREFIX)) {
-    const prefix = lowered.startsWith(PROJECT_PREFIX) ? PROJECT_PREFIX : FOLDER_PREFIX
-    const rawValue = normalizeProjectName(activeToken.slice(prefix.length))
+  if (lowered.startsWith(FOLDER_PREFIX)) {
+    const rawValue = normalizeProjectName(activeToken.slice(FOLDER_PREFIX.length))
     return projects
       .filter((project) => normalizeProjectName(project.name).includes(rawValue))
       .slice(0, 6)

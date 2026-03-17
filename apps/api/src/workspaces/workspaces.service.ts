@@ -60,8 +60,7 @@ const CAPABILITY_MODULES: Array<keyof OpenPortWorkspaceResourceCapabilities> = [
   'knowledge',
   'prompts',
   'tools',
-  'skills',
-  'access'
+  'skills'
 ]
 
 const CAPABILITY_ACTIONS: Array<keyof OpenPortWorkspaceModuleCapabilities> = [
@@ -390,8 +389,7 @@ export class WorkspacesService implements OnModuleInit {
       knowledge: capabilities.knowledge.read,
       prompts: capabilities.prompts.read,
       tools: capabilities.tools.read,
-      skills: capabilities.skills.read,
-      access: capabilities.access.read
+      skills: capabilities.skills.read
     }
   }
 
@@ -497,24 +495,21 @@ export class WorkspacesService implements OnModuleInit {
           knowledge: this.buildModuleCapabilities({ read: true, manage: true, import: true, export: true, validate: true }),
           prompts: this.buildModuleCapabilities({ read: true, manage: true, import: true, export: true, publish: true, share: true }),
           tools: this.buildModuleCapabilities({ read: true, manage: true, import: true, export: true, validate: true, share: true }),
-          skills: this.buildModuleCapabilities({ read: true, manage: true, import: true, export: true, share: true }),
-          access: this.buildModuleCapabilities({ read: true, manage: true })
+          skills: this.buildModuleCapabilities({ read: true, manage: true, import: true, export: true, share: true })
         },
         member: {
           models: this.buildModuleCapabilities({ read: true }),
           knowledge: this.buildModuleCapabilities({ read: true }),
           prompts: this.buildModuleCapabilities({ read: true }),
           tools: this.buildModuleCapabilities({ read: true }),
-          skills: this.buildModuleCapabilities({ read: true }),
-          access: this.buildModuleCapabilities({ read: false })
+          skills: this.buildModuleCapabilities({ read: true })
         },
         viewer: {
           models: this.buildModuleCapabilities({ read: true }),
           knowledge: this.buildModuleCapabilities({ read: true }),
           prompts: this.buildModuleCapabilities({ read: true }),
           tools: this.buildModuleCapabilities({ read: true }),
-          skills: this.buildModuleCapabilities({ read: true }),
-          access: this.buildModuleCapabilities({ read: false })
+          skills: this.buildModuleCapabilities({ read: true })
         }
       },
       updatedAt: new Date().toISOString()
@@ -530,24 +525,21 @@ export class WorkspacesService implements OnModuleInit {
           knowledge: this.buildModuleCapabilities({}),
           prompts: this.buildModuleCapabilities({}),
           tools: this.buildModuleCapabilities({}),
-          skills: this.buildModuleCapabilities({}),
-          access: this.buildModuleCapabilities({})
+          skills: this.buildModuleCapabilities({})
         },
         member: {
           models: this.buildModuleCapabilities({}),
           knowledge: this.buildModuleCapabilities({}),
           prompts: this.buildModuleCapabilities({}),
           tools: this.buildModuleCapabilities({}),
-          skills: this.buildModuleCapabilities({}),
-          access: this.buildModuleCapabilities({})
+          skills: this.buildModuleCapabilities({})
         },
         viewer: {
           models: this.buildModuleCapabilities({}),
           knowledge: this.buildModuleCapabilities({}),
           prompts: this.buildModuleCapabilities({}),
           tools: this.buildModuleCapabilities({}),
-          skills: this.buildModuleCapabilities({}),
-          access: this.buildModuleCapabilities({})
+          skills: this.buildModuleCapabilities({})
         }
       },
       updatedAt: new Date().toISOString()

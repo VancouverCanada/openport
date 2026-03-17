@@ -12,9 +12,16 @@ import { CreateWorkspaceToolDto } from './dto/create-workspace-tool.dto.js'
 import { UpdateWorkspaceToolDto } from './dto/update-workspace-tool.dto.js'
 import { ValidateWorkspaceToolDto } from './dto/validate-workspace-tool.dto.js'
 import { ImportWorkspaceToolPackageDto } from './dto/import-workspace-tool-package.dto.js'
+import { RunWorkspaceToolOrchestrationDto } from './dto/run-workspace-tool-orchestration.dto.js'
+import { ReplayWorkspaceToolOrchestrationRunDto } from './dto/replay-workspace-tool-orchestration-run.dto.js'
 import { CreateWorkspaceSkillDto } from './dto/create-workspace-skill.dto.js'
 import { UpdateWorkspaceSkillDto } from './dto/update-workspace-skill.dto.js'
 import { ShareWorkspaceResourceDto } from './dto/share-workspace-resource.dto.js'
+import { CreateWorkspaceConnectorDto } from './dto/create-workspace-connector.dto.js'
+import { UpdateWorkspaceConnectorDto } from './dto/update-workspace-connector.dto.js'
+import { CreateWorkspaceConnectorCredentialDto } from './dto/create-workspace-connector-credential.dto.js'
+import { UpdateWorkspaceConnectorCredentialDto } from './dto/update-workspace-connector-credential.dto.js'
+import { TriggerWorkspaceConnectorSyncDto } from './dto/trigger-workspace-connector-sync.dto.js'
 
 @Controller('workspace')
 export class WorkspaceResourcesController {
@@ -179,6 +186,40 @@ export class WorkspaceResourcesController {
     return this.resources.updateTool(resolveActor(req.headers), id, dto)
   }
 
+  @Post('tools/:id/orchestration/runs')
+  runToolOrchestration(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: RunWorkspaceToolOrchestrationDto
+  ) {
+    return this.resources.runToolOrchestration(resolveActor(req.headers), id, dto)
+  }
+
+  @Get('tools/:id/orchestration/runs')
+  listToolOrchestrationRuns(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.listToolOrchestrationRuns(resolveActor(req.headers), id)
+  }
+
+  @Get('tools/:id/orchestration/runs/:runId')
+  getToolOrchestrationRun(@Req() req: FastifyRequest, @Param('id') id: string, @Param('runId') runId: string) {
+    return this.resources.getToolOrchestrationRun(resolveActor(req.headers), id, runId)
+  }
+
+  @Post('tools/:id/orchestration/runs/:runId/replay')
+  replayToolOrchestrationRun(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Body() dto: ReplayWorkspaceToolOrchestrationRunDto
+  ) {
+    return this.resources.replayToolOrchestrationRun(resolveActor(req.headers), id, runId, dto)
+  }
+
+  @Post('tools/:id/orchestration/runs/:runId/cancel')
+  cancelToolOrchestrationRun(@Req() req: FastifyRequest, @Param('id') id: string, @Param('runId') runId: string) {
+    return this.resources.cancelToolOrchestrationRun(resolveActor(req.headers), id, runId)
+  }
+
   @Delete('tools/:id')
   deleteTool(@Req() req: FastifyRequest, @Param('id') id: string) {
     return this.resources.deleteTool(resolveActor(req.headers), id)
@@ -237,5 +278,83 @@ export class WorkspaceResourcesController {
   @Delete('skills/:id/access-grants/:grantId')
   revokeSkillShare(@Req() req: FastifyRequest, @Param('id') id: string, @Param('grantId') grantId: string) {
     return this.resources.revokeSkillShare(resolveActor(req.headers), id, grantId)
+  }
+
+  @Get('connectors/credentials')
+  listConnectorCredentials(@Req() req: FastifyRequest) {
+    return this.resources.listConnectorCredentials(resolveActor(req.headers))
+  }
+
+  @Post('connectors/credentials')
+  createConnectorCredential(@Req() req: FastifyRequest, @Body() dto: CreateWorkspaceConnectorCredentialDto) {
+    return this.resources.createConnectorCredential(resolveActor(req.headers), dto)
+  }
+
+  @Patch('connectors/credentials/:id')
+  updateConnectorCredential(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkspaceConnectorCredentialDto
+  ) {
+    return this.resources.updateConnectorCredential(resolveActor(req.headers), id, dto)
+  }
+
+  @Delete('connectors/credentials/:id')
+  deleteConnectorCredential(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.deleteConnectorCredential(resolveActor(req.headers), id)
+  }
+
+  @Get('connectors')
+  listConnectors(@Req() req: FastifyRequest) {
+    return this.resources.listConnectors(resolveActor(req.headers))
+  }
+
+  @Post('connectors')
+  createConnector(@Req() req: FastifyRequest, @Body() dto: CreateWorkspaceConnectorDto) {
+    return this.resources.createConnector(resolveActor(req.headers), dto)
+  }
+
+  @Get('connectors/:id')
+  getConnector(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.getConnector(resolveActor(req.headers), id)
+  }
+
+  @Patch('connectors/:id')
+  updateConnector(@Req() req: FastifyRequest, @Param('id') id: string, @Body() dto: UpdateWorkspaceConnectorDto) {
+    return this.resources.updateConnector(resolveActor(req.headers), id, dto)
+  }
+
+  @Delete('connectors/:id')
+  deleteConnector(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.deleteConnector(resolveActor(req.headers), id)
+  }
+
+  @Post('connectors/:id/sync')
+  triggerConnectorSync(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: TriggerWorkspaceConnectorSyncDto
+  ) {
+    return this.resources.triggerConnectorSync(resolveActor(req.headers), id, dto)
+  }
+
+  @Get('connectors/:id/tasks')
+  listConnectorTasks(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.listConnectorTasks(resolveActor(req.headers), id)
+  }
+
+  @Get('connectors/tasks/:taskId')
+  getConnectorTask(@Req() req: FastifyRequest, @Param('taskId') taskId: string) {
+    return this.resources.getConnectorTask(resolveActor(req.headers), taskId)
+  }
+
+  @Post('connectors/tasks/:taskId/retry')
+  retryConnectorTask(@Req() req: FastifyRequest, @Param('taskId') taskId: string) {
+    return this.resources.retryConnectorTask(resolveActor(req.headers), taskId)
+  }
+
+  @Get('connectors/:id/audit')
+  listConnectorAudit(@Req() req: FastifyRequest, @Param('id') id: string) {
+    return this.resources.listConnectorAudit(resolveActor(req.headers), id)
   }
 }

@@ -25,6 +25,13 @@ One-pass closure for the remaining parity gaps called out in audit:
 - Access operations use resource-in-context modal flows; compatibility route layer is removed.
 - Settings governance canonical path is `/settings/workspaces`.
 
+## Hard-closure addendum (2026-03-16)
+
+- Chat canonical route is unified to `/`; remaining `/chat` is compatibility redirect only.
+- Workspace permission helper fallbacks and entry actions now resolve to `/` instead of `/chat`.
+- Access module permission surface is removed from workspace capability policy DTO/service and frontend permission map.
+- Final compile blockers in connectors/resources/state-store path were resolved and verified in production builds.
+
 ## Verification
 
 - `npm --prefix apps/api run build` ✅

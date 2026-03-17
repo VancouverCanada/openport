@@ -79,12 +79,21 @@ import type {
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceSkillResponse,
   OpenPortWorkspaceTool,
+  OpenPortWorkspaceToolRun,
+  OpenPortWorkspaceToolRunResponse,
   OpenPortWorkspaceToolPackage,
   OpenPortWorkspaceToolPackageImportResponse,
   OpenPortWorkspaceToolPackageResponse,
   OpenPortWorkspaceToolValidationResponse,
   OpenPortWorkspaceToolValveSchemaField,
-  OpenPortWorkspaceToolResponse
+  OpenPortWorkspaceToolResponse,
+  OpenPortWorkspaceConnector,
+  OpenPortWorkspaceConnectorResponse,
+  OpenPortWorkspaceConnectorCredential,
+  OpenPortWorkspaceConnectorCredentialResponse,
+  OpenPortWorkspaceConnectorTask,
+  OpenPortWorkspaceConnectorTaskResponse,
+  OpenPortWorkspaceConnectorAuditEvent
 } from '@openport/product-contracts'
 import { getPublicApiBaseUrl } from './runtime-env'
 
@@ -147,9 +156,14 @@ export type {
   OpenPortWorkspaceResourcePrincipalType,
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceTool,
+  OpenPortWorkspaceToolRun,
   OpenPortWorkspaceToolPackage,
   OpenPortWorkspaceToolPackageImportResponse,
   OpenPortWorkspaceToolPackageResponse,
+  OpenPortWorkspaceConnector,
+  OpenPortWorkspaceConnectorCredential,
+  OpenPortWorkspaceConnectorTask,
+  OpenPortWorkspaceConnectorAuditEvent,
   OpenPortWorkspaceToolValidationResponse,
   OpenPortWorkspaceToolValveSchemaField,
   OpenPortSearchContextResponse,
@@ -1457,6 +1471,257 @@ export async function importWorkspaceToolPackage(
     method: 'POST',
     body: JSON.stringify(input)
   }, session)
+}
+
+export async function runWorkspaceToolOrchestration(
+  id: string,
+  input: {
+    inputPayload?: string
+    debug?: boolean
+    stepLimit?: number
+  } = {},
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceToolRunResponse> {
+  return request<OpenPortWorkspaceToolRunResponse>(`/workspace/tools/${id}/orchestration/runs`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function fetchWorkspaceToolOrchestrationRuns(
+  id: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortListResponse<OpenPortWorkspaceToolRun>> {
+  return request<OpenPortListResponse<OpenPortWorkspaceToolRun>>(
+    `/workspace/tools/${id}/orchestration/runs`,
+    { method: 'GET' },
+    session
+  )
+}
+
+export async function fetchWorkspaceToolOrchestrationRun(
+  id: string,
+  runId: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceToolRunResponse> {
+  return request<OpenPortWorkspaceToolRunResponse>(
+    `/workspace/tools/${id}/orchestration/runs/${runId}`,
+    { method: 'GET' },
+    session
+  )
+}
+
+export async function replayWorkspaceToolOrchestrationRun(
+  id: string,
+  runId: string,
+  input: {
+    inputPayload?: string
+    debug?: boolean
+  } = {},
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceToolRunResponse> {
+  return request<OpenPortWorkspaceToolRunResponse>(
+    `/workspace/tools/${id}/orchestration/runs/${runId}/replay`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input)
+    },
+    session
+  )
+}
+
+export async function cancelWorkspaceToolOrchestrationRun(
+  id: string,
+  runId: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceToolRunResponse> {
+  return request<OpenPortWorkspaceToolRunResponse>(
+    `/workspace/tools/${id}/orchestration/runs/${runId}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({})
+    },
+    session
+  )
+}
+
+export async function fetchWorkspaceConnectorCredentials(
+  session?: OpenPortSession | null
+): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorCredential>> {
+  return request<OpenPortListResponse<OpenPortWorkspaceConnectorCredential>>(
+    '/workspace/connectors/credentials',
+    { method: 'GET' },
+    session
+  )
+}
+
+export async function createWorkspaceConnectorCredential(
+  input: {
+    id?: string
+    name: string
+    provider: OpenPortWorkspaceConnector['adapter']
+    description?: string
+    fields: Array<{
+      key?: string
+      label?: string
+      secret?: boolean
+      value?: string
+    }>
+  },
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorCredentialResponse> {
+  return request<OpenPortWorkspaceConnectorCredentialResponse>('/workspace/connectors/credentials', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function updateWorkspaceConnectorCredential(
+  id: string,
+  input: {
+    name?: string
+    provider?: OpenPortWorkspaceConnector['adapter']
+    description?: string
+    fields?: Array<{
+      key?: string
+      label?: string
+      secret?: boolean
+      value?: string
+    }>
+  },
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorCredentialResponse> {
+  return request<OpenPortWorkspaceConnectorCredentialResponse>(`/workspace/connectors/credentials/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function deleteWorkspaceConnectorCredential(
+  id: string,
+  session?: OpenPortSession | null
+): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/workspace/connectors/credentials/${id}`, { method: 'DELETE' }, session)
+}
+
+export async function fetchWorkspaceConnectors(
+  session?: OpenPortSession | null
+): Promise<OpenPortListResponse<OpenPortWorkspaceConnector>> {
+  return request<OpenPortListResponse<OpenPortWorkspaceConnector>>('/workspace/connectors', { method: 'GET' }, session)
+}
+
+export async function fetchWorkspaceConnector(
+  id: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorResponse> {
+  return request<OpenPortWorkspaceConnectorResponse>(`/workspace/connectors/${id}`, { method: 'GET' }, session)
+}
+
+export async function createWorkspaceConnector(
+  input: {
+    id?: string
+    name: string
+    adapter: OpenPortWorkspaceConnector['adapter']
+    description?: string
+    enabled?: boolean
+    credentialId?: string | null
+    tags?: string[]
+    schedule?: OpenPortWorkspaceConnector['schedule']
+    syncPolicy?: OpenPortWorkspaceConnector['syncPolicy']
+    sourceConfig?: OpenPortWorkspaceConnector['sourceConfig']
+  },
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorResponse> {
+  return request<OpenPortWorkspaceConnectorResponse>('/workspace/connectors', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function updateWorkspaceConnector(
+  id: string,
+  input: {
+    name?: string
+    adapter?: OpenPortWorkspaceConnector['adapter']
+    description?: string
+    enabled?: boolean
+    credentialId?: string | null
+    tags?: string[]
+    schedule?: Partial<OpenPortWorkspaceConnector['schedule']>
+    syncPolicy?: Partial<OpenPortWorkspaceConnector['syncPolicy']>
+    sourceConfig?: Partial<OpenPortWorkspaceConnector['sourceConfig']>
+  },
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorResponse> {
+  return request<OpenPortWorkspaceConnectorResponse>(`/workspace/connectors/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function deleteWorkspaceConnector(id: string, session?: OpenPortSession | null): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/workspace/connectors/${id}`, { method: 'DELETE' }, session)
+}
+
+export async function triggerWorkspaceConnectorSync(
+  id: string,
+  input: {
+    mode?: OpenPortWorkspaceConnectorTask['mode']
+    debug?: boolean
+  } = {},
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+  return request<OpenPortWorkspaceConnectorTaskResponse>(`/workspace/connectors/${id}/sync`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, session)
+}
+
+export async function fetchWorkspaceConnectorTasks(
+  id: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorTask>> {
+  return request<OpenPortListResponse<OpenPortWorkspaceConnectorTask>>(
+    `/workspace/connectors/${id}/tasks`,
+    { method: 'GET' },
+    session
+  )
+}
+
+export async function fetchWorkspaceConnectorTask(
+  taskId: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+  return request<OpenPortWorkspaceConnectorTaskResponse>(
+    `/workspace/connectors/tasks/${taskId}`,
+    { method: 'GET' },
+    session
+  )
+}
+
+export async function retryWorkspaceConnectorTask(
+  taskId: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortWorkspaceConnectorTaskResponse> {
+  return request<OpenPortWorkspaceConnectorTaskResponse>(
+    `/workspace/connectors/tasks/${taskId}/retry`,
+    {
+      method: 'POST',
+      body: JSON.stringify({})
+    },
+    session
+  )
+}
+
+export async function fetchWorkspaceConnectorAudit(
+  id: string,
+  session?: OpenPortSession | null
+): Promise<OpenPortListResponse<OpenPortWorkspaceConnectorAuditEvent>> {
+  return request<OpenPortListResponse<OpenPortWorkspaceConnectorAuditEvent>>(
+    `/workspace/connectors/${id}/audit`,
+    { method: 'GET' },
+    session
+  )
 }
 
 export async function fetchWorkspaceSkills(

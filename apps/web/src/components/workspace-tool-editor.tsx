@@ -6,15 +6,20 @@ import {
   createWorkspaceTool,
   fetchIntegrations,
   fetchWorkspaceModels,
+  fetchWorkspaceToolOrchestrationRuns,
   fetchWorkspaceTools,
   fetchWorkspaceTool,
   loadSession,
+  replayWorkspaceToolOrchestrationRun,
+  runWorkspaceToolOrchestration,
+  cancelWorkspaceToolOrchestrationRun,
   updateWorkspaceModel,
   validateWorkspaceTool,
   updateWorkspaceTool,
   type OpenPortIntegration,
   type OpenPortWorkspaceModel,
   type OpenPortWorkspaceTool,
+  type OpenPortWorkspaceToolRun,
   type OpenPortWorkspaceToolValidationResponse
 } from '../lib/openport-api'
 import type { OpenPortWorkspaceToolValveSchemaField } from '../lib/openport-api'
@@ -113,8 +118,25 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
   const [manifestModalOpen, setManifestModalOpen] = useState(false)
   const [valvesModalOpen, setValvesModalOpen] = useState(false)
   const [syncingBindings, setSyncingBindings] = useState(false)
+  const [runInputPayload, setRunInputPayload] = useState('')
+  const [orchestrationRuns, setOrchestrationRuns] = useState<OpenPortWorkspaceToolRun[]>([])
+  const [orchestrationRunsLoading, setOrchestrationRunsLoading] = useState(false)
+  const [orchestrationRunning, setOrchestrationRunning] = useState(false)
+  const [orchestrationWorkingRunId, setOrchestrationWorkingRunId] = useState<string | null>(null)
   const { canManageModule } = useWorkspaceAuthority()
   const canManageModelBindings = canManageModule('models')
+
+  async function refreshOrchestrationRuns(targetToolId: string): Promise<void> {
+    setOrchestrationRunsLoading(true)
+    try {
+      const response = await fetchWorkspaceToolOrchestrationRuns(targetToolId, loadSession())
+      setOrchestrationRuns(response.items)
+    } catch {
+      setOrchestrationRuns([])
+    } finally {
+      setOrchestrationRunsLoading(false)
+    }
+  }
 
   useEffect(() => {
     let isActive = true
@@ -123,12 +145,14 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
       fetchIntegrations(loadSession()).catch(() => ({ items: [] })),
       fetchWorkspaceModels(loadSession()).catch(() => ({ items: [] })),
       fetchWorkspaceTools(loadSession()).catch(() => ({ items: [] })),
-      toolId ? fetchWorkspaceTool(toolId, loadSession()).catch(() => null) : Promise.resolve(null)
-    ]).then(([integrationsResponse, modelsResponse, toolsResponse, toolResponse]) => {
+      toolId ? fetchWorkspaceTool(toolId, loadSession()).catch(() => null) : Promise.resolve(null),
+      toolId ? fetchWorkspaceToolOrchestrationRuns(toolId, loadSession()).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
+    ]).then(([integrationsResponse, modelsResponse, toolsResponse, toolResponse, runsResponse]) => {
       if (!isActive) return
       setIntegrations(integrationsResponse.items)
       setModels(modelsResponse.items)
       setAvailableTools(toolsResponse.items)
+      setOrchestrationRuns(toolId ? runsResponse.items : [])
       if (toolId) {
         setLinkedModelIds(
           modelsResponse.items
@@ -145,6 +169,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
         setBuiltinModelIds([])
         setExecutionChainEnabled(false)
         setExecutionChainSteps([])
+        setOrchestrationRuns([])
       }
       if (toolResponse?.item) {
         setName(toolResponse.item.name)
@@ -552,6 +577,69 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
       notify('error', 'Unable to save tool.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleRunOrchestration(): Promise<void> {
+    const persistedToolId = toolId || ''
+    if (!persistedToolId) {
+      notify('error', 'Save the tool before running orchestration.')
+      return
+    }
+    setOrchestrationRunning(true)
+    try {
+      await runWorkspaceToolOrchestration(
+        persistedToolId,
+        {
+          inputPayload: runInputPayload,
+          debug: true
+        },
+        loadSession()
+      )
+      notify('success', 'Orchestration run queued.')
+      await refreshOrchestrationRuns(persistedToolId)
+    } catch {
+      notify('error', 'Unable to run orchestration.')
+    } finally {
+      setOrchestrationRunning(false)
+    }
+  }
+
+  async function handleReplayRun(runId: string): Promise<void> {
+    const persistedToolId = toolId || ''
+    if (!persistedToolId) return
+    setOrchestrationWorkingRunId(runId)
+    try {
+      await replayWorkspaceToolOrchestrationRun(
+        persistedToolId,
+        runId,
+        {
+          inputPayload: runInputPayload || undefined,
+          debug: true
+        },
+        loadSession()
+      )
+      notify('success', 'Replay queued.')
+      await refreshOrchestrationRuns(persistedToolId)
+    } catch {
+      notify('error', 'Unable to replay run.')
+    } finally {
+      setOrchestrationWorkingRunId(null)
+    }
+  }
+
+  async function handleCancelRun(runId: string): Promise<void> {
+    const persistedToolId = toolId || ''
+    if (!persistedToolId) return
+    setOrchestrationWorkingRunId(runId)
+    try {
+      await cancelWorkspaceToolOrchestrationRun(persistedToolId, runId, loadSession())
+      notify('success', 'Run cancelled.')
+      await refreshOrchestrationRuns(persistedToolId)
+    } catch {
+      notify('error', 'Unable to cancel run.')
+    } finally {
+      setOrchestrationWorkingRunId(null)
     }
   }
 
@@ -1115,6 +1203,95 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
                 ))
               )}
             </div>
+          </section>
+          <section className="workspace-editor-section">
+            <ResourceCardCopy className="workspace-editor-section-heading">
+              <ResourceCardHeading><strong>Runtime orchestration control panel</strong></ResourceCardHeading>
+              <span>Run, replay, cancel and inspect step-level execution snapshots for this tool chain.</span>
+            </ResourceCardCopy>
+            {toolId ? (
+              <>
+                <Field label="Run input payload">
+                  <textarea
+                    onChange={(event) => setRunInputPayload(event.target.value)}
+                    placeholder='{"message":"hello"}'
+                    rows={4}
+                    value={runInputPayload}
+                  />
+                </Field>
+                <div className="workspace-editor-actions">
+                  <CapsuleButton
+                    disabled={orchestrationRunning}
+                    onClick={() => void handleRunOrchestration()}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {orchestrationRunning ? 'Running…' : 'Run orchestration'}
+                  </CapsuleButton>
+                  <CapsuleButton
+                    disabled={orchestrationRunsLoading}
+                    onClick={() => {
+                      if (!toolId) return
+                      void refreshOrchestrationRuns(toolId)
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Refresh runs
+                  </CapsuleButton>
+                </div>
+                {orchestrationRunsLoading ? <p className="workspace-module-empty">Loading runs…</p> : null}
+                {!orchestrationRunsLoading && orchestrationRuns.length === 0 ? (
+                  <p className="workspace-module-empty">No orchestration runs yet.</p>
+                ) : null}
+                <div className="workspace-valve-list">
+                  {orchestrationRuns.slice(0, 10).map((run) => (
+                    <div key={run.id} className="workspace-valve-schema-row">
+                      <strong>{run.trigger}</strong>
+                      <Tag>{run.status}</Tag>
+                      <span>{run.steps.filter((step) => step.status === 'success').length} success steps</span>
+                      <span>{run.steps.filter((step) => step.status === 'failed').length} failed steps</span>
+                      <span>{run.errorMessage || 'no error'}</span>
+                      <CapsuleButton
+                        disabled={orchestrationWorkingRunId === run.id}
+                        onClick={() => void handleReplayRun(run.id)}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        Replay
+                      </CapsuleButton>
+                      {run.status === 'queued' || run.status === 'running' ? (
+                        <CapsuleButton
+                          disabled={orchestrationWorkingRunId === run.id}
+                          onClick={() => void handleCancelRun(run.id)}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          Cancel
+                        </CapsuleButton>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="workspace-valve-list">
+                  {orchestrationRuns[0]?.steps?.map((step) => (
+                    <div key={step.id} className="workspace-valve-schema-row">
+                      <strong>{step.toolName}</strong>
+                      <Tag>{step.status}</Tag>
+                      <Tag>{step.mode}</Tag>
+                      <Tag>{step.when}</Tag>
+                      <span>{step.branchPath}</span>
+                      <span>{step.condition || 'always'}</span>
+                      <span>{step.errorMessage || step.outputKey || 'no output key'}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="workspace-module-empty">Save this tool first to enable orchestration runtime controls.</p>
+            )}
           </section>
           <div className="workspace-editor-actions">
             <CapsuleButton disabled={saving} type="submit" variant="primary">{saving ? 'Saving…' : toolId ? 'Save tool' : 'Create tool'}</CapsuleButton>
