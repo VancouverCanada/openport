@@ -3,6 +3,7 @@
 import type { OpenPortChatSettings, OpenPortWorkspaceModel } from '@openport/product-contracts'
 import type { OpenPortProject } from './chat-workspace'
 import type { OpenPortChatUiPreferences } from './chat-ui-preferences'
+import { getProjectPrimaryModelRoute } from './chat-workspace'
 
 export type ChatSettingSource = 'chat' | 'project' | 'interface' | 'workspace' | 'runtime'
 
@@ -25,7 +26,7 @@ export function getInheritedChatSettings(
     valves: {
       ...baseSettings.valves,
       modelRoute:
-        project?.data.defaultModelRoute ||
+        getProjectPrimaryModelRoute(project) ||
         interfaceDefaults.modelRoute ||
         workspaceDefaultModelRoute ||
         baseSettings.valves.modelRoute,
@@ -50,7 +51,8 @@ export function getModelRouteSource(
   models: OpenPortWorkspaceModel[]
 ): ChatSettingSource {
   const workspaceDefaultRoute = getWorkspaceDefaultModelRoute(models)
-  if (route === (project?.data.defaultModelRoute || null)) return 'project'
+  const projectRoute = getProjectPrimaryModelRoute(project)
+  if (route === (projectRoute || null)) return 'project'
   if (route === (preferences.chatDefaults.modelRoute || null)) return 'interface'
   if (route === workspaceDefaultRoute) return 'workspace'
   if (route === 'openport/local') return 'runtime'

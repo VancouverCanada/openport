@@ -241,7 +241,13 @@ export class SearchService {
       .filter((note) => {
         if (filters.pinned !== undefined && note.pinned !== filters.pinned) return false
         if (filters.shared !== undefined && this.isSharedNote(note) !== filters.shared) return false
-        if (filters.tag && !note.tags.some((tag) => tag.toLowerCase() === filters.tag)) return false
+        if (filters.tag) {
+          if (filters.tag === 'none') {
+            if (note.tags.length > 0) return false
+          } else if (!note.tags.some((tag) => tag.toLowerCase() === filters.tag)) {
+            return false
+          }
+        }
         if (!filters.text) return true
         const haystack = `${note.title} ${note.contentMd} ${note.tags.join(' ')}`.toLowerCase()
         return haystack.includes(filters.text.toLowerCase())
@@ -259,7 +265,13 @@ export class SearchService {
     if (filters.archived !== undefined && chat.archived !== filters.archived) return false
     if (filters.pinned !== undefined && chat.pinned !== filters.pinned) return false
     if (filters.shared !== undefined && this.isSharedChat(chat) !== filters.shared) return false
-    if (filters.tag && !chat.tags.some((tag) => tag.toLowerCase() === filters.tag)) return false
+    if (filters.tag) {
+      if (filters.tag === 'none') {
+        if (chat.tags.length > 0) return false
+      } else if (!chat.tags.some((tag) => tag.toLowerCase() === filters.tag)) {
+        return false
+      }
+    }
     if (!filters.text) return true
 
     const lowered = filters.text.toLowerCase()
@@ -318,7 +330,7 @@ export class SearchService {
       type: 'chat',
       title: chat.title,
       excerpt,
-      href: `/?thread=${chat.id}`,
+      href: `/c/${chat.id}`,
       updatedAt: chat.updatedAt,
       metadata: 'Chat',
       projectId: chat.folderId ?? chat.settings.projectId ?? null,

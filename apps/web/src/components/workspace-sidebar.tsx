@@ -3,6 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import type { DragEvent } from 'react'
 import { useEffect, useState, useTransition } from 'react'
+import { AnimatePresence, m } from 'framer-motion'
 import {
   buildProjectEventsUrl,
   createChatSession,
@@ -12,6 +13,7 @@ import {
   fetchChatSessions,
   fetchProjects,
   fetchWorkspaceModels,
+  importChatSessions,
   importProjectBundle,
   loadSession,
   moveProject as moveProjectRemote,
@@ -58,6 +60,10 @@ const appLinks = [
   { href: '/dashboard/notes', label: 'Notes', icon: 'solar:notebook-outline' },
   { href: '/workspace', label: 'Workspace', icon: 'solar:widget-5-outline' }
 ]
+
+const layoutMotion = {
+  layout: { type: 'spring', damping: 46, stiffness: 420 }
+} as const
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/dashboard') {
@@ -451,6 +457,35 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     return null
   }
 
+  function isProjectExportBundle(value: unknown): value is OpenPortProjectExportBundle {
+    if (!value || typeof value !== 'object') return false
+    const candidate = value as {
+      project?: { id?: unknown; name?: unknown }
+      descendants?: unknown
+      chats?: unknown
+    }
+    return Boolean(
+      candidate.project &&
+        typeof candidate.project.id === 'string' &&
+        typeof candidate.project.name === 'string' &&
+        Array.isArray(candidate.descendants) &&
+        Array.isArray(candidate.chats)
+    )
+  }
+
+  function extractChatImportItems(value: unknown): unknown[] | null {
+    if (Array.isArray(value)) return value
+    if (!value || typeof value !== 'object') return null
+
+    const candidate = value as {
+      items?: unknown
+      chats?: unknown
+    }
+    if (Array.isArray(candidate.items)) return candidate.items
+    if (Array.isArray(candidate.chats)) return candidate.chats
+    return null
+  }
+
   function getThreadHref(threadId: string): string {
     const project = selectedProjectId || threads.find((thread) => thread.id === threadId)?.settings.projectId
     const params = new URLSearchParams()
@@ -485,12 +520,51 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
   async function importProject(file: File, parentId: string | null = null): Promise<void> {
     try {
       const raw = await file.text()
-      const bundle = JSON.parse(raw) as OpenPortProjectExportBundle
-      await importProjectBundle(bundle, parentId, loadSession())
+      const payload = JSON.parse(raw) as unknown
+      if (isProjectExportBundle(payload)) {
+        await importProjectBundle(payload, parentId, loadSession())
+        await refreshProjects()
+        notify('success', 'Project imported.')
+        return
+      }
+
+      const items = extractChatImportItems(payload)
+      if (!items || items.length === 0) {
+        notify('error', 'Unsupported JSON import payload.')
+        return
+      }
+
+      const beforeResponse = await fetchChatSessions({ archived: isArchivedView }, loadSession())
+      const beforeIds = new Set(beforeResponse.items.map((item) => item.id))
+      const importResponse = await importChatSessions(items, loadSession())
+      const importedSessionIds = importResponse.items
+        .filter((item) => !beforeIds.has(item.id))
+        .map((item) => item.id)
+
+      if (parentId && importedSessionIds.length > 0) {
+        const importedById = new Map(importResponse.items.map((item) => [item.id, item]))
+        await Promise.all(
+          importedSessionIds.map((sessionId) => {
+            const session = importedById.get(sessionId)
+            if (!session) return Promise.resolve()
+            return updateChatSessionSettings(
+              sessionId,
+              {
+                ...session.settings,
+                projectId: parentId
+              },
+              loadSession()
+            )
+          })
+        )
+      }
+
+      const afterResponse = await fetchChatSessions({ archived: isArchivedView }, loadSession())
+      setThreads(afterResponse.items)
       await refreshProjects()
-      notify('success', 'Project imported.')
+      notify('success', importResponse.imported > 0 ? `Imported ${importResponse.imported} chat(s).` : 'No new chats imported.')
     } catch {
-      notify('error', 'Unable to import project bundle.')
+      notify('error', 'Unable to import JSON data.')
     }
   }
 
@@ -580,7 +654,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         >
           <span className="workspace-sidebar-utility-copy">
             <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:pen-new-square-outline'} size={18} />
-            <span>{isPending ? 'Creating chat...' : 'New Chat'}</span>
+            <span>{isPending ? 'Creating chat...' : 'New chat'}</span>
           </span>
         </TextButton>
 
@@ -673,8 +747,9 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
             </TextButton>
 
             {groupedThreads.length > 0 ? (
-              groupedThreads.map((group) => (
-                <div key={group.label} className="workspace-sidebar-history-group">
+              <AnimatePresence initial={false}>
+                {groupedThreads.map((group) => (
+                <m.div key={group.label} className="workspace-sidebar-history-group" layout transition={layoutMotion}>
                   <TextButton
                     onClick={() => toggleHistoryGroup(group.label)}
                     variant="sidebar"
@@ -688,11 +763,17 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                   </TextButton>
 
                   {collapsedGroups[group.label] ? null : (
-                    <div className="workspace-sidebar-history-list">
-                      {group.items.slice(0, 10).map((thread) => (
-                        <TextButton
-                          active={activeThreadId === thread.id}
+                    <m.div className="workspace-sidebar-history-list" layout transition={layoutMotion}>
+                      <AnimatePresence initial={false}>
+                        {group.items.slice(0, 10).map((thread) => (
+                        <m.div
                           key={thread.id}
+                          layout="position"
+                          layoutId={`sidebar-thread-${thread.id}`}
+                          transition={layoutMotion}
+                        >
+                          <TextButton
+                          active={activeThreadId === thread.id}
                           href={getThreadHref(thread.id)}
                           onClick={() => {
                             if (isMobile) toggleSidebar()
@@ -702,11 +783,14 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                           <Iconify icon="solar:chat-round-line-outline" size={16} />
                           <span>{thread.title}</span>
                         </TextButton>
+                        </m.div>
                       ))}
-                    </div>
+                      </AnimatePresence>
+                    </m.div>
                   )}
-                </div>
-              ))
+                </m.div>
+              ))}
+              </AnimatePresence>
             ) : (
               <p className="workspace-sidebar-empty">
                 {isArchivedView ? 'No archived chats yet.' : 'No recent chats yet.'}
@@ -752,19 +836,20 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         title="Projects"
       >
         {uiPreferences.collapsedSidebarSections.projects ? null : (
-          <div className="workspace-sidebar-project-list">
+          <m.div className="workspace-sidebar-project-list" layout transition={layoutMotion}>
             {projects.some((project) => project.parentId === null && !project.meta.hiddenInSidebar) ? (
-              projects
-                .filter((project) => project.parentId === null && !project.meta.hiddenInSidebar)
-                .sort((left, right) =>
-                  left.name.localeCompare(right.name, undefined, {
-                    numeric: true,
-                    sensitivity: 'base'
-                  })
-                )
-                .map((project) => (
+              <AnimatePresence initial={false}>
+                {projects
+                  .filter((project) => project.parentId === null && !project.meta.hiddenInSidebar)
+                  .sort((left, right) =>
+                    left.name.localeCompare(right.name, undefined, {
+                      numeric: true,
+                      sensitivity: 'base'
+                    })
+                  )
+                  .map((project) => (
+                  <m.div key={project.id} layout="position" layoutId={`sidebar-project-root-${project.id}`} transition={layoutMotion}>
                   <ProjectTreeItem
-                    key={project.id}
                     activeThreadId={activeThreadId}
                     getThreadHref={getThreadHref}
                     onAssignThreadToProject={(threadId, projectId) => {
@@ -785,11 +870,13 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                     selectedProjectId={selectedProjectId}
                     threads={threads}
                   />
-                ))
+                  </m.div>
+                ))}
+              </AnimatePresence>
             ) : (
-              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'Projects appear here.'}</p>
+              <p className="workspace-sidebar-empty">{isProjectsLoading ? 'Loading projects…' : 'No projects yet.'}</p>
             )}
-          </div>
+          </m.div>
         )}
       </SidebarSection>
 
@@ -814,27 +901,34 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
             </IconButton>
           }
           className="workspace-sidebar-pinned"
-          title="Pinned Models"
+          title="Pinned"
         >
           {uiPreferences.collapsedSidebarSections.pinnedModels ? null : (
-            <div className="workspace-sidebar-pinned-list">
+            <m.div className="workspace-sidebar-pinned-list" layout transition={layoutMotion}>
               {pinnedModels.map((model) => (
-                <div
+                <m.div
                   className={`workspace-sidebar-pinned-row${draggedPinnedModelRoute === model.route ? ' is-dragging' : ''}`}
                   draggable
                   key={model.id}
+                  layout="position"
+                  layoutId={`sidebar-pinned-model-${model.route}`}
                   onDragEnd={() => setDraggedPinnedModelRoute(null)}
                   onDragOver={(event) => event.preventDefault()}
                   onDragStart={(event) => {
-                    event.dataTransfer.setData('text/plain', model.route)
+                    const dataTransfer = (event as { dataTransfer?: DataTransfer }).dataTransfer
+                    if (!dataTransfer) return
+                    dataTransfer.setData('text/plain', model.route)
                     setDraggedPinnedModelRoute(model.route)
                   }}
                   onDrop={(event) => {
                     event.preventDefault()
-                    const route = event.dataTransfer.getData('text/plain')
+                    const dataTransfer = (event as { dataTransfer?: DataTransfer }).dataTransfer
+                    if (!dataTransfer) return
+                    const route = dataTransfer.getData('text/plain')
                     movePinnedModelRoute(route, model.route)
                     setDraggedPinnedModelRoute(null)
                   }}
+                  transition={layoutMotion}
                 >
                   <TextButton
                     active={activeModelRoute === model.route && !activeThreadId}
@@ -848,12 +942,11 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
                     <Iconify icon="solar:bookmark-bold" size={15} />
                     <span className="workspace-sidebar-pinned-copy">
                       <strong>{model.name}</strong>
-                      <span>{model.route}</span>
                     </span>
                   </TextButton>
-                </div>
+                </m.div>
               ))}
-            </div>
+            </m.div>
           )}
         </SidebarSection>
       ) : null}

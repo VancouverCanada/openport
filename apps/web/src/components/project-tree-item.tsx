@@ -2,6 +2,7 @@
 
 import type { CSSProperties, DragEvent } from 'react'
 import { useMemo, useState } from 'react'
+import { AnimatePresence, m } from 'framer-motion'
 import type { OpenPortChatSession } from '../lib/openport-api'
 import { getProjectChildren, type OpenPortProject } from '../lib/chat-workspace'
 import { Iconify } from './iconify'
@@ -27,6 +28,10 @@ type ProjectTreeItemProps = {
   selectedProjectId: string | null
   threads: OpenPortChatSession[]
 }
+
+const layoutMotion = {
+  layout: { type: 'spring', damping: 44, stiffness: 400 }
+} as const
 
 type DragPayload =
   | {
@@ -139,7 +144,13 @@ export function ProjectTreeItem({
   }
 
   return (
-    <div className={`project-tree-item${draggedOver ? ' is-dragged-over' : ''}`} style={{ '--project-depth': depth } as CSSProperties}>
+    <m.div
+      className={`project-tree-item${draggedOver ? ' is-dragged-over' : ''}`}
+      layout="position"
+      layoutId={`project-tree-item-${project.id}`}
+      style={{ '--project-depth': depth } as CSSProperties}
+      transition={layoutMotion}
+    >
       <div
         className={`project-tree-row${selectedProjectId === project.id ? ' is-active' : ''}`}
         draggable
@@ -203,8 +214,9 @@ export function ProjectTreeItem({
       </div>
 
       {project.isExpanded ? (
-        <div
+        <m.div
           className="project-tree-children"
+          layout
           onDragLeave={() => setDraggedOver(false)}
           onDragOver={(event) => {
             event.preventDefault()
@@ -212,50 +224,55 @@ export function ProjectTreeItem({
           }}
           onDrop={handleDrop}
         >
-          {visibleChildProjects.map((childProject) => (
-            <ProjectTreeItem
-              key={childProject.id}
-              activeThreadId={activeThreadId}
-              onAssignThreadToProject={onAssignThreadToProject}
-              depth={depth + 1}
-              getThreadHref={getThreadHref}
-              onCreateChildProject={onCreateChildProject}
-              onDeleteProject={onDeleteProject}
-              onImportProject={onImportProject}
-              onExportProject={onExportProject}
-              onMoveProject={onMoveProject}
-              onOpenEditProject={onOpenEditProject}
-              onSelectProject={onSelectProject}
-              onToggleProject={onToggleProject}
-              project={childProject}
-              projects={projects}
-              selectedProjectId={selectedProjectId}
-              threads={threads}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {visibleChildProjects.map((childProject) => (
+              <ProjectTreeItem
+                key={childProject.id}
+                activeThreadId={activeThreadId}
+                onAssignThreadToProject={onAssignThreadToProject}
+                depth={depth + 1}
+                getThreadHref={getThreadHref}
+                onCreateChildProject={onCreateChildProject}
+                onDeleteProject={onDeleteProject}
+                onExportProject={onExportProject}
+                onImportProject={onImportProject}
+                onMoveProject={onMoveProject}
+                onOpenEditProject={onOpenEditProject}
+                onSelectProject={onSelectProject}
+                onToggleProject={onToggleProject}
+                project={childProject}
+                projects={projects}
+                selectedProjectId={selectedProjectId}
+                threads={threads}
+              />
+            ))}
+          </AnimatePresence>
 
-          {projectChats.map((thread) => (
-            <a
-              key={thread.id}
-              className={`project-tree-chat-link${activeThreadId === thread.id ? ' is-active' : ''}`}
-              draggable
-              href={getThreadHref(thread.id)}
-              onDragStart={(event) => {
-                event.dataTransfer.setData(
-                  'text/plain',
-                  JSON.stringify({
-                    type: 'chat',
-                    id: thread.id
-                  })
-                )
-              }}
-            >
-              <Iconify icon="solar:chat-round-line-outline" size={14} />
-              <span>{thread.title}</span>
-            </a>
-          ))}
-        </div>
+          <AnimatePresence initial={false}>
+            {projectChats.map((thread) => (
+              <m.div key={thread.id} layout="position" layoutId={`project-tree-chat-${thread.id}`} transition={layoutMotion}>
+                <a
+                  className={`project-tree-chat-link${activeThreadId === thread.id ? ' is-active' : ''}`}
+                  draggable
+                  href={getThreadHref(thread.id)}
+                  onDragStart={(event: DragEvent<HTMLAnchorElement>) => {
+                    event.dataTransfer.setData(
+                      'text/plain',
+                      JSON.stringify({
+                        type: 'chat',
+                        id: thread.id
+                      })
+                    )
+                  }}
+                >
+                  <Iconify icon="solar:chat-round-line-outline" size={14} />
+                  <span>{thread.title}</span>
+                </a>
+              </m.div>
+            ))}
+          </AnimatePresence>
+        </m.div>
       ) : null}
-    </div>
+    </m.div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Iconify } from '../iconify'
 import { IconButton } from './icon-button'
 
@@ -33,10 +33,29 @@ export function ModalShell({
   overlayClassName = 'project-dialog-overlay',
   title
 }: ModalShellProps) {
-  if (!open) return null
+  const [isMounted, setIsMounted] = useState(open)
+  const [isVisible, setIsVisible] = useState(open)
+
+  useEffect(() => {
+    if (open) {
+      setIsMounted(true)
+      const id = window.requestAnimationFrame(() => setIsVisible(true))
+      return () => window.cancelAnimationFrame(id)
+    }
+
+    setIsVisible(false)
+    const timeout = window.setTimeout(() => setIsMounted(false), 180)
+    return () => window.clearTimeout(timeout)
+  }, [open])
+
+  if (!isMounted) return null
 
   return (
-    <div aria-modal="true" className={overlayClassName} role="dialog">
+    <div
+      aria-modal="true"
+      className={`${overlayClassName}${isVisible ? ' is-open' : ' is-closing'}`}
+      role="dialog"
+    >
       <button aria-label={closeLabel} className={backdropClassName || 'project-dialog-backdrop'} onClick={onClose} type="button" />
 
       <div className={dialogClassName}>

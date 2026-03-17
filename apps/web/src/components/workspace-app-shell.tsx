@@ -1,13 +1,15 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Suspense, useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Shortcut, WORKSPACE_SHORTCUT_EVENT, isShortcutMatch, shortcuts } from '../lib/shortcuts'
 import { AppShellStateProvider, useAppShellState } from './app-shell-state'
+import { Iconify } from './iconify'
 import { KeyboardShortcutsModal } from './keyboard-shortcuts-modal'
 import { WorkspaceSearchModal } from './workspace-search-modal'
 import { WorkspaceSidebar } from './workspace-sidebar'
 import { WorkspaceToastRegion } from './workspace-toast-region'
+import { IconButton } from './ui/icon-button'
 
 async function copyToClipboard(value: string): Promise<void> {
   if (!value.trim()) return
@@ -27,9 +29,14 @@ function getLastAssistantCodeBlock(): string {
 
 function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter()
+  const pathname = usePathname()
   const [showSearch, setShowSearch] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const { isMobile, showSidebar, sidebarWidth, toggleSidebar, setSidebarWidth } = useAppShellState()
+
+  function isPathActive(href: string): boolean {
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
 
   useEffect(() => {
     const openShortcuts = () => setShowShortcuts(true)
@@ -147,6 +154,62 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
     >
       {isMobile && showSidebar ? <button aria-label="Close sidebar" className="workspace-app-sidebar-backdrop" onClick={toggleSidebar} type="button" /> : null}
       <div className={`workspace-app-layout${showSidebar ? '' : ' is-sidebar-collapsed'}${isMobile ? ' is-mobile' : ''}`}>
+        {!showSidebar && !isMobile ? (
+          <aside className="workspace-sidebar-compact" aria-label="Collapsed workspace navigation">
+            <IconButton
+              aria-label="Expand sidebar"
+              className="workspace-sidebar-compact-toggle"
+              onClick={toggleSidebar}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Iconify icon="solar:sidebar-minimalistic-outline" size={18} />
+            </IconButton>
+
+            <nav className="workspace-sidebar-compact-nav" aria-label="Primary">
+              <IconButton
+                active={isPathActive('/chat')}
+                aria-label="Chat"
+                onClick={() => router.push('/chat')}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Iconify icon="solar:chat-round-line-outline" size={18} />
+              </IconButton>
+              <IconButton
+                aria-label="Search"
+                onClick={() => setShowSearch(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Iconify icon="solar:magnifer-outline" size={18} />
+              </IconButton>
+              <IconButton
+                active={isPathActive('/dashboard/notes') || isPathActive('/notes')}
+                aria-label="Notes"
+                onClick={() => router.push('/dashboard/notes')}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Iconify icon="solar:notebook-outline" size={18} />
+              </IconButton>
+              <IconButton
+                active={isPathActive('/dashboard/workspace') || isPathActive('/workspace')}
+                aria-label="Workspace"
+                onClick={() => router.push('/dashboard/workspace')}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Iconify icon="solar:widget-outline" size={18} />
+              </IconButton>
+            </nav>
+          </aside>
+        ) : null}
         {showSidebar ? (
           <Suspense fallback={<aside className="workspace-sidebar" />}>
             <WorkspaceSidebar onOpenSearch={() => setShowSearch(true)} />

@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator'
+import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator'
 import { Type } from 'class-transformer'
 
 class ProjectMetaDto {
@@ -65,6 +65,11 @@ class ProjectDataDto {
   @IsOptional()
   @IsString()
   defaultModelRoute?: string | null
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  modelRoutes?: string[]
 
   @IsOptional()
   @ValidateNested({ each: true })

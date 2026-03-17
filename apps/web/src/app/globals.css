@@ -10,6 +10,11 @@
   --accent-soft: rgba(14, 143, 121, 0.12);
   --signal: #f29f05;
   --shadow: 0 20px 50px rgba(32, 49, 43, 0.12);
+  --motion-fast: 260ms;
+  --motion-base: 380ms;
+  --motion-slow: 560ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --font-display: var(--font-serif), "Georgia", "Times New Roman", serif;
   --font-code: var(--font-mono), ui-monospace, "SFMono-Regular", "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", "Courier New", monospace;
 }
@@ -29,6 +34,18 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   background: #ffffff;
+}
+
+.app-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 110;
+  height: 2px;
+  transform-origin: 0%;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.78) 0%, rgba(15, 23, 42, 0.38) 100%);
+  pointer-events: none;
 }
 
 a {
@@ -440,6 +457,175 @@ textarea {
   }
 }
 
+@keyframes menuScaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes menuScaleOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes menuFadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInForward {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInBackward {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chatControlsIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chatControlsOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+@keyframes emptyStageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes messageBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalPanelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.988);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media (max-width: 960px) {
   .hero-grid,
   .dashboard-shell,
@@ -471,7 +657,7 @@ textarea {
 .landing-page--entry {
   display: grid;
   min-height: 100vh;
-  background: #fbfbfa;
+  background: #ffffff;
 }
 
 .landing-navbar {
@@ -561,8 +747,59 @@ textarea {
 }
 
 .landing-auth-copy--entry {
-  gap: 16px;
-  width: min(280px, 100%);
+  gap: 12px;
+  width: min(260px, 100%);
+}
+
+.landing-auth-copy--bare {
+  gap: 18px;
+}
+
+.landing-entry-motion {
+  width: min(980px, calc(100vw - 48px));
+}
+
+.entry-carousel {
+  width: min(980px, 100%);
+}
+
+.entry-carousel-viewport {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f3f4f6;
+}
+
+.entry-carousel-container {
+  display: flex;
+  touch-action: pan-y pinch-zoom;
+}
+
+.entry-carousel-slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.entry-carousel-parallax {
+  position: relative;
+  height: clamp(180px, 34vw, 300px);
+  overflow: hidden;
+}
+
+.entry-carousel-parallax::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.18) 100%);
+}
+
+.entry-carousel-parallax img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.16);
+  will-change: transform;
 }
 
 .landing-auth-kicker {
@@ -607,7 +844,12 @@ textarea {
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  transition:
+    transform var(--motion-base) var(--motion-ease-out),
+    background-color var(--motion-base) var(--motion-ease-out),
+    border-color var(--motion-base) var(--motion-ease-out),
+    color var(--motion-base) var(--motion-ease-out);
+  transform-origin: center;
 }
 
 .capsule-button--primary {
@@ -648,7 +890,11 @@ textarea {
 }
 
 .capsule-button:hover {
-  transform: translateY(-1px);
+  transform: scale(1.02);
+}
+
+.capsule-button:active {
+  transform: scale(0.97);
 }
 
 .capsule-button.is-active {
@@ -680,7 +926,20 @@ textarea {
   background: transparent;
   color: rgba(15, 23, 42, 0.62);
   cursor: pointer;
-  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+  transition:
+    transform var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-base) var(--motion-ease-out),
+    color var(--motion-base) var(--motion-ease-out),
+    border-color var(--motion-base) var(--motion-ease-out);
+  transform-origin: center;
+}
+
+.icon-button:hover {
+  transform: scale(1.04);
+}
+
+.icon-button:active {
+  transform: scale(0.96);
 }
 
 .icon-button--sm {
@@ -738,6 +997,19 @@ textarea {
   color: rgba(15, 23, 42, 0.74);
   cursor: pointer;
   text-decoration: none;
+  transition:
+    transform var(--motion-fast) var(--motion-ease-out),
+    color var(--motion-base) var(--motion-ease-out),
+    background-color var(--motion-base) var(--motion-ease-out);
+  transform-origin: center left;
+}
+
+.text-button:hover {
+  transform: scale(1.015);
+}
+
+.text-button:active {
+  transform: scale(0.985);
 }
 
 .text-button:disabled {
@@ -832,10 +1104,11 @@ textarea {
   display: grid;
   grid-template-columns: var(--openport-sidebar-width, 252px) 12px minmax(0, 1fr);
   min-height: 100vh;
+  transition: grid-template-columns var(--motion-slow) var(--motion-ease-in-out);
 }
 
 .workspace-app-layout.is-sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
 }
 
 .workspace-app-sidebar-backdrop {
@@ -867,10 +1140,40 @@ textarea {
 .workspace-sidebar {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  gap: 4px;
-  padding: 16px 12px 10px;
+  gap: 2px;
+  padding: 14px 12px 10px;
+  background: #fcfcfb;
+  animation: riseIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.workspace-sidebar-compact {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  justify-items: center;
+  padding: 10px 8px;
   border-right: 1px solid rgba(15, 23, 42, 0.07);
-  background: #fdfdfc;
+  background: #fcfcfb;
+  animation: riseIn var(--motion-fast) var(--motion-ease-out) both;
+}
+
+.workspace-sidebar-compact-toggle {
+  width: 100%;
+  justify-content: center;
+}
+
+.workspace-sidebar-compact-nav {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  justify-items: center;
+  width: 100%;
+}
+
+.workspace-sidebar-compact-nav .icon-button {
+  width: 100%;
+  justify-content: center;
 }
 
 .workspace-sidebar-brand {
@@ -886,7 +1189,7 @@ textarea {
 }
 
 .workspace-sidebar-wordmark .landing-wordmark {
-  font-size: 1.16rem;
+  font-size: 1.12rem;
 }
 
 .workspace-sidebar-collapse {
@@ -907,7 +1210,7 @@ textarea {
 
 .workspace-sidebar-new-chat {
   color: #111111;
-  font-weight: 450;
+  font-weight: 500;
 }
 
 .workspace-sidebar-utility {
@@ -915,12 +1218,12 @@ textarea {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  min-height: 26px;
+  min-height: 25px;
   padding: 0 2px;
   border: 0;
   background: transparent;
-  color: rgba(15, 23, 42, 0.62);
-  font-size: 0.96rem;
+  color: rgba(15, 23, 42, 0.58);
+  font-size: 0.94rem;
   font-weight: 400;
   line-height: 1.2;
   text-align: left;
@@ -1058,12 +1361,14 @@ textarea {
   display: grid;
   gap: 1px;
   align-content: start;
+  margin-top: 8px;
 }
 
 .workspace-sidebar-pinned {
   display: grid;
   gap: 2px;
   align-content: start;
+  margin-top: 6px;
 }
 
 .workspace-sidebar-pinned-list {
@@ -1091,15 +1396,9 @@ textarea {
 
 .workspace-sidebar-pinned-copy strong {
   color: #111111;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.2;
-}
-
-.workspace-sidebar-pinned-copy span {
-  color: rgba(15, 23, 42, 0.48);
-  font-size: 12px;
-  line-height: 1.3;
 }
 
 .workspace-sidebar-root-link {
@@ -1377,7 +1676,7 @@ textarea {
 }
 
 .workspace-sidebar-label {
-  color: rgba(15, 23, 42, 0.42);
+  color: rgba(15, 23, 42, 0.34);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1409,8 +1708,8 @@ textarea {
 
 .workspace-sidebar-empty {
   margin: 0;
-  color: rgba(15, 23, 42, 0.36);
-  font-size: 0.84rem;
+  color: rgba(15, 23, 42, 0.32);
+  font-size: 0.82rem;
 }
 
 .project-dialog-overlay {
@@ -1421,6 +1720,15 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  opacity: 0;
+}
+
+.project-dialog-overlay.is-open {
+  animation: modalFadeIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.project-dialog-overlay.is-closing {
+  animation: modalFadeOut var(--motion-fast) var(--motion-ease-in-out) both;
 }
 
 .project-dialog-backdrop {
@@ -1438,6 +1746,15 @@ textarea {
   border-radius: 34px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.18);
+  transform-origin: top center;
+}
+
+.project-dialog-overlay.is-open .project-dialog {
+  animation: modalPanelIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.project-dialog-overlay.is-closing .project-dialog {
+  animation: modalPanelOut var(--motion-fast) var(--motion-ease-in-out) both;
 }
 
 .project-dialog-header {
@@ -2390,6 +2707,7 @@ textarea {
   gap: 28px;
   min-height: calc(100vh - 60px);
   position: relative;
+  transition: grid-template-columns var(--motion-slow) var(--motion-ease-in-out);
 }
 
 .chat-app-shell.has-controls-open {
@@ -2409,6 +2727,17 @@ textarea {
   position: relative;
   z-index: 5;
   cursor: ew-resize;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.chat-controls-resize-handle.is-open {
+  opacity: 1;
+}
+
+.chat-controls-resize-handle.is-closing {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chat-controls-resize-handle::before {
@@ -2516,6 +2845,20 @@ textarea {
   border-radius: 28px;
   background: #ffffff;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-account-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  animation: menuScaleIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.chat-account-menu.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  animation: menuScaleOut var(--motion-fast) var(--motion-ease-in-out) both;
 }
 
 .chat-account-menu-list {
@@ -2581,7 +2924,7 @@ textarea {
 
 .chat-model-menu-wrap.is-hero {
   justify-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .chat-project-context {
@@ -2613,9 +2956,9 @@ textarea {
 
 .chat-model-menu-wrap.is-hero .chat-model-trigger {
   justify-content: center;
-  font-size: clamp(2.35rem, 4.2vw, 3.1rem);
+  font-size: clamp(2.6rem, 4.6vw, 3.35rem);
   font-weight: 450;
-  letter-spacing: -0.065em;
+  letter-spacing: -0.07em;
   line-height: 0.95;
 }
 
@@ -2644,11 +2987,25 @@ textarea {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chat-model-menu.is-hero {
   left: 50%;
   transform: translateX(-50%);
+}
+
+.chat-model-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  animation: menuFadeIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.chat-model-menu.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  animation: menuFadeOut var(--motion-fast) var(--motion-ease-in-out) both;
 }
 
 .chat-model-menu-list {
@@ -2736,6 +3093,13 @@ textarea {
   min-height: 0;
 }
 
+.chat-conversation-flow .message-bubble {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: messageBubbleIn var(--motion-base) var(--motion-ease-out) both;
+  animation-delay: var(--message-enter-delay, 0ms);
+}
+
 .chat-main-composer {
   margin-top: auto;
 }
@@ -2744,14 +3108,32 @@ textarea {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 16px;
+  gap: 18px;
   min-height: calc(100vh - 148px);
 }
 
 .chat-empty-head {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+.chat-empty-stage-item {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: emptyStageIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.chat-empty-stage-item--head {
+  animation-delay: 40ms;
+}
+
+.chat-empty-stage-item--composer {
+  animation-delay: 90ms;
+}
+
+.chat-empty-stage-item--suggestions {
+  animation-delay: 140ms;
 }
 
 .chat-empty-model {
@@ -2810,6 +3192,10 @@ textarea {
   gap: 12px;
 }
 
+.chat-model-trigger-copy.is-hero {
+  gap: 8px;
+}
+
 .chat-model-trigger-subtitle.is-hero {
   max-width: 34rem;
   text-align: center;
@@ -2830,7 +3216,7 @@ textarea {
 }
 
 .chat-composer-card.is-hero {
-  width: min(760px, 100%);
+  width: min(740px, 100%);
   padding: 12px 14px 10px;
 }
 
@@ -2944,6 +3330,21 @@ textarea {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  transform-origin: bottom left;
+  animation: menuScaleIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.chat-tools-menu-view {
+  display: grid;
+}
+
+.chat-tools-menu-view.is-forward {
+  animation: slideInForward var(--motion-fast) var(--motion-ease-out) both;
+}
+
+.chat-tools-menu-view.is-backward {
+  animation: slideInBackward var(--motion-fast) var(--motion-ease-out) both;
 }
 
 .chat-tools-menu-list {
@@ -2998,6 +3399,7 @@ textarea {
 .chat-tools-menu-copy {
   display: grid;
   gap: 2px;
+  margin-right: auto;
   text-align: left;
 }
 
@@ -3032,7 +3434,7 @@ textarea {
 .chat-suggestion-list {
   display: grid;
   gap: 10px;
-  width: min(540px, 100%);
+  width: min(520px, 100%);
 }
 
 .chat-suggestion-label {
@@ -3156,10 +3558,26 @@ textarea {
 .chat-controls {
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding-left: 20px;
+  gap: 9px;
+  padding-left: 18px;
   border-left: 1px solid rgba(15, 23, 42, 0.07);
   min-width: 0;
+  opacity: 0;
+  transform: translateX(8px);
+  will-change: transform, opacity;
+}
+
+.chat-controls.is-open {
+  opacity: 1;
+  transform: translateX(0);
+  animation: chatControlsIn var(--motion-base) var(--motion-ease-out) both;
+}
+
+.chat-controls.is-closing {
+  opacity: 0;
+  transform: translateX(8px);
+  animation: chatControlsOut var(--motion-fast) var(--motion-ease-in-out) both;
+  pointer-events: none;
 }
 
 .chat-controls-intro {
@@ -3167,10 +3585,9 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: rgba(15, 23, 42, 0.4);
+  color: rgba(15, 23, 42, 0.42);
   font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
 }
 
 .chat-controls-actions {
@@ -3228,6 +3645,28 @@ textarea {
   gap: 6px;
 }
 
+.chat-controls-section-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    grid-template-rows var(--motion-base) var(--motion-ease-out),
+    opacity var(--motion-fast) var(--motion-ease-out),
+    transform var(--motion-fast) var(--motion-ease-out);
+}
+
+.chat-controls-section.is-open .chat-controls-section-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chat-controls-section-body-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .chat-controls-toggle {
   display: flex;
   align-items: center;
@@ -3237,8 +3676,8 @@ textarea {
   border: 0;
   background: transparent;
   color: #0f172a;
-  font-size: 13px;
-  font-weight: 450;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: -0.01em;
   text-align: left;
   cursor: pointer;
@@ -3320,7 +3759,7 @@ textarea {
 }
 
 .chat-controls-field-label {
-  color: rgba(15, 23, 42, 0.52);
+  color: rgba(15, 23, 42, 0.46);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -5652,6 +6091,10 @@ textarea {
     border-bottom: 1px solid rgba(15, 23, 42, 0.07);
     background: rgba(251, 251, 250, 0.98);
     box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
+  }
+
+  .workspace-sidebar-compact {
+    display: none;
   }
 
   .workspace-app-sidebar-resize-handle {

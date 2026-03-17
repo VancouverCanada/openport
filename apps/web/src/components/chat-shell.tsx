@@ -106,6 +106,10 @@ export function ChatShell() {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const [modelMenuMounted, setModelMenuMounted] = useState(false)
+  const [modelMenuVisible, setModelMenuVisible] = useState(false)
+  const [accountMenuMounted, setAccountMenuMounted] = useState(false)
+  const [accountMenuVisible, setAccountMenuVisible] = useState(false)
   const [uiPreferences, setUiPreferences] = useState(loadChatUiPreferences())
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([])
   const [collaboration, setCollaboration] = useState<OpenPortProjectCollaborationState | null>(null)
@@ -118,6 +122,8 @@ export function ChatShell() {
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
   const toolsMenuRef = useRef<HTMLDivElement | null>(null)
   const { controlsWidth, isMobile, setControlsWidth, showControls, setShowControls, toggleControls } = useAppShellState()
+  const [controlsMounted, setControlsMounted] = useState(showControls)
+  const [controlsVisible, setControlsVisible] = useState(showControls)
   const selectedProjectId = searchParams.get('project')
   const requestedModelRoute = searchParams.get('model')
   const seededPrompt = searchParams.get('q')?.trim() || ''
@@ -164,6 +170,12 @@ export function ChatShell() {
     }
   const showEmptyStage = !activeThread || messages.length === 0
   const activeProjectId = selectedProject?.id || null
+  const projectBackgroundImage = selectedProject?.meta.backgroundImageUrl?.trim() || ''
+  const chatMainStageStyle = projectBackgroundImage
+    ? ({
+        backgroundImage: `linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)), url("${projectBackgroundImage.replace(/"/g, '\\"')}")`
+      } as CSSProperties)
+    : undefined
   const availableModels = useMemo(() => {
     const next = [...models]
     if (!next.some((model) => model.route === currentModelRoute)) {
@@ -280,6 +292,42 @@ export function ChatShell() {
       window.removeEventListener(getWorkspaceEventName(), handleWorkspaceUpdate)
     }
   }, [])
+
+  useEffect(() => {
+    if (showModelMenu) {
+      setModelMenuMounted(true)
+      const id = window.requestAnimationFrame(() => setModelMenuVisible(true))
+      return () => window.cancelAnimationFrame(id)
+    }
+
+    setModelMenuVisible(false)
+    const timeout = window.setTimeout(() => setModelMenuMounted(false), 160)
+    return () => window.clearTimeout(timeout)
+  }, [showModelMenu])
+
+  useEffect(() => {
+    if (showAccountMenu) {
+      setAccountMenuMounted(true)
+      const id = window.requestAnimationFrame(() => setAccountMenuVisible(true))
+      return () => window.cancelAnimationFrame(id)
+    }
+
+    setAccountMenuVisible(false)
+    const timeout = window.setTimeout(() => setAccountMenuMounted(false), 160)
+    return () => window.clearTimeout(timeout)
+  }, [showAccountMenu])
+
+  useEffect(() => {
+    if (showControls) {
+      setControlsMounted(true)
+      const id = window.requestAnimationFrame(() => setControlsVisible(true))
+      return () => window.cancelAnimationFrame(id)
+    }
+
+    setControlsVisible(false)
+    const timeout = window.setTimeout(() => setControlsMounted(false), 180)
+    return () => window.clearTimeout(timeout)
+  }, [showControls])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -572,12 +620,7 @@ export function ChatShell() {
           variant="inline"
         >
           {placement === 'hero' ? (
-            <span className="chat-model-trigger-copy">
-              <span className="chat-empty-model-mark">
-                <span className="chat-empty-model-icon">
-                  <Iconify icon="solar:cpu-bolt-outline" size={18} />
-                </span>
-              </span>
+            <span className="chat-model-trigger-copy is-hero">
               <span>{currentModel?.name || currentModelRoute}</span>
             </span>
           ) : (
@@ -589,8 +632,10 @@ export function ChatShell() {
           {activeThread && placement !== 'hero' ? currentModelRoute : currentModelDescription}
         </span>
 
-        {showModelMenu ? (
-          <div className={`chat-model-menu${placement === 'hero' ? ' is-hero' : ''}`}>
+        {modelMenuMounted ? (
+          <div
+            className={`chat-model-menu${placement === 'hero' ? ' is-hero' : ''}${modelMenuVisible ? ' is-open' : ' is-closing'}`}
+          >
             <div className="chat-model-menu-list">
               {availableModels.map((model) => (
                 <div className={`chat-model-menu-item-row${model.route === currentModelRoute ? ' is-active' : ''}`} key={model.id}>
@@ -832,7 +877,7 @@ export function ChatShell() {
 
   return (
     <div
-      className={`chat-app-shell${showControls ? ' has-controls-open' : ''}${isMobile ? ' is-mobile' : ''}`}
+      className={`chat-app-shell${controlsMounted ? ' has-controls-open' : ''}${isMobile ? ' is-mobile' : ''}`}
       style={
         {
           '--openport-controls-width': `${controlsWidth}px`
@@ -847,7 +892,10 @@ export function ChatShell() {
           type="button"
         />
       ) : null}
-      <section className="chat-main-stage">
+      <section
+        className={`chat-main-stage${projectBackgroundImage ? ' has-project-background' : ''}`}
+        style={chatMainStageStyle}
+      >
         <div className="chat-main-header">
           <div className="chat-main-header-copy">{showEmptyStage ? null : renderModelSelector('header')}</div>
           <div className="chat-topbar">
@@ -875,8 +923,8 @@ export function ChatShell() {
                 <span className="chat-account-trigger-badge">{accountInitial}</span>
               </IconButton>
 
-              {showAccountMenu ? (
-                <div className="chat-account-menu">
+              {accountMenuMounted ? (
+                <div className={`chat-account-menu${accountMenuVisible ? ' is-open' : ' is-closing'}`}>
                   <div className="chat-account-menu-list">
                     {accountMenuItems.map((item) =>
                       item.action ? (
@@ -927,11 +975,11 @@ export function ChatShell() {
 
         {showEmptyStage ? (
           <div className="chat-empty-stage">
-            <div className="chat-empty-head">{renderModelSelector('hero')}</div>
+            <div className="chat-empty-head chat-empty-stage-item chat-empty-stage-item--head">{renderModelSelector('hero')}</div>
 
-            {renderComposer('empty')}
+            <div className="chat-empty-stage-item chat-empty-stage-item--composer">{renderComposer('empty')}</div>
 
-            <div className="chat-suggestion-list">
+            <div className="chat-suggestion-list chat-empty-stage-item chat-empty-stage-item--suggestions">
               <span className="chat-suggestion-label">
                 <Iconify icon="solar:bolt-outline" size={14} />
                 <span>Suggested</span>
@@ -952,18 +1000,17 @@ export function ChatShell() {
                 </TextButton>
               ))}
             </div>
-
-            {selectedProject ? (
-              <div className="chat-empty-context">
-                <span>Using project {selectedProject.name}</span>
-              </div>
-            ) : null}
           </div>
         ) : activeThread ? (
           <>
             <div className="chat-conversation-flow">
-              {messages.map((message) => (
-                <MessageBubble attachments={message.attachments} key={message.id} role={message.role}>
+              {messages.map((message, index) => (
+                <MessageBubble
+                  attachments={message.attachments}
+                  key={message.id}
+                  role={message.role}
+                  style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
+                >
                   <p data-copy-response-source>{message.content}</p>
                 </MessageBubble>
               ))}
@@ -976,16 +1023,17 @@ export function ChatShell() {
         {error ? <FeedbackBanner variant="error">{error}</FeedbackBanner> : null}
       </section>
 
-      {showControls ? (
+      {controlsMounted ? (
         <>
           {!isMobile ? (
             <div
               aria-hidden="true"
-              className="chat-controls-resize-handle"
+              className={`chat-controls-resize-handle${controlsVisible ? ' is-open' : ' is-closing'}`}
               onMouseDown={onControlsResizeStart}
             />
           ) : null}
           <ChatControlsPanel
+            className={controlsVisible ? 'is-open' : 'is-closing'}
             activeThreadId={activeThreadId}
             activeArchived={activeThread?.archived ?? false}
             activePinned={activeThread?.pinned ?? false}
