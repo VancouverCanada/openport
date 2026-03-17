@@ -534,7 +534,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         return
       }
 
-      const beforeResponse = await fetchChatSessions({ archived: isArchivedView }, loadSession())
+      const beforeResponse = await fetchChatSessions({}, loadSession())
       const beforeIds = new Set(beforeResponse.items.map((item) => item.id))
       const importResponse = await importChatSessions(items, loadSession())
       const importedSessionIds = importResponse.items
