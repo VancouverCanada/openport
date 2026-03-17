@@ -165,6 +165,10 @@ export function ChatShell() {
   const [assistantThoughtSeconds, setAssistantThoughtSeconds] = useState<Record<string, number>>({})
   const [streamingAssistantIds, setStreamingAssistantIds] = useState<Record<string, true>>({})
   const [assistantLiveStatusById, setAssistantLiveStatusById] = useState<Record<string, string>>({})
+  const [assistantStatusHistoryById, setAssistantStatusHistoryById] = useState<
+    Record<string, Array<{ done: boolean; action: string; description: string; urls?: string[]; query?: string }>>
+  >({})
+  const [expandedStatusHistory, setExpandedStatusHistory] = useState<Record<string, boolean>>({})
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null
   const messages: OpenPortChatMessage[] = activeThread?.messages || []
@@ -256,6 +260,15 @@ export function ChatShell() {
     }
   }
 
+  function stripDetailsMarkup(raw: string): string {
+    const input = raw || ''
+    // Best-effort: remove <details>/<summary> blocks that OpenWebUI hides from copies.
+    return input
+      .replace(/<details[\s\S]*?>[\s\S]*?<\/details>/gi, '')
+      .replace(/<summary[\s\S]*?>[\s\S]*?<\/summary>/gi, '')
+      .trim()
+  }
+
   function formatChatTimestamp(iso: string): { short: string; full: string } {
     const date = new Date(iso)
     const now = new Date()
@@ -288,7 +301,8 @@ export function ChatShell() {
 
   async function copyToClipboard(text: string): Promise<void> {
     try {
-      await navigator.clipboard.writeText(text)
+      const { visible } = extractThinkBlocks(text)
+      await navigator.clipboard.writeText(stripDetailsMarkup(visible))
       notify('success', 'Copied.')
     } catch {
       notify('error', 'Unable to copy.')
@@ -1457,6 +1471,19 @@ export function ChatShell() {
           if (!evt || !evt.event) return
           if (evt.event === 'status' && typeof evt.data?.description === 'string') {
             setAssistantLiveStatusById((current) => ({ ...current, [optimisticAssistantId]: evt.data.description }))
+            setAssistantStatusHistoryById((current) => {
+              const next = { ...current }
+              const existing = next[optimisticAssistantId] || []
+              const entry = {
+                done: Boolean(evt.data?.done),
+                action: String(evt.data?.action || 'status'),
+                description: String(evt.data.description || ''),
+                urls: Array.isArray(evt.data?.urls) ? evt.data.urls : undefined,
+                query: typeof evt.data?.query === 'string' ? evt.data.query : undefined
+              }
+              next[optimisticAssistantId] = [...existing, entry]
+              return next
+            })
             return
           }
           if (evt.event === 'delta' && typeof evt.data?.delta === 'string') {
@@ -1487,6 +1514,22 @@ export function ChatShell() {
             if (assistant) {
               const seconds = Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000))
               setAssistantThoughtSeconds((current) => ({ ...current, [assistant.id]: seconds }))
+              setAssistantStatusHistoryById((current) => {
+                const next = { ...current }
+                if (next[optimisticAssistantId] && !next[assistant.id]) {
+                  next[assistant.id] = next[optimisticAssistantId]
+                }
+                delete next[optimisticAssistantId]
+                return next
+              })
+              setExpandedStatusHistory((current) => {
+                const next = { ...current }
+                if (typeof next[optimisticAssistantId] === 'boolean' && typeof next[assistant.id] !== 'boolean') {
+                  next[assistant.id] = next[optimisticAssistantId]
+                }
+                delete next[optimisticAssistantId]
+                return next
+              })
             }
 
             setThreads((current) => {
@@ -1528,6 +1571,11 @@ export function ChatShell() {
               return next
             })
             setAssistantLiveStatusById((current) => {
+              const next = { ...current }
+              delete next[optimisticAssistantId]
+              return next
+            })
+            setAssistantStatusHistoryById((current) => {
               const next = { ...current }
               delete next[optimisticAssistantId]
               return next
@@ -1709,6 +1757,8 @@ export function ChatShell() {
                   message.role === 'assistant' && !isAssistantPending ? extractThinkBlocks(message.content) : null
                 const assistantTimestamp =
                   message.role === 'assistant' && !isAssistantPending ? formatChatTimestamp(message.createdAt) : null
+                const statusHistory = message.role === 'assistant' ? assistantStatusHistoryById[message.id] || [] : []
+                const statusExpanded = message.role === 'assistant' ? Boolean(expandedStatusHistory[message.id]) : false
 
                 return (
                   <article
@@ -1781,6 +1831,40 @@ export function ChatShell() {
                                 </span>
                               )
                             )}
+                          </div>
+                        ) : null}
+
+                        {message.role === 'assistant' && statusHistory.length > 0 ? (
+                          <div className="owui-status-history">
+                            <button
+                              aria-expanded={statusExpanded}
+                              className="owui-status-toggle"
+                              onClick={() =>
+                                setExpandedStatusHistory((current) => ({
+                                  ...current,
+                                  [message.id]: !Boolean(current[message.id])
+                                }))
+                              }
+                              type="button"
+                            >
+                              <span className="owui-status-item">
+                                <span className="owui-status-dot" />
+                                <span className="owui-status-copy">{statusHistory.at(-1)?.description || 'Working…'}</span>
+                              </span>
+                            </button>
+                            {statusExpanded ? (
+                              <div className="owui-status-list">
+                                {statusHistory.map((entry, entryIndex) => (
+                                  <div className="owui-status-row" key={`${entry.action}-${entryIndex}`}>
+                                    <div className="owui-status-rail" aria-hidden="true">
+                                      <span className="owui-status-dot is-muted" />
+                                      {entryIndex < statusHistory.length - 1 ? <span className="owui-status-line" /> : null}
+                                    </div>
+                                    <span className="owui-status-copy is-muted">{entry.description}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
 
