@@ -133,8 +133,13 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
   const activeThreadId = searchParams.get('thread')
   const selectedProjectId = searchParams.get('project')
   const selectedModelRoute = searchParams.get('model')
+  const isTemporaryChat = (() => {
+    const value = searchParams.get('temporary-chat')
+    return value === 'true' || value === '1'
+  })()
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
+  const isChatPathActive = pathname === '/' || pathname.startsWith('/chat')
   const modalProject =
     projectModalState.projectId ? projects.find((project) => project.id === projectModalState.projectId) || null : null
   const modalParentProject =
@@ -837,6 +842,7 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
 
       <div className="workspace-sidebar-utility-group">
         <TextButton
+          active={isChatPathActive && !isTemporaryChat && !activeThreadId}
           className="workspace-sidebar-utility workspace-sidebar-new-chat"
           disabled={isPending}
           id="sidebar-new-chat-button"
@@ -847,6 +853,29 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           <span className="workspace-sidebar-utility-copy">
             <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:pen-new-square-outline'} size={18} />
             <span>{isPending ? 'Creating chat...' : 'New chat'}</span>
+          </span>
+        </TextButton>
+
+        <TextButton
+          active={isChatPathActive && isTemporaryChat}
+          className="workspace-sidebar-utility"
+          id="sidebar-temporary-chat-button"
+          onClick={() => {
+            const params = new URLSearchParams()
+            params.set('temporary-chat', 'true')
+            // Use a unique key so repeated clicks always re-mount the chat home state.
+            params.set('tempKey', `${Date.now()}`)
+            if (selectedProjectId) params.set('project', selectedProjectId)
+            if (selectedModelRoute) params.set('model', selectedModelRoute)
+            router.push(buildChatHref(params))
+            if (isMobile) toggleSidebar()
+          }}
+          variant="sidebar"
+          type="button"
+        >
+          <span className="workspace-sidebar-utility-copy">
+            <Iconify icon="solar:chat-round-dots-outline" size={18} />
+            <span>Temporary chat</span>
           </span>
         </TextButton>
 
