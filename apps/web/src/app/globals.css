@@ -1105,11 +1105,21 @@ textarea {
   background: #ffffff;
 }
 
+.workspace-app-shell.is-chat {
+  height: 100vh;
+  overflow: hidden;
+}
+
 .workspace-app-layout {
   display: grid;
   grid-template-columns: var(--openport-sidebar-width, 252px) 12px minmax(0, 1fr);
   min-height: 100vh;
   transition: grid-template-columns var(--motion-slow) var(--motion-ease-in-out);
+}
+
+.workspace-app-shell.is-chat .workspace-app-layout {
+  height: 100%;
+  min-height: 0;
 }
 
 .workspace-app-layout.is-sidebar-collapsed {
@@ -1147,6 +1157,8 @@ textarea {
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: 2px;
   padding: 14px 12px 10px;
+  min-height: 0;
+  overflow-y: auto;
   background: #fcfcfb;
   animation: riseIn var(--motion-base) var(--motion-ease-out) both;
 }
@@ -1158,6 +1170,8 @@ textarea {
   align-items: start;
   justify-items: center;
   padding: 10px 8px;
+  min-height: 0;
+  overflow-y: auto;
   border-right: 1px solid rgba(15, 23, 42, 0.07);
   background: #fcfcfb;
   animation: riseIn var(--motion-fast) var(--motion-ease-out) both;
@@ -2809,6 +2823,14 @@ textarea {
 .workspace-app-content {
   min-width: 0;
   padding: 28px 32px 32px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.workspace-app-content.is-chat {
+  overflow: hidden;
+  height: 100%;
 }
 
 .dashboard-overview {
@@ -2960,7 +2982,9 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 28px;
-  min-height: calc(100vh - 60px);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   position: relative;
   transition: grid-template-columns var(--motion-slow) var(--motion-ease-in-out);
 }
@@ -3011,6 +3035,28 @@ textarea {
   grid-template-rows: auto 1fr auto;
   gap: 18px;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-main-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-thread-stage {
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 18px;
+  min-height: 0;
+}
+
+.chat-thread-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .chat-main-stage.has-project-background {
@@ -3969,7 +4015,9 @@ textarea {
   justify-items: center;
   align-content: center;
   gap: 18px;
-  min-height: calc(100vh - 148px);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .chat-empty-frame {
@@ -5743,6 +5791,13 @@ textarea {
 .workspace-editor-field {
   display: grid;
   gap: 8px;
+}
+
+.workspace-editor-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .workspace-editor-field span,

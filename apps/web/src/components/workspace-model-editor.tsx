@@ -52,6 +52,47 @@ function normalizeTokenList(values: string[]): string[] {
   )
 }
 
+const RECOMMENDED_PROVIDER_OPTIONS = [
+  'openport',
+  'ollama',
+  'openai',
+  'anthropic',
+  'google',
+  'meta',
+  'xai',
+  'microsoft',
+  'azure',
+  'alibaba',
+  'mistral',
+  'deepseek',
+  'qwen'
+] as const
+
+function inferProviderFromRoute(route: string): string {
+  const prefix = (route || '').trim().toLowerCase().split('/')[0] || ''
+  return prefix
+}
+
+function slugifyRouteComponent(value: string): string {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+}
+
+function buildRecommendedRoute(input: { provider: string; name: string }): string {
+  const providerKey = (input.provider || '').trim().toLowerCase() || 'openport'
+  const name = (input.name || '').trim()
+  if (providerKey === 'ollama') {
+    // Preserve native Ollama naming (may include tags or namespaces).
+    return `ollama/${name || 'model'}`
+  }
+  return `${providerKey}/${slugifyRouteComponent(name) || 'model'}`
+}
+
 function collectModelTokens(
   models: OpenPortWorkspaceModel[],
   pick: (model: OpenPortWorkspaceModel) => string[]
@@ -306,11 +347,15 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
     event.preventDefault()
     setSaving(true)
 
+    const inferredProvider = inferProviderFromRoute(route)
+    const normalizedProvider = (provider || '').trim() || inferredProvider || 'openport'
+    const normalizedRoute = (route || '').trim() || buildRecommendedRoute({ provider: normalizedProvider, name })
+
     const payload = {
       id: modelId,
       name,
-      route,
-      provider,
+      route: normalizedRoute,
+      provider: normalizedProvider,
       description,
       tags: tags.split(',').map((entry) => entry.trim()).filter(Boolean),
       status,
@@ -341,6 +386,8 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
         await createWorkspaceModel(payload, session)
         notify('success', 'Model created.')
       }
+      setRoute(normalizedRoute)
+      setProvider(normalizedProvider)
       router.push('/workspace/models')
       router.refresh()
     } catch {
@@ -483,11 +530,46 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
           <Field label="Name">
             <input onChange={(event) => setName(event.target.value)} required value={name} />
           </Field>
-          <Field label="Route">
-            <input onChange={(event) => setRoute(event.target.value)} required value={route} />
+          <Field
+            label={
+              <span className="workspace-editor-field-label-row">
+                <span>Route</span>
+                <TextButton
+                  onClick={(event) => {
+                    event.preventDefault()
+                    const inferredProvider = inferProviderFromRoute(route)
+                    const normalizedProvider = (provider || '').trim() || inferredProvider || 'openport'
+                    const recommended = buildRecommendedRoute({ provider: normalizedProvider, name })
+                    setProvider(normalizedProvider)
+                    setRoute(recommended)
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="link"
+                >
+                  Use recommended
+                </TextButton>
+              </span>
+            }
+          >
+            <input
+              onChange={(event) => setRoute(event.target.value)}
+              placeholder={buildRecommendedRoute({ provider: provider || 'openport', name: name || 'model' })}
+              value={route}
+            />
           </Field>
           <Field label="Provider">
-            <input onChange={(event) => setProvider(event.target.value)} value={provider} />
+            <input
+              list="workspace-model-provider-options"
+              onChange={(event) => setProvider(event.target.value)}
+              placeholder="openport / ollama / openai / ..."
+              value={provider}
+            />
+            <datalist id="workspace-model-provider-options">
+              {RECOMMENDED_PROVIDER_OPTIONS.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Description">
             <textarea onChange={(event) => setDescription(event.target.value)} rows={4} value={description} />
