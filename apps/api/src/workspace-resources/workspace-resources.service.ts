@@ -147,7 +147,12 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     const items = await this.stateStore.readWorkspaceModels(actor.workspaceId)
     const now = new Date().toISOString()
     const id = dto.id?.trim() || `model_${randomUUID()}`
-    if (items.some((entry) => entry.id === id || entry.route === dto.route.trim())) {
+    const normalized = this.normalizeWorkspaceModelIdentity({
+      name: dto.name,
+      route: dto.route,
+      provider: dto.provider
+    })
+    if (items.some((entry) => entry.id === id || entry.route === normalized.route)) {
       throw new BadRequestException('Model id or route already exists')
     }
 
@@ -155,8 +160,8 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       id,
       workspaceId: actor.workspaceId,
       name: dto.name.trim(),
-      route: dto.route.trim(),
-      provider: dto.provider?.trim() || 'openport',
+      route: normalized.route,
+      provider: normalized.provider,
       description: dto.description?.trim() || '',
       tags: dto.tags?.filter(Boolean) || [],
       status: dto.status === 'disabled' ? 'disabled' : 'active',
@@ -193,11 +198,21 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     if (!item) throw new NotFoundException('Model not found')
     await this.ensureResourcePermission(actor, item.accessGrants, 'write')
 
+    const nextName = dto.name?.trim() || item.name
+    const normalized = this.normalizeWorkspaceModelIdentity({
+      name: nextName,
+      route: dto.route ?? item.route,
+      provider: dto.provider ?? item.provider
+    })
+    if (items.some((entry) => entry.id !== id && entry.route === normalized.route)) {
+      throw new BadRequestException('Model route already exists')
+    }
+
     const updated: OpenPortWorkspaceModel = {
       ...item,
-      name: dto.name?.trim() || item.name,
-      route: dto.route?.trim() || item.route,
-      provider: dto.provider?.trim() || item.provider,
+      name: nextName,
+      route: normalized.route,
+      provider: normalized.provider,
       description: dto.description?.trim() ?? item.description,
       tags: dto.tags ? dto.tags.filter(Boolean) : item.tags,
       status: dto.status === 'disabled' ? 'disabled' : dto.status === 'active' ? 'active' : item.status,
@@ -2519,6 +2534,59 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     }
     await this.stateStore.writeWorkspaceModels(actor.workspaceId, [item])
     return item
+  }
+
+  private normalizeWorkspaceModelIdentity(input: {
+    name: string
+    route: string | null | undefined
+    provider: string | null | undefined
+  }): { route: string; provider: string } {
+    const name = (input.name || '').trim()
+    const rawRoute = (input.route || '').trim()
+
+    // Keep route stable as a lookup key. Whitespace causes subtle bugs (copy/paste, URL encoding, etc.).
+    if (rawRoute && /\s/.test(rawRoute)) {
+      throw new BadRequestException('Model route must not contain whitespace')
+    }
+
+    const provider = this.normalizeWorkspaceModelProvider(input.provider, rawRoute)
+    const route = rawRoute || this.buildRecommendedModelRoute(provider, name)
+
+    if (!route) {
+      throw new BadRequestException('Model route is required')
+    }
+    if (/\s/.test(route)) {
+      throw new BadRequestException('Model route must not contain whitespace')
+    }
+
+    return { provider, route }
+  }
+
+  private normalizeWorkspaceModelProvider(value: string | null | undefined, route: string): string {
+    const trimmed = (value || '').trim().toLowerCase()
+    if (trimmed) return trimmed
+    const prefix = (route || '').trim().toLowerCase().split('/')[0] || ''
+    return prefix || 'openport'
+  }
+
+  private buildRecommendedModelRoute(provider: string, name: string): string {
+    const providerKey = (provider || '').trim().toLowerCase() || 'openport'
+    if (providerKey === 'ollama') {
+      // Ollama names often include tags like "qwen3:30b" and may include "owner/model:tag".
+      // Preserve the name verbatim (trimmed) to avoid breaking native Ollama naming.
+      return `ollama/${name.trim() || 'model'}`
+    }
+    return `${providerKey}/${this.slugifyRouteComponent(name) || 'model'}`
+  }
+
+  private slugifyRouteComponent(value: string): string {
+    return (value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._:-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '')
   }
 
   private normalizeValves(input: Record<string, string> | undefined | null): Record<string, string> {
