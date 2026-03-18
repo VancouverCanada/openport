@@ -1045,11 +1045,6 @@ textarea {
   color: #111111;
 }
 
-.text-button--sidebar.is-active {
-  background: rgba(15, 23, 42, 0.05);
-  border-radius: 12px;
-}
-
 .text-button--menu {
   width: 100%;
   justify-content: flex-start;
@@ -1168,83 +1163,6 @@ textarea {
   animation: riseIn var(--motion-base) var(--motion-ease-out) both;
 }
 
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 14px 14px;
-  overflow: hidden;
-  border-right: 1px solid rgba(15, 23, 42, 0.07);
-  background: #ffffff;
-}
-
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar-top {
-  display: grid;
-  gap: 12px;
-}
-
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar-bottom {
-  padding-top: 6px;
-}
-
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar-mini-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.06);
-  color: #0f172a;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar {
-  padding: 14px 10px;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-brand {
-  justify-content: center;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-collapse {
-  position: absolute;
-  top: 12px;
-  right: 10px;
-}
-
-.workspace-app-shell.is-minimal-sidebar .workspace-sidebar-brand {
-  position: relative;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-wordmark .landing-wordmark {
-  display: none;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-utility-group {
-  justify-items: center;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-utility {
-  justify-content: center;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-utility-label {
-  display: none;
-}
-
-.workspace-app-shell.is-minimal-sidebar.is-sidebar-mini .workspace-sidebar-account-row span {
-  display: none;
-}
-
 .workspace-sidebar-compact {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -1344,15 +1262,6 @@ textarea {
 .workspace-sidebar-utility.is-active,
 .workspace-sidebar-utility:hover {
   color: #111111;
-}
-
-.workspace-sidebar-utility.is-active {
-  background: rgba(15, 23, 42, 0.05);
-  border-radius: 12px;
-}
-
-.workspace-sidebar-thread-row.is-active {
-  background: rgba(15, 23, 42, 0.05);
 }
 
 .workspace-sidebar-search {
@@ -2922,7 +2831,6 @@ textarea {
 .workspace-app-content.is-chat {
   overflow: hidden;
   height: 100%;
-  padding: 0;
 }
 
 .dashboard-overview {
@@ -3079,118 +2987,6 @@ textarea {
   overflow: hidden;
   position: relative;
   transition: grid-template-columns var(--motion-slow) var(--motion-ease-in-out);
-  padding: 28px 32px 32px;
-}
-
-.chat-app-shell.is-temporary-chat {
-  background: #2b3036;
-}
-
-.chat-app-shell.is-temporary-chat .owui-assistant-model,
-.chat-app-shell.is-temporary-chat .owui-assistant-model-name {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.chat-app-shell.is-temporary-chat .owui-assistant-mark {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.chat-app-shell.is-temporary-chat .owui-assistant-mark--icon {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.chat-app-shell.is-temporary-chat .owui-thoughts > summary {
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.chat-app-shell.is-temporary-chat .owui-thoughts > summary::after {
-  border-right-color: rgba(255, 255, 255, 0.42);
-  border-bottom-color: rgba(255, 255, 255, 0.42);
-}
-
-.chat-app-shell.is-temporary-chat .owui-thoughts-body {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.84);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-card {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: none;
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-card:focus-within {
-  border-color: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-input {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-divider {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-tool {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-tool:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-attachment {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-attachment-copy {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-attachment-copy strong {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.chat-app-shell.is-temporary-chat .chat-composer-attachment-remove {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.chat-app-shell.is-temporary-chat .chat-suggestion-label {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.chat-app-shell.is-temporary-chat .chat-suggestion {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.chat-app-shell.is-temporary-chat .chat-suggestion:hover {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.chat-app-shell.is-temporary-chat .chat-suggestion-copy strong {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.chat-app-shell.is-temporary-chat .chat-suggestion-copy span {
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.chat-app-shell.is-temporary-chat .chat-empty-context {
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.chat-app-shell.is-temporary-chat .chat-empty-model-icon {
-  border-color: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.86);
 }
 
 .chat-app-shell.has-controls-open {
@@ -3241,73 +3037,6 @@ textarea {
   min-width: 0;
   height: 100%;
   min-height: 0;
-}
-
-.chat-main-stage.is-temporary {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.chat-main-stage.is-temporary .chat-main-header::before {
-  background: linear-gradient(to bottom, rgba(43, 48, 54, 0.92), rgba(43, 48, 54, 0.55), transparent);
-}
-
-.chat-main-stage.is-temporary .chat-model-trigger {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.chat-main-stage.is-temporary .chat-model-trigger-subtitle {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chat-main-stage.is-temporary .owui-model-add {
-  color: rgba(255, 255, 255, 0.68);
-}
-
-.chat-main-stage.is-temporary .owui-model-add:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.chat-main-stage.is-temporary .chat-topbar-icon {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.chat-main-stage.is-temporary .chat-topbar-icon.is-active,
-.chat-main-stage.is-temporary .chat-topbar-icon:hover {
-  color: #ffffff;
-}
-
-.chat-main-stage.is-temporary .chat-account-trigger.is-active {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.chat-main-stage.is-temporary .owui-user-head,
-.chat-main-stage.is-temporary .owui-assistant-head {
-  color: rgba(255, 255, 255, 0.64);
-}
-
-.chat-main-stage.is-temporary .owui-user-timestamp,
-.chat-main-stage.is-temporary .owui-assistant-timestamp {
-  color: rgba(255, 255, 255, 0.46);
-}
-
-.chat-main-stage.is-temporary .owui-message-content {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.chat-main-stage.is-temporary .owui-thoughts-label {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.chat-main-stage.is-temporary .owui-assistant-action {
-  color: rgba(255, 255, 255, 0.66);
-}
-
-.chat-main-stage.is-temporary .owui-assistant-action:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
 }
 
 .chat-main-body {
@@ -7336,14 +7065,6 @@ textarea {
     padding: 22px 20px 24px;
   }
 
-  .workspace-app-content.is-chat {
-    padding: 0;
-  }
-
-  .chat-app-shell {
-    padding: 22px 20px 24px;
-  }
-
   .notes-workspace-header,
   .notes-toolbar,
   .note-editor-header {
@@ -7505,14 +7226,6 @@ textarea {
   }
 
   .workspace-app-content {
-    padding: 18px 14px 20px;
-  }
-
-  .workspace-app-content.is-chat {
-    padding: 0;
-  }
-
-  .chat-app-shell {
     padding: 18px 14px 20px;
   }
 

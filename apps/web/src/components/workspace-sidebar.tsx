@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import type { DragEvent, ReactElement } from 'react'
+import type { DragEvent } from 'react'
 import { useEffect, useState, useTransition } from 'react'
 import { AnimatePresence, m } from 'framer-motion'
 import {
@@ -129,17 +129,12 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
   const [renameDraft, setRenameDraft] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isChatsDropTarget, setIsChatsDropTarget] = useState(false)
-  const { isMobile, isSidebarMini, sidebarVariant, toggleSidebar, toggleSidebarMini } = useAppShellState()
+  const { isMobile, toggleSidebar } = useAppShellState()
   const activeThreadId = searchParams.get('thread')
   const selectedProjectId = searchParams.get('project')
   const selectedModelRoute = searchParams.get('model')
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
-  const isTemporaryChat = (() => {
-    const value = searchParams.get('temporary-chat')
-    return value === 'true' || value === '1'
-  })()
-  const isChatPathActive = pathname === '/' || pathname.startsWith('/chat')
   const modalProject =
     projectModalState.projectId ? projects.find((project) => project.id === projectModalState.projectId) || null : null
   const modalParentProject =
@@ -816,168 +811,77 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
     ]
   }
 
-  const isMinimalSidebar = sidebarVariant === 'minimal'
-
-  function renderBrandMark() {
-    if (!isMinimalSidebar) {
-      return <LandingWordmark />
-    }
-
-    if (isSidebarMini) {
-      return <span className="workspace-sidebar-mini-mark">OP</span>
-    }
-
-    return <LandingWordmark />
-  }
-
-  function renderCollapseButton() {
-    const label = isMobile ? 'Close sidebar' : isMinimalSidebar ? (isSidebarMini ? 'Expand sidebar' : 'Mini sidebar') : 'Collapse sidebar'
-    const onClick = () => {
-      if (isMobile) {
-        toggleSidebar()
-        return
-      }
-      if (isMinimalSidebar) {
-        toggleSidebarMini()
-        return
-      }
-      toggleSidebar()
-    }
-
-    return (
-      <IconButton
-        aria-label={label}
-        className="workspace-sidebar-collapse"
-        onClick={onClick}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <Iconify icon={isMinimalSidebar ? (isSidebarMini ? 'solar:alt-arrow-right-outline' : 'solar:alt-arrow-left-outline') : 'solar:sidebar-minimalistic-outline'} size={17} />
-      </IconButton>
-    )
-  }
-
-  function wrapMiniTooltip(label: string, node: ReactElement): ReactElement {
-    if (!isMinimalSidebar || !isSidebarMini) return node
-    return (
-      <span className="owui-tooltip-target" data-tooltip={label} title={label}>
-        {node}
-      </span>
-    )
-  }
-
-  function renderUtilityLabel(text: string) {
-    if (!isMinimalSidebar) return <span>{text}</span>
-    return <span className="workspace-sidebar-utility-label">{text}</span>
-  }
-
   return (
-    <>
-      <aside
-        className={`workspace-sidebar${isMinimalSidebar ? ' is-minimal' : ''}${isSidebarMini ? ' is-mini' : ''}`}
-        aria-label="Workspace navigation"
-      >
-        <div className="workspace-sidebar-top">
-          <div className="workspace-sidebar-brand">
-            <a
-              className="workspace-sidebar-wordmark"
-              href="/"
-              onClick={() => {
-                if (isMobile) toggleSidebar()
-              }}
-            >
-              {renderBrandMark()}
-            </a>
-            {renderCollapseButton()}
-          </div>
+    <aside className="workspace-sidebar" aria-label="Workspace navigation">
+      <div className="workspace-sidebar-brand">
+        <a
+          className="workspace-sidebar-wordmark"
+          href="/"
+          onClick={() => {
+            if (isMobile) toggleSidebar()
+          }}
+        >
+          <LandingWordmark />
+        </a>
+        <IconButton
+          aria-label={isMobile ? 'Close sidebar' : 'Collapse sidebar'}
+          className="workspace-sidebar-collapse"
+          onClick={toggleSidebar}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <Iconify icon="solar:sidebar-minimalistic-outline" size={17} />
+        </IconButton>
+      </div>
 
-          <div className="workspace-sidebar-utility-group">
-            {wrapMiniTooltip(
-              isPending ? 'Creating chat...' : 'New chat',
-              <TextButton
-              active={isChatPathActive && !isTemporaryChat && !activeThreadId}
-              className="workspace-sidebar-utility workspace-sidebar-new-chat"
-              disabled={isPending}
-              id="sidebar-new-chat-button"
-              onClick={onNewChat}
-              variant="sidebar"
-              type="button"
-            >
-              <span className="workspace-sidebar-utility-copy">
-                <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:pen-new-square-outline'} size={18} />
-                {renderUtilityLabel(isPending ? 'Creating chat...' : 'New chat')}
-              </span>
-              </TextButton>
-            )}
+      <div className="workspace-sidebar-utility-group">
+        <TextButton
+          className="workspace-sidebar-utility workspace-sidebar-new-chat"
+          disabled={isPending}
+          id="sidebar-new-chat-button"
+          onClick={onNewChat}
+          variant="sidebar"
+          type="button"
+        >
+          <span className="workspace-sidebar-utility-copy">
+            <Iconify icon={isPending ? 'solar:refresh-outline' : 'solar:pen-new-square-outline'} size={18} />
+            <span>{isPending ? 'Creating chat...' : 'New chat'}</span>
+          </span>
+        </TextButton>
 
-            {wrapMiniTooltip(
-              'Temporary chat',
-              <TextButton
-              active={isChatPathActive && isTemporaryChat}
-              className="workspace-sidebar-utility"
-              id="sidebar-temporary-chat-button"
-              onClick={() => {
-                const params = new URLSearchParams()
-                params.set('temporary-chat', 'true')
-                params.set('tempKey', `${Date.now()}`)
-                if (selectedProjectId) params.set('project', selectedProjectId)
-                router.push(buildChatHref(params))
-                if (isMobile) toggleSidebar()
-              }}
-              variant="sidebar"
-              type="button"
-            >
-              <span className="workspace-sidebar-utility-copy">
-                <Iconify icon="solar:chat-round-dots-outline" size={18} />
-                {renderUtilityLabel('Temporary chat')}
-              </span>
-              </TextButton>
-            )}
+        <TextButton
+          id="workspace-search-toggle"
+          onClick={() => {
+            onOpenSearch?.()
+            if (isMobile) toggleSidebar()
+          }}
+          variant="sidebar"
+          type="button"
+        >
+          <span className="workspace-sidebar-utility-copy">
+            <Iconify icon="solar:magnifer-outline" size={18} />
+            <span>Search</span>
+          </span>
+        </TextButton>
 
-            {wrapMiniTooltip(
-              'Search',
-              <TextButton
-              id="workspace-search-toggle"
-              onClick={() => {
-                onOpenSearch?.()
-                if (isMobile) toggleSidebar()
-              }}
-              variant="sidebar"
-              type="button"
-            >
-              <span className="workspace-sidebar-utility-copy">
-                <Iconify icon="solar:magnifer-outline" size={18} />
-                {renderUtilityLabel('Search')}
-              </span>
-              </TextButton>
-            )}
-
-            {appLinks.map((link) =>
-              wrapMiniTooltip(
-                link.label,
-                <TextButton
-                  active={isActive(pathname, link.href)}
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => {
-                    if (isMobile) toggleSidebar()
-                  }}
-                  variant="sidebar"
-                >
-                  <span className="workspace-sidebar-utility-copy">
-                    <Iconify icon={link.icon} size={18} />
-                    {renderUtilityLabel(link.label)}
-                  </span>
-                </TextButton>
-              )
-            )}
-          </div>
-        </div>
-
-        <div className="workspace-sidebar-scroll">
-          {isSidebarMini && isMinimalSidebar ? null : (
-            <>
+        {appLinks.map((link) => (
+          <TextButton
+            active={isActive(pathname, link.href)}
+            key={link.href}
+            href={link.href}
+            onClick={() => {
+              if (isMobile) toggleSidebar()
+            }}
+            variant="sidebar"
+          >
+            <span className="workspace-sidebar-utility-copy">
+              <Iconify icon={link.icon} size={18} />
+              <span>{link.label}</span>
+            </span>
+          </TextButton>
+        ))}
+      </div>
 
       <SidebarSection
         actions={
@@ -1164,19 +1068,12 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
         )}
       </SidebarSection>
 
-            </>
-          )}
+      <div className="workspace-sidebar-account">
+        <div className="workspace-sidebar-account-row">
+          <Iconify icon="solar:user-circle-outline" size={18} />
+          <span>{accountLabel}</span>
         </div>
-
-        <div className="workspace-sidebar-bottom">
-          <div className="workspace-sidebar-account">
-            <div className="workspace-sidebar-account-row">
-              <Iconify icon="solar:user-circle-outline" size={18} />
-              <span>{accountLabel}</span>
-            </div>
-          </div>
-        </div>
-      </aside>
+      </div>
 
       <ProjectModal
         mode={projectModalState.mode}
@@ -1247,6 +1144,6 @@ export function WorkspaceSidebar({ onOpenSearch }: WorkspaceSidebarProps) {
           />
         </label>
       </ConfirmDialog>
-    </>
+    </aside>
   )
 }
