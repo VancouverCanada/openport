@@ -248,8 +248,10 @@ export function ChatShell() {
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
 
-  function getLobeIconForModel(route: string, name: string): string | null {
-    const label = `${name} ${route}`.toLowerCase()
+  function getLobeIconForModel(route: string, name: string, provider: string | null | undefined): string | null {
+    const providerKey = (provider || '').trim().toLowerCase()
+    const routeKey = (route || '').trim().toLowerCase()
+    const label = `${name} ${routeKey} ${providerKey}`.toLowerCase()
 
     // Prefer model-specific icons when available.
     if (label.includes('qwen')) return '/vendor/lobe-icons/icons/qwen-color.svg'
@@ -261,11 +263,26 @@ export function ChatShell() {
     // Llama (Meta) family.
     if (label.includes('llama')) return '/vendor/lobe-icons/icons/meta-color.svg'
 
-    // Provider-based fallbacks.
-    if (route.startsWith('openai/')) return '/vendor/lobe-icons/icons/openai.svg'
-    if (route.startsWith('anthropic/')) return '/vendor/lobe-icons/icons/anthropic.svg'
-    if (route.startsWith('google/')) return '/vendor/lobe-icons/icons/gemini-color.svg'
-    if (route.startsWith('ollama/')) return '/vendor/lobe-icons/icons/ollama.svg'
+    // Provider-based fallbacks (prefer provider field, then route prefix).
+    if (providerKey === 'openai') return '/vendor/lobe-icons/icons/openai.svg'
+    if (providerKey === 'anthropic') return '/vendor/lobe-icons/icons/anthropic.svg'
+    if (providerKey === 'google') return '/vendor/lobe-icons/icons/gemini-color.svg'
+    if (providerKey === 'meta') return '/vendor/lobe-icons/icons/meta-color.svg'
+    if (providerKey === 'xai') return '/vendor/lobe-icons/icons/xai.svg'
+    if (providerKey === 'microsoft') return '/vendor/lobe-icons/icons/microsoft.svg'
+    if (providerKey === 'azure') return '/vendor/lobe-icons/icons/azure.svg'
+    if (providerKey === 'alibaba') return '/vendor/lobe-icons/icons/alibaba.svg'
+    if (providerKey === 'ollama') return '/vendor/lobe-icons/icons/ollama.svg'
+
+    const prefix = routeKey.split('/')[0] || ''
+    if (prefix === 'openai') return '/vendor/lobe-icons/icons/openai.svg'
+    if (prefix === 'anthropic') return '/vendor/lobe-icons/icons/anthropic.svg'
+    if (prefix === 'google') return '/vendor/lobe-icons/icons/gemini-color.svg'
+    if (prefix === 'ollama') return '/vendor/lobe-icons/icons/ollama.svg'
+    if (prefix === 'xai') return '/vendor/lobe-icons/icons/xai.svg'
+    if (prefix === 'microsoft') return '/vendor/lobe-icons/icons/microsoft.svg'
+    if (prefix === 'azure') return '/vendor/lobe-icons/icons/azure.svg'
+    if (prefix === 'alibaba') return '/vendor/lobe-icons/icons/alibaba.svg'
 
     return null
   }
@@ -289,7 +306,7 @@ export function ChatShell() {
   }
 
   function renderModelAvatar(model: OpenPortWorkspaceModel) {
-    const iconSrc = getLobeIconForModel(model.route, model.name)
+    const iconSrc = getLobeIconForModel(model.route, model.name, model.provider)
     if (iconSrc) {
       return (
         <span className="owui-assistant-mark owui-assistant-mark--icon" aria-label={`${model.name} icon`}>
