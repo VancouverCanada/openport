@@ -3653,7 +3653,8 @@ textarea {
 }
 
 .owui-message-card.is-user {
-  width: fit-content;
+  display: inline-block;
+  width: auto;
   max-width: min(720px, 85vw);
   padding: 12px 14px;
   border-radius: 18px;
