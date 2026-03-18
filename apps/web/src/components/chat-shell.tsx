@@ -248,6 +248,42 @@ export function ChatShell() {
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
 
+  function getModelMonogram(route: string, name: string): { text: string; palette: { bg: string; fg: string } } {
+    const label = `${name} ${route}`.toLowerCase()
+
+    if (label.includes('qwen')) return { text: 'QW', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (label.includes('llama') || label.includes('lLaMA'.toLowerCase())) return { text: 'LL', palette: { bg: '#0f172a', fg: '#ffffff' } }
+    if (label.includes('mistral')) return { text: 'MI', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (label.includes('deepseek')) return { text: 'DS', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (label.includes('gemma')) return { text: 'GE', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (label.includes('phi')) return { text: 'PH', palette: { bg: '#111111', fg: '#ffffff' } }
+
+    if (route.startsWith('openai/')) return { text: 'OA', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (route.startsWith('anthropic/')) return { text: 'AN', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (route.startsWith('google/')) return { text: 'GG', palette: { bg: '#111111', fg: '#ffffff' } }
+    if (route.startsWith('ollama/')) return { text: 'OL', palette: { bg: '#111111', fg: '#ffffff' } }
+
+    return { text: 'AI', palette: { bg: '#111111', fg: '#ffffff' } }
+  }
+
+  function renderModelAvatar(model: OpenPortWorkspaceModel) {
+    const { text, palette } = getModelMonogram(model.route, model.name)
+    return (
+      <span
+        className="owui-assistant-mark owui-assistant-mark--avatar"
+        style={
+          {
+            '--owui-avatar-bg': palette.bg,
+            '--owui-avatar-fg': palette.fg
+          } as CSSProperties
+        }
+        aria-label={`${model.name} avatar`}
+      >
+        {text}
+      </span>
+    )
+  }
+
   function extractThinkBlocks(raw: string): { thought: string; visible: string } {
     const input = raw || ''
     const parts: string[] = []
@@ -1828,7 +1864,7 @@ export function ChatShell() {
                       {message.role === 'assistant' ? (
                         <div className="owui-assistant-head">
                           <div className="owui-assistant-model">
-                            <span className="owui-assistant-mark">OI</span>
+                            {renderModelAvatar(currentModel)}
                             <span className="owui-assistant-model-name">{modelLabel}</span>
                             {assistantTimestamp ? (
                               <span

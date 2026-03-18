@@ -3506,6 +3506,13 @@ textarea {
   letter-spacing: 0.04em;
 }
 
+.owui-assistant-mark--avatar {
+  background: var(--owui-avatar-bg, #111111);
+  color: var(--owui-avatar-fg, #ffffff);
+  border-color: rgba(15, 23, 42, 0.08);
+  font-weight: 800;
+}
+
 .owui-assistant-model-name {
   font-size: 14px;
   color: #111111;
