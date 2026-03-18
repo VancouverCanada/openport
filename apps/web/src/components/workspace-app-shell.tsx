@@ -32,7 +32,8 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
   const pathname = usePathname()
   const [showSearch, setShowSearch] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const { isMobile, showSidebar, sidebarWidth, toggleSidebar, setSidebarWidth } = useAppShellState()
+  const { isMobile, isSidebarMini, showSidebar, sidebarVariant, sidebarWidth, toggleSidebar, setSidebarWidth } =
+    useAppShellState()
 
   function isPathActive(href: string): boolean {
     return pathname === href || pathname.startsWith(`${href}/`)
@@ -149,7 +150,7 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
 
   return (
     <main
-      className="workspace-app-shell"
+      className={`workspace-app-shell${isChatPathActive() ? ' is-chat' : ''}${sidebarVariant === 'minimal' ? ' is-minimal-sidebar' : ''}${isSidebarMini ? ' is-sidebar-mini' : ''}`}
       style={
         {
           '--openport-sidebar-width': `${sidebarWidth}px`
@@ -219,14 +220,18 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
             <WorkspaceSidebar onOpenSearch={() => setShowSearch(true)} />
           </Suspense>
         ) : null}
-        {showSidebar && !isMobile ? (
+        {showSidebar && !isMobile && !(sidebarVariant === 'minimal' && isSidebarMini) ? (
           <div
             aria-hidden="true"
             className="workspace-app-sidebar-resize-handle"
             onMouseDown={onSidebarResizeStart}
           />
         ) : null}
-        <section className="workspace-app-content">{children}</section>
+        <section
+          className={`workspace-app-content${isChatPathActive() ? ' is-chat' : ''}`}
+        >
+          {children}
+        </section>
       </div>
       <WorkspaceToastRegion />
       <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} open={showShortcuts} />
