@@ -164,7 +164,6 @@ export function ChatShell() {
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
   const [assistantThoughtSeconds, setAssistantThoughtSeconds] = useState<Record<string, number>>({})
   const [streamingAssistantIds, setStreamingAssistantIds] = useState<Record<string, true>>({})
-  const [assistantLiveStatusById, setAssistantLiveStatusById] = useState<Record<string, string>>({})
   const [assistantStatusHistoryById, setAssistantStatusHistoryById] = useState<
     Record<string, Array<{ done: boolean; action: string; description: string; urls?: string[]; query?: string }>>
   >({})
@@ -1476,7 +1475,7 @@ export function ChatShell() {
         const optimisticAssistantId = optimisticAssistantMessage.id
         setIsGenerating(true)
         setStreamingAssistantIds((current) => ({ ...current, [optimisticAssistantId]: true }))
-        setAssistantLiveStatusById((current) => ({ ...current, [optimisticAssistantId]: 'Thinking…' }))
+        setAssistantStatusHistoryById((current) => ({ ...current, [optimisticAssistantId]: [{ done: false, action: 'thinking', description: 'Thinking…' }] }))
 
         // Optimistic render: show the user message immediately and a placeholder assistant "Thinking..." bubble.
         if (createdSession) {
@@ -1511,7 +1510,6 @@ export function ChatShell() {
         const onEvent = (evt: any) => {
           if (!evt || !evt.event) return
           if (evt.event === 'status' && typeof evt.data?.description === 'string') {
-            setAssistantLiveStatusById((current) => ({ ...current, [optimisticAssistantId]: evt.data.description }))
             setAssistantStatusHistoryById((current) => {
               const next = { ...current }
               const existing = next[optimisticAssistantId] || []
@@ -1610,11 +1608,6 @@ export function ChatShell() {
           .finally(() => {
             setIsGenerating(false)
             setStreamingAssistantIds((current) => {
-              const next = { ...current }
-              delete next[optimisticAssistantId]
-              return next
-            })
-            setAssistantLiveStatusById((current) => {
               const next = { ...current }
               delete next[optimisticAssistantId]
               return next
@@ -1804,6 +1797,10 @@ export function ChatShell() {
                 const userTimestamp = message.role === 'user' ? formatChatTimestamp(message.createdAt) : null
                 const statusHistory = message.role === 'assistant' ? assistantStatusHistoryById[message.id] || [] : []
                 const statusExpanded = message.role === 'assistant' ? Boolean(expandedStatusHistory[message.id]) : false
+                const showAssistantSkeleton =
+                  message.role === 'assistant' &&
+                  showAssistantThinkingPlaceholder &&
+                  statusHistory.length === 0
 
                 return (
                   <article
@@ -1844,12 +1841,7 @@ export function ChatShell() {
                             ) : null}
                           </div>
                           <div className="owui-assistant-meta">
-                            {isAssistantPending ? (
-                              <span className="owui-assistant-status">
-                                <span className="owui-assistant-live-dot" aria-hidden="true" />
-                                <span>{assistantLiveStatusById[message.id] || 'Thinking…'}</span>
-                              </span>
-                            ) : thoughtSeconds ? (
+                            {!isAssistantPending && thoughtSeconds ? (
                               assistantThought?.thought ? (
                                 <details className="owui-thoughts">
                                   <summary>Thought for {thoughtSeconds} seconds</summary>
@@ -1929,15 +1921,8 @@ export function ChatShell() {
                         ) : null}
 
                         <div className="owui-message-content" data-copy-response-source>
-                          {showAssistantThinkingPlaceholder ? (
-                            <span className="owui-thinking">
-                              <span className="owui-thinking-dots" aria-hidden="true">
-                                <span />
-                                <span />
-                                <span />
-                              </span>
-                              <span className="owui-thinking-label">Thinking...</span>
-                            </span>
+                          {showAssistantSkeleton ? (
+                            <span className="owui-skeleton-dot" aria-label="Generating response" />
                           ) : (
                             <>
                               {assistantThought ? assistantThought.visible : message.content}
