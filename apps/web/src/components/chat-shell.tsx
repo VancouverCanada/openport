@@ -180,6 +180,7 @@ export function ChatShell() {
     projects.find((project) => project.id === activeThread?.settings.projectId) ||
     null
   const accountInitial = (session?.name || session?.email || 'O').trim().charAt(0).toUpperCase()
+  const userDisplayName = (session?.name || session?.email || 'You').trim() || 'You'
   const mergedModels = useMemo(() => {
     const merged = new Map<string, OpenPortWorkspaceModel>()
     ;[...ollamaLiveModels, ...models].forEach((model) => {
@@ -1814,7 +1815,6 @@ export function ChatShell() {
                     <div className="owui-message-inner">
                       {message.role === 'user' ? (
                         <div className="owui-user-head">
-                          <span className="owui-user-label">YOU</span>
                           {userTimestamp ? (
                             <span
                               className="owui-user-timestamp owui-tooltip-target"
@@ -1824,6 +1824,7 @@ export function ChatShell() {
                               {userTimestamp.short}
                             </span>
                           ) : null}
+                          <span className="owui-user-label">{userDisplayName}</span>
                         </div>
                       ) : null}
 

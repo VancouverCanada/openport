@@ -3639,8 +3639,8 @@ textarea {
   width: min(520px, 100%);
   padding: 12px 14px;
   border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(14, 143, 121, 0.1);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #111111;
 }
 
 .owui-message-card.is-assistant {
@@ -3654,6 +3654,10 @@ textarea {
   color: rgba(15, 23, 42, 0.9);
   line-height: 1.55;
   font-size: 15px;
+}
+
+.owui-message--user .owui-message-content {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .owui-status-history {
