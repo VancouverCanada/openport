@@ -3761,6 +3761,53 @@ textarea {
   animation-delay: 240ms;
 }
 
+.owui-skeleton-dot {
+  position: relative;
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  margin: 8px 2px;
+}
+
+.owui-skeleton-dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+  opacity: 0.75;
+  animation: owuiSkeletonPulse 1500ms ease-in-out infinite;
+}
+
+.owui-skeleton-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #111111;
+  animation: owuiSkeletonScale 1500ms ease-in-out infinite;
+}
+
+@keyframes owuiSkeletonPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes owuiSkeletonScale {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
 @keyframes owuiDotPulse {
   0%,
   100% {
