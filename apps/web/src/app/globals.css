@@ -3513,6 +3513,16 @@ textarea {
   font-weight: 800;
 }
 
+.owui-assistant-mark--icon {
+  background: #ffffff;
+}
+
+.owui-assistant-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .owui-assistant-model-name {
   font-size: 14px;
   color: #111111;
@@ -3643,7 +3653,8 @@ textarea {
 }
 
 .owui-message-card.is-user {
-  width: min(520px, 100%);
+  width: fit-content;
+  max-width: min(720px, 85vw);
   padding: 12px 14px;
   border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.1);
@@ -3665,6 +3676,8 @@ textarea {
 
 .owui-message--user .owui-message-content {
   color: rgba(255, 255, 255, 0.92);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .owui-status-history {
