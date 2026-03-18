@@ -248,6 +248,28 @@ export function ChatShell() {
 
   const currentModelDescription = currentModel?.description?.trim() || 'How can I help you today?'
 
+  function getLobeIconForModel(route: string, name: string): string | null {
+    const label = `${name} ${route}`.toLowerCase()
+
+    // Prefer model-specific icons when available.
+    if (label.includes('qwen')) return '/vendor/lobe-icons/icons/qwen-color.svg'
+    if (label.includes('deepseek')) return '/vendor/lobe-icons/icons/deepseek-color.svg'
+    if (label.includes('mistral')) return '/vendor/lobe-icons/icons/mistral-color.svg'
+    if (label.includes('gemini')) return '/vendor/lobe-icons/icons/gemini-color.svg'
+    if (label.includes('gemma')) return '/vendor/lobe-icons/icons/gemma-color.svg'
+
+    // Llama (Meta) family.
+    if (label.includes('llama')) return '/vendor/lobe-icons/icons/meta-color.svg'
+
+    // Provider-based fallbacks.
+    if (route.startsWith('openai/')) return '/vendor/lobe-icons/icons/openai.svg'
+    if (route.startsWith('anthropic/')) return '/vendor/lobe-icons/icons/anthropic.svg'
+    if (route.startsWith('google/')) return '/vendor/lobe-icons/icons/gemini-color.svg'
+    if (route.startsWith('ollama/')) return '/vendor/lobe-icons/icons/ollama.svg'
+
+    return null
+  }
+
   function getModelMonogram(route: string, name: string): { text: string; palette: { bg: string; fg: string } } {
     const label = `${name} ${route}`.toLowerCase()
 
@@ -267,6 +289,15 @@ export function ChatShell() {
   }
 
   function renderModelAvatar(model: OpenPortWorkspaceModel) {
+    const iconSrc = getLobeIconForModel(model.route, model.name)
+    if (iconSrc) {
+      return (
+        <span className="owui-assistant-mark owui-assistant-mark--icon" aria-label={`${model.name} icon`}>
+          <img alt="" aria-hidden="true" className="owui-assistant-icon" src={iconSrc} />
+        </span>
+      )
+    }
+
     const { text, palette } = getModelMonogram(model.route, model.name)
     return (
       <span
