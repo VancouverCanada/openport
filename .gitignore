@@ -16,3 +16,7 @@ dist/
 .next/
 coverage/
 .openport-product/
+
+# Private research drafts and submission materials live outside this public repo.
+research/
+docs/research/
