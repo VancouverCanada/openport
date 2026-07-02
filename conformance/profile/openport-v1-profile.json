@@ -40,7 +40,7 @@
     },
     {
       "id": "openport-abuse-resistance-v0.1",
-      "description": "Attack-oriented evaluation profile covering revoked-token replay, cross-tenant injection, high-risk action misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete attempts."
+      "description": "Abuse-resistance profile covering revoked-token replay, cross-tenant input misuse, high-risk action misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete requests."
     }
   ]
 }

@@ -9,7 +9,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Added
 - Conformance kit with profile and runnable local/remote checker.
 - OpenPort Security Conformance Profile v0.2 with executable checks for state-witness revalidation, 100x idempotency replay, endpoint 429 no-side-effect behavior, and allow/deny/fail audit completeness.
-- OpenPort Abuse-Resistance Profile v0.1 with attack-matrix tests for revoked-token replay, cross-tenant injection, high-risk misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete attempts.
+- OpenPort abuse-resistance profile with misuse-path checks for revoked-token replay, cross-tenant inputs, high-risk misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete requests.
 - Release preparation script (`scripts/prepare-release.sh`) and release helper command.
 - Governance assets (`ROADMAP.md`, `SUPPORT.md`, issue templates, PR template).
 - Security hardening and LLM/OpenClaw integration guides.

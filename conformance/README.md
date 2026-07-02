@@ -57,9 +57,9 @@ npm run conformance:security
 
 ## Abuse-Resistance Profile v0.1
 
-`profile/openport-abuse-resistance-v0.1-profile.json` complements conformance testing with attack-oriented evaluation. It does not claim that OpenPort solves unsafe instruction at the model layer. Instead, it checks whether a compromised, confused, or abuse-resistant agent can convert a bad plan into an unauthorized server-side effect.
+`profile/openport-abuse-resistance-v0.1-profile.json` complements conformance testing with misuse-path regression checks. It does not claim model-layer immunity. Instead, it checks whether unsafe requests can become unauthorized server-side effects.
 
-| Attack | Expected OpenPort behavior |
+| Misuse path | Expected OpenPort behavior |
 | --- | --- |
 | Stolen token calls `/manifest` after key revocation | Deny immediately with `agent.token_invalid`. |
 | Cross-tenant `ledgerId` injection | Deny with `agent.policy_denied` without revealing whether the target tenant resource exists. |
@@ -69,9 +69,9 @@ npm run conformance:security
 | Agent retry storm | Return HTTP 429 without creating draft/execution/preflight/audit side effects on the limited request. |
 | Malformed schema fuzz | Return stable 4xx envelopes, not 5xx. |
 | Adapter throws generic exception | Return a safe generic error and sanitize execution/audit metadata. |
-| Untrusted instruction-like export/delete request | Do not claim prompt immunity; enforce scope, policy, preflight, draft-first, and auto-execute gates. |
+| Untrusted instruction-like export/delete request | Enforce scope, policy, preflight, draft-first, and auto-execute gates. |
 
-Run the reference-runtime abuse-resistant profile:
+Run the reference-runtime abuse-resistance profile:
 
 ```bash
 npm run conformance:abuse-resistance

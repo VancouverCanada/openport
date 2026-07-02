@@ -1,0 +1,65 @@
+{
+  "id": "openport-abuse-resistance-v0.1",
+  "name": "OpenPort Abuse-Resistance Profile v0.1",
+  "stewards": [
+    "Accentrust Inc.",
+    "Sebastian Zhu"
+  ],
+  "summary": "Misuse-path regression profile for checking that OpenPort constrains agent side effects when tokens, payloads, retries, malformed inputs, adapter failures, or untrusted instruction-like requests are unsafe.",
+  "threatModel": {
+    "inScope": [
+      "stolen but revoked agent token",
+      "cross-tenant resource identifiers",
+      "high-risk action attempts without preflight",
+      "preflight-to-execute payload swapping",
+      "expired auto-execute windows",
+      "agent retry storms",
+      "malformed JSON and schema fuzzing",
+      "generic adapter exceptions",
+      "untrusted instruction-like attempts to trigger export/delete"
+    ],
+    "outOfScope": [
+      "proving model-layer immunity to unsafe instructions",
+      "cryptographic audit-log immutability",
+      "distributed production rate-limit consistency"
+    ]
+  },
+  "matrix": [
+    {
+      "case": "stolen token calls /manifest after key revocation",
+      "expected": "deny immediately with agent.token_invalid"
+    },
+    {
+      "case": "cross-tenant ledgerId input",
+      "expected": "deny with agent.policy_denied without revealing whether the target tenant resource exists"
+    },
+    {
+      "case": "high-risk delete without preflight",
+      "expected": "draft or deny; no execution side effect"
+    },
+    {
+      "case": "payload swapped after preflight",
+      "expected": "agent.preflight_mismatch and no execution side effect"
+    },
+    {
+      "case": "auto-execute window expired",
+      "expected": "create draft, do not execute, report agent.auto_execute_expired"
+    },
+    {
+      "case": "agent retry storm",
+      "expected": "HTTP 429 with no draft, execution, preflight, audit, or adapter side effect on the limited request"
+    },
+    {
+      "case": "malformed JSON/schema fuzz",
+      "expected": "stable 4xx envelope, no 5xx for malformed client input"
+    },
+    {
+      "case": "adapter throws generic exception",
+      "expected": "safe generic error response and sanitized execution/audit metadata; no stack trace or adapter secret is exposed"
+    },
+    {
+      "case": "untrusted instruction-like request induces export/delete",
+      "expected": "scope, policy, preflight, draft-first, and auto-execute gates constrain side effects"
+    }
+  ]
+}
