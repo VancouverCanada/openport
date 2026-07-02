@@ -21,6 +21,23 @@ export const ErrorCodes = {
   AGENT_STEP_UP_REQUIRED: 'agent.step_up_required',
   AGENT_STEP_UP_INVALID: 'agent.step_up_invalid',
   AGENT_RATE_LIMITED: 'agent.rate_limited',
+  AGENT_EXECUTION_FAILED: 'agent.execution_failed',
+  AGENT_INTENT_NOT_FOUND: 'agent.intent_not_found',
+  AGENT_INTENT_EXPIRED: 'agent.intent_expired',
+  AGENT_INTENT_LOW_CONFIDENCE: 'agent.intent_low_confidence',
+  AGENT_INTENT_CONFLICTING: 'agent.intent_conflicting',
+  AGENT_INTENT_TOOL_MISMATCH: 'agent.intent_tool_mismatch',
+  AGENT_INTENT_PAYLOAD_EXCEEDS_BOUND: 'agent.intent_payload_exceeds_bound',
+  AGENT_INTENT_REVIEW_REQUIRED: 'agent.intent_review_required',
+  AGENT_CONTEXT_RISK_HIGH: 'agent.context_risk_high',
+  AGENT_CONTEXT_TOOL_HIDDEN: 'agent.context_tool_hidden',
+  AGENT_CONTEXT_MODE_DOWNGRADED: 'agent.context_mode_downgraded',
+  AGENT_CONTEXT_MANIFEST_STALE: 'agent.context_manifest_stale',
+  AGENT_CONTEXT_SNAPSHOT_EXPIRED: 'agent.context_snapshot_expired',
+  AGENT_CONTEXT_SNAPSHOT_CROSS_KEY: 'agent.context_snapshot_cross_key',
+  AGENT_CONTEXT_SNAPSHOT_NOT_FOUND: 'agent.context_snapshot_not_found',
+  AGENT_CONTEXT_PROVENANCE_MISSING: 'agent.context_provenance_missing',
+  AGENT_CONTEXT_AUDIT_REDACTED: 'agent.context_audit_redacted',
   AGENT_NOT_FOUND: 'agent.not_found'
 } as const
 

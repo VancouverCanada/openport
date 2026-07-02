@@ -30,6 +30,61 @@ const listTransactionsSchema = z.object({
   pageSize: z.coerce.number().int().positive().optional()
 })
 
+const intentClassSchema = z.enum(['read', 'summarize', 'transform', 'create', 'update', 'delete', 'export', 'delegate', 'admin', 'unknown'])
+const intentReviewModeSchema = z.enum(['allow', 'draft', 'preflight', 'confirm', 'deny', 'clarify'])
+
+const intentBodySchema = z.object({
+  request: z.string().optional(),
+  intentClasses: z.array(intentClassSchema).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  resourceBounds: z.record(z.unknown()).optional(),
+  effectBounds: z.record(z.unknown()).optional(),
+  reviewMode: intentReviewModeSchema.optional(),
+  classifierSource: z.string().optional(),
+  expiresInSeconds: z.number().int().positive().optional()
+})
+
+const manifestQuerySchema = z.object({
+  intentCertificateId: z.string().optional(),
+  contextRiskSnapshotId: z.string().optional(),
+  sessionId: z.string().optional()
+})
+
+const contextSourceLabelSchema = z.enum([
+  'trusted_user_instruction',
+  'trusted_system_policy',
+  'trusted_admin_policy',
+  'untrusted_document',
+  'untrusted_web_content',
+  'untrusted_tool_output',
+  'external_message',
+  'derived_summary',
+  'model_plan',
+  'product_preview_block',
+  'pending_flow_state',
+  'compute_result',
+  'provider_fallback_output'
+])
+
+const contextTrustSchema = z.enum(['trusted', 'untrusted', 'derived', 'system'])
+
+const contextRiskBodySchema = z.object({
+  sessionId: z.string().min(1),
+  segments: z.array(z.object({
+    id: z.string().optional(),
+    source: contextSourceLabelSchema,
+    author: z.string().nullable().optional(),
+    trust: contextTrustSchema.optional(),
+    instructionLike: z.boolean().optional(),
+    derivedFrom: z.array(z.string()).optional(),
+    hash: z.string().optional(),
+    content: z.string().optional(),
+    ttlSeconds: z.number().int().positive().optional(),
+    createdAt: z.string().optional()
+  })),
+  expiresInSeconds: z.number().int().positive().optional()
+})
+
 const actionBodySchema = z.object({
   action: z.string().min(1),
   payload: z.record(z.unknown()).optional(),
@@ -40,7 +95,10 @@ const actionBodySchema = z.object({
   idempotencyKey: z.string().optional(),
   justification: z.string().optional(),
   preflightHash: z.string().optional(),
-  stateWitnessHash: z.string().optional()
+  stateWitnessHash: z.string().optional(),
+  intentCertificateId: z.string().optional(),
+  contextRiskSnapshotId: z.string().optional(),
+  sessionId: z.string().optional()
 }).superRefine((value, ctx) => {
   const hasPayload = value.payload !== undefined
   const hasPreflightId = Boolean(value.preflightId && value.preflightId.trim())
@@ -51,7 +109,10 @@ const actionBodySchema = z.object({
 
 const preflightBodySchema = z.object({
   action: z.string().min(1),
-  payload: z.record(z.unknown())
+  payload: z.record(z.unknown()),
+  intentCertificateId: z.string().optional(),
+  contextRiskSnapshotId: z.string().optional(),
+  sessionId: z.string().optional()
 })
 
 export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): FastifyInstance {
@@ -73,7 +134,26 @@ export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): Fa
   app.get('/api/agent/v1/manifest', async (request, reply) => {
     return handle(reply, async () => {
       const ctx = getAgentContext(request, runtime)
-      const data = runtime.agent.manifest(ctx)
+      const query = manifestQuerySchema.parse(request.query)
+      const data = await runtime.agent.manifest(ctx, query)
+      return success('common.success', data)
+    })
+  })
+
+  app.post('/api/agent/v1/intent', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const parsed = intentBodySchema.parse(request.body)
+      const data = await runtime.intent.createCertificate(ctx, parsed)
+      return success('common.success', data)
+    })
+  })
+
+  app.post('/api/agent/v1/context-risk', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const parsed = contextRiskBodySchema.parse(request.body)
+      const data = await runtime.contextRisk.createSnapshot(ctx, parsed)
       return success('common.success', data)
     })
   })

@@ -1,0 +1,63 @@
+{
+  "id": "openport-security-v0.2",
+  "name": "OpenPort Security Conformance Profile v0.2",
+  "stewards": [
+    "Accentrust Inc.",
+    "Sebastian Zhu"
+  ],
+  "summary": "Executable security profile for high-value OpenPort runtime invariants that were previously treated as partial or future validation targets.",
+  "requiredEndpoints": [
+    { "method": "GET", "path": "/api/agent/v1/manifest" },
+    { "method": "GET", "path": "/api/agent/v1/ledgers" },
+    { "method": "POST", "path": "/api/agent/v1/preflight" },
+    { "method": "POST", "path": "/api/agent/v1/actions" },
+    { "method": "POST", "path": "/api/agent-admin/v1/drafts/{id}/approve" },
+    { "method": "GET", "path": "/api/agent-admin/v1/audit" }
+  ],
+  "checks": [
+    {
+      "id": "security.state_witness.execution_revalidation",
+      "level": "MUST",
+      "description": "When resource state changes between preflight/draft creation and execution, execution MUST fail closed with agent.precondition_failed and MUST NOT apply the tool side effect.",
+      "evidence": [
+        "HTTP 409 response",
+        "error code agent.precondition_failed",
+        "unchanged side-effect oracle",
+        "denied audit event with app/key/request/draft correlation"
+      ]
+    },
+    {
+      "id": "security.idempotency.replay_regression",
+      "level": "MUST",
+      "description": "Repeating the same (appId, idempotencyKey) execute request 100 times MUST produce exactly one execution effect and return replay responses for duplicates.",
+      "evidence": [
+        "one execution row",
+        "one confirmed draft row for the effect",
+        "99 replay responses",
+        "idempotency replay audit events"
+      ]
+    },
+    {
+      "id": "security.rate_limit.no_side_effects",
+      "level": "MUST",
+      "description": "A request rejected with HTTP 429 MUST NOT create a draft, execution, preflight, audit event, or adapter call.",
+      "evidence": [
+        "HTTP 429 response",
+        "error code agent.rate_limited",
+        "unchanged draft/execution/preflight/audit counts",
+        "unchanged adapter-call counters"
+      ]
+    },
+    {
+      "id": "security.audit.allow_deny_fail_completeness",
+      "level": "MUST",
+      "description": "Authenticated allow, deny, and fail paths MUST each emit structured audit events with app, key, actor, status, action, and relevant draft/execution correlation.",
+      "evidence": [
+        "success audit for authenticated read or action",
+        "denied audit for policy or precondition denial",
+        "failed audit for adapter/tool execution failure",
+        "correlation fields present where applicable"
+      ]
+    }
+  ]
+}

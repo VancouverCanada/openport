@@ -1,5 +1,5 @@
 import type { AgentAuditLog } from './types.js'
-import { nowIso, randomId } from './utils.js'
+import { nowIso, randomId, sha256JcsHex } from './utils.js'
 
 export type AuditInput = {
   appId?: string | null
@@ -26,7 +26,31 @@ export class InMemoryAuditSink implements AuditSink {
   private readonly events: AgentAuditLog[] = []
 
   async log(event: AgentAuditLog): Promise<void> {
-    this.events.push(event)
+    const previous = this.events[this.events.length - 1] || null
+    const prevEventHash = previous?.event_hash || null
+    const next: AgentAuditLog = {
+      ...event,
+      prev_event_hash: prevEventHash,
+      event_hash: sha256JcsHex({
+        prev_event_hash: prevEventHash,
+        id: event.id,
+        app_id: event.app_id,
+        key_id: event.key_id,
+        actor_user_id: event.actor_user_id,
+        performed_by_user_id: event.performed_by_user_id,
+        action: event.action,
+        status: event.status,
+        code: event.code,
+        request_id: event.request_id,
+        draft_id: event.draft_id,
+        execution_id: event.execution_id,
+        ip: event.ip,
+        user_agent: event.user_agent,
+        details: event.details,
+        created_at: event.created_at
+      })
+    }
+    this.events.push(next)
   }
 
   list(): AgentAuditLog[] {
@@ -53,7 +77,9 @@ export class AuditService {
       ip: input.ip || null,
       user_agent: input.userAgent || null,
       details: input.details || null,
-      created_at: nowIso()
+      created_at: nowIso(),
+      prev_event_hash: null,
+      event_hash: ''
     }
 
     await this.sink.log(event)

@@ -76,6 +76,13 @@ export class AgentToolRegistry {
         requiredScopes: ['ledger.read'],
         risk: 'low',
         requiresConfirmation: false,
+        contextRiskPolicy: {
+          low: 'execute_allowed',
+          medium: 'execute_allowed',
+          high: 'read_only',
+          critical: 'hidden',
+          reasonCodes: ['bounded_read']
+        },
         http: { method: 'GET', path: '/api/agent/v1/ledgers' },
         inputSchema: { type: 'object', properties: {} },
         outputSchema: { type: 'object', properties: { items: { type: 'array' } } }
@@ -86,6 +93,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.read'],
         risk: 'low',
         requiresConfirmation: false,
+        contextRiskPolicy: {
+          low: 'execute_allowed',
+          medium: 'execute_allowed',
+          high: 'read_only',
+          critical: 'hidden',
+          reasonCodes: ['bounded_read']
+        },
         http: { method: 'GET', path: '/api/agent/v1/transactions' },
         inputSchema: {
           type: 'object',
@@ -110,6 +124,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.write'],
         risk: 'medium',
         requiresConfirmation: true,
+        contextRiskPolicy: {
+          low: 'confirm_required',
+          medium: 'draft_only',
+          high: 'draft_only',
+          critical: 'hidden',
+          reasonCodes: ['external_content', 'draft_fallback']
+        },
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { transaction: { type: 'object' } } },
@@ -134,6 +155,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.write'],
         risk: 'medium',
         requiresConfirmation: true,
+        contextRiskPolicy: {
+          low: 'confirm_required',
+          medium: 'preflight_required',
+          high: 'draft_only',
+          critical: 'hidden',
+          reasonCodes: ['external_content', 'state_sensitive_update']
+        },
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { transaction: { type: 'object' } } },
@@ -164,6 +192,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.delete'],
         risk: 'high',
         requiresConfirmation: true,
+        contextRiskPolicy: {
+          low: 'preflight_required',
+          medium: 'hidden',
+          high: 'hidden',
+          critical: 'hidden',
+          reasonCodes: ['destructive_effect', 'external_content']
+        },
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
@@ -211,6 +246,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.delete'],
         risk: 'high',
         requiresConfirmation: true,
+        contextRiskPolicy: {
+          low: 'preflight_required',
+          medium: 'hidden',
+          high: 'hidden',
+          critical: 'hidden',
+          reasonCodes: ['destructive_effect', 'external_content']
+        },
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { deleted: { type: 'object' } } },
@@ -258,6 +300,13 @@ export class AgentToolRegistry {
         requiredScopes: ['transaction.read', 'transaction.export'],
         risk: 'high',
         requiresConfirmation: true,
+        contextRiskPolicy: {
+          low: 'preflight_required',
+          medium: 'hidden',
+          high: 'hidden',
+          critical: 'hidden',
+          reasonCodes: ['export_effect', 'external_content']
+        },
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { export: { type: 'object' } } },

@@ -1,4 +1,4 @@
-import type { AgentApp, AgentAutoExecute, AgentDraft, AgentExecution, AgentKey, AgentPolicy, DraftStatus, StepUpSession, StepUpToken } from './types.js'
+import type { AgentApp, AgentAutoExecute, AgentDraft, AgentExecution, AgentKey, AgentPolicy, ContextRiskSnapshot, DraftStatus, IntentCertificate, StepUpSession, StepUpToken } from './types.js'
 import { isExpired, nowIso, randomId } from './utils.js'
 
 type PreflightRecord = {
@@ -24,8 +24,13 @@ export class InMemoryStore {
   readonly stepUpSessions = new Map<string, StepUpSession>()
   readonly stepUpTokens = new Map<string, StepUpToken>()
   readonly preflights = new Map<string, PreflightRecord>()
+  readonly intentCertificates = new Map<string, IntentCertificate>()
+  readonly contextRiskSnapshots = new Map<string, ContextRiskSnapshot>()
 
   private readonly preflightTtlMs = 10 * 60 * 1000
+  private readonly intentTtlMs = 10 * 60 * 1000
+  private readonly contextRiskTtlMs = 10 * 60 * 1000
+  private readonly currentContextRiskBySession = new Map<string, string>()
 
   listApps(): AgentApp[] {
     return [...this.apps.values()].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -184,6 +189,95 @@ export class InMemoryStore {
     return record
   }
 
+  saveIntentCertificate(input: Omit<IntentCertificate, 'id' | 'created_at' | 'expires_at' | 'revoked_at'> & { id?: string; ttl_ms?: number; revoked_at?: string | null }): IntentCertificate {
+    const now = Date.now()
+    const ttl = Number.isFinite(Number(input.ttl_ms)) ? Math.max(10_000, Math.trunc(Number(input.ttl_ms))) : this.intentTtlMs
+    const certificate: IntentCertificate = {
+      id: input.id || randomId('int'),
+      app_id: input.app_id,
+      key_id: input.key_id,
+      actor_user_id: input.actor_user_id,
+      request_hash: input.request_hash,
+      request_excerpt: input.request_excerpt,
+      intent_classes: input.intent_classes,
+      resource_bounds: input.resource_bounds,
+      effect_bounds: input.effect_bounds,
+      confidence: input.confidence,
+      review_mode: input.review_mode,
+      classifier_source: input.classifier_source,
+      audit_digest: input.audit_digest,
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + ttl).toISOString(),
+      revoked_at: input.revoked_at || null
+    }
+    this.intentCertificates.set(certificate.id, certificate)
+    return certificate
+  }
+
+  getIntentCertificate(certificateId: string): IntentCertificate | null {
+    const record = this.intentCertificates.get(certificateId) || null
+    if (!record) return null
+    if (record.revoked_at || isExpired(record.expires_at)) {
+      this.intentCertificates.delete(certificateId)
+      return null
+    }
+    return record
+  }
+
+  revokeIntentCertificate(certificateId: string, revokedAt = nowIso()): IntentCertificate | null {
+    const record = this.intentCertificates.get(certificateId) || null
+    if (!record) return null
+    const next: IntentCertificate = {
+      ...record,
+      revoked_at: revokedAt
+    }
+    this.intentCertificates.set(certificateId, next)
+    return next
+  }
+
+  saveContextRiskSnapshot(input: Omit<ContextRiskSnapshot, 'snapshot_id' | 'created_at' | 'expires_at'> & { snapshot_id?: string; ttl_ms?: number; expires_at?: string | null }): ContextRiskSnapshot {
+    const now = Date.now()
+    const ttl = Number.isFinite(Number(input.ttl_ms)) ? Math.max(10_000, Math.trunc(Number(input.ttl_ms))) : this.contextRiskTtlMs
+    const snapshot: ContextRiskSnapshot = {
+      snapshot_id: input.snapshot_id || randomId('crs'),
+      app_id: input.app_id,
+      key_id: input.key_id,
+      actor_user_id: input.actor_user_id,
+      session_id: input.session_id,
+      risk: input.risk,
+      score: input.score,
+      source_labels: input.source_labels,
+      segment_hashes: input.segment_hashes,
+      reasons: input.reasons,
+      created_at: new Date(now).toISOString(),
+      expires_at: input.expires_at === null ? null : input.expires_at || new Date(now + ttl).toISOString()
+    }
+    this.contextRiskSnapshots.set(snapshot.snapshot_id, snapshot)
+    this.currentContextRiskBySession.set(this.contextRiskSessionKey(snapshot), snapshot.snapshot_id)
+    return snapshot
+  }
+
+  getContextRiskSnapshot(snapshotId: string): ContextRiskSnapshot | null {
+    const record = this.contextRiskSnapshots.get(snapshotId) || null
+    if (!record) return null
+    if (isExpired(record.expires_at)) {
+      this.contextRiskSnapshots.delete(snapshotId)
+      const key = this.contextRiskSessionKey(record)
+      if (this.currentContextRiskBySession.get(key) === snapshotId) this.currentContextRiskBySession.delete(key)
+      return null
+    }
+    return record
+  }
+
+  getCurrentContextRiskSnapshot(input: { app_id: string; key_id: string; actor_user_id: string; session_id: string }): ContextRiskSnapshot | null {
+    const snapshotId = this.currentContextRiskBySession.get(this.contextRiskSessionKey(input))
+    return snapshotId ? this.getContextRiskSnapshot(snapshotId) : null
+  }
+
+  private contextRiskSessionKey(input: { app_id: string; key_id: string; actor_user_id: string; session_id: string }): string {
+    return `${input.app_id}:${input.key_id}:${input.actor_user_id}:${input.session_id}`
+  }
+
   updateDraft(draftId: string, patch: Partial<AgentDraft>): AgentDraft | null {
     const existing = this.drafts.get(draftId)
     if (!existing) return null
@@ -270,5 +364,59 @@ export class InMemoryStore {
 
   getStepUpToken(tokenId: string): StepUpToken | null {
     return this.stepUpTokens.get(tokenId) || null
+  }
+
+  sweepExpired(): {
+    removedPreflights: number
+    removedIntentCertificates: number
+    removedContextRiskSnapshots: number
+    removedStepUpSessions: number
+    removedStepUpTokens: number
+  } {
+    let removedPreflights = 0
+    let removedIntentCertificates = 0
+    let removedContextRiskSnapshots = 0
+    let removedStepUpSessions = 0
+    let removedStepUpTokens = 0
+
+    for (const [id, record] of this.preflights.entries()) {
+      if (!isExpired(record.expires_at)) continue
+      this.preflights.delete(id)
+      removedPreflights += 1
+    }
+
+    for (const [id, record] of this.intentCertificates.entries()) {
+      if (!record.revoked_at && !isExpired(record.expires_at)) continue
+      this.intentCertificates.delete(id)
+      removedIntentCertificates += 1
+    }
+
+    for (const [id, record] of this.contextRiskSnapshots.entries()) {
+      if (!isExpired(record.expires_at)) continue
+      this.contextRiskSnapshots.delete(id)
+      const key = this.contextRiskSessionKey(record)
+      if (this.currentContextRiskBySession.get(key) === id) this.currentContextRiskBySession.delete(key)
+      removedContextRiskSnapshots += 1
+    }
+
+    for (const [id, record] of this.stepUpSessions.entries()) {
+      if (!isExpired(record.expires_at)) continue
+      this.stepUpSessions.delete(id)
+      removedStepUpSessions += 1
+    }
+
+    for (const [id, record] of this.stepUpTokens.entries()) {
+      if (!isExpired(record.expires_at)) continue
+      this.stepUpTokens.delete(id)
+      removedStepUpTokens += 1
+    }
+
+    return {
+      removedPreflights,
+      removedIntentCertificates,
+      removedContextRiskSnapshots,
+      removedStepUpSessions,
+      removedStepUpTokens
+    }
   }
 }

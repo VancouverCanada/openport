@@ -65,4 +65,42 @@ describe('fuzz http surface', () => {
       await app.close()
     }
   })
+
+  it('does not return 5xx for malformed intent certificate inputs and invalid manifest bindings', async () => {
+    const { app, bootstrap } = await buildDemoApp()
+    const token = String((bootstrap as any).token)
+
+    try {
+      const malformedBodies = [
+        null,
+        { request: 123, confidence: 'high' },
+        { intentClasses: ['read', 'totally_invalid'], confidence: -10 },
+        { intentClasses: 'read', resourceBounds: [] },
+        { reviewMode: 'split', effectBounds: 'bad-shape' }
+      ]
+
+      for (const payload of malformedBodies) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/agent/v1/intent',
+          headers: bearer(token),
+          payload
+        })
+        expect(response.statusCode).toBeGreaterThanOrEqual(400)
+        expect(response.statusCode).toBeLessThan(500)
+      }
+
+      for (let i = 0; i < 20; i += 1) {
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/agent/v1/manifest?intentCertificateId=${encodeURIComponent(`bad-${pseudoRandomString(i)}`)}`,
+          headers: bearer(token)
+        })
+        expect(response.statusCode).toBeGreaterThanOrEqual(400)
+        expect(response.statusCode).toBeLessThan(500)
+      }
+    } finally {
+      await app.close()
+    }
+  })
 })

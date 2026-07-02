@@ -1,10 +1,12 @@
 import { AuditService } from './audit.js'
+import { ContextRiskEngine, contextRiskAuditDetails, publicContextRiskSnapshot } from './context-risk.js'
 import { ErrorCodes } from './error-codes.js'
 import { OpenPortError } from './errors.js'
+import { IntentEngine, intentAuditDetails } from './intent-engine.js'
 import { ensureLedgerAllowed, ensureScope, ensureWorkspaceBoundary, getDataPolicy, resolveDateRange } from './policy.js'
 import { InMemoryStore } from './store.js'
 import { AgentToolRegistry } from './tool-registry.js'
-import type { AgentDraft, AgentRequestContext, DomainAdapter } from './types.js'
+import type { AgentDraft, AgentRequestContext, DomainAdapter, IntentCertificate } from './types.js'
 import { isExpired, sha256JcsHex } from './utils.js'
 
 function normalizeAutoExecute(value: unknown): {
@@ -37,10 +39,34 @@ export class AgentEngine {
     private readonly store: InMemoryStore,
     private readonly domain: DomainAdapter,
     private readonly tools: AgentToolRegistry,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly intent: IntentEngine,
+    private readonly contextRisk: ContextRiskEngine
   ) {}
 
-  manifest(ctx: AgentRequestContext): { app: Record<string, unknown>; tools: unknown[] } {
+  async manifest(ctx: AgentRequestContext, opts: { intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string } = {}): Promise<{ app: Record<string, unknown>; tools: unknown[]; intentCertificate?: Record<string, unknown>; contextRiskSnapshot?: Record<string, unknown> }> {
+    const certificate = this.intent.getCertificateForContext(ctx, opts.intentCertificateId)
+    const staticTools = this.tools.listManifestTools(ctx)
+    const intentTools = this.intent.filterManifest(certificate, staticTools)
+    const contextFiltered = await this.contextRisk.filterManifest(ctx, intentTools, opts)
+    const tools = contextFiltered.tools
+    if (certificate) {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.intent.manifest',
+        status: 'success',
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: intentAuditDetails(certificate, {
+          staticToolCount: staticTools.length,
+          visibleToolCount: tools.length,
+          contextRiskSnapshotId: contextFiltered.snapshot?.snapshot_id || null
+        })
+      })
+    }
     return {
       app: {
         id: ctx.app.id,
@@ -48,7 +74,9 @@ export class AgentEngine {
         scope: ctx.app.scope,
         orgId: ctx.app.org_id
       },
-      tools: this.tools.listManifestTools(ctx)
+      tools,
+      ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
+      ...(contextFiltered.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextFiltered.snapshot) } : {})
     }
   }
 
@@ -147,12 +175,60 @@ export class AgentEngine {
     }
   }
 
-  async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown> }): Promise<Record<string, unknown>> {
+  async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown>; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string }): Promise<Record<string, unknown>> {
     const tool = this.tools.getActionTool(input.action)
     if (!tool) {
       throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
+    const contextDecision = this.contextRisk.checkToolMode(ctx, tool, input)
+    if (contextDecision.mode === 'hidden' || contextDecision.mode === 'read_only') {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.action.preflight',
+        status: 'denied',
+        code: contextDecision.code,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: contextRiskAuditDetails(contextDecision.snapshot, {
+          actionType: tool.name,
+          mode: contextDecision.mode,
+          reason: contextDecision.reason
+        })
+      })
+      throw new OpenPortError(403, contextDecision.code || ErrorCodes.AGENT_CONTEXT_TOOL_HIDDEN, 'Context policy denied preflight', {
+        action: tool.name,
+        mode: contextDecision.mode,
+        reason: contextDecision.reason
+      })
+    }
+    const certificate = this.intent.getCertificateForContext(ctx, input.intentCertificateId)
+    const intentDecision = this.intent.checkTool(certificate, tool, { payload: input.payload, execute: false })
+    if (intentDecision?.decision === 'deny') {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.action.preflight',
+        status: 'denied',
+        code: intentDecision.code,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: intentAuditDetails(certificate, {
+          actionType: tool.name,
+          reason: intentDecision.reason,
+          intentDecision: intentDecision.decision
+        })
+      })
+      throw new OpenPortError(403, intentDecision.code || ErrorCodes.AGENT_FORBIDDEN, 'Intent policy denied', {
+        action: tool.name,
+        reason: intentDecision.reason
+      })
+    }
 
     const impact = tool.computeImpact
       ? await tool.computeImpact(ctx, input.payload, { domain: this.domain })
@@ -183,7 +259,13 @@ export class AgentEngine {
       status: 'success',
       ip: ctx.ip,
       userAgent: ctx.userAgent,
-      details: { actionType: tool.name, risk: tool.risk, impact }
+      details: contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
+        actionType: tool.name,
+        risk: tool.risk,
+        impact,
+        contextMode: contextDecision.mode,
+        intentDecision: intentDecision?.decision || null
+      }))
     })
 
     return {
@@ -194,11 +276,14 @@ export class AgentEngine {
       impactHash,
       stateWitness,
       stateWitnessHash,
-      preflightId: preflight.id
+      preflightId: preflight.id,
+      contextMode: contextDecision.mode,
+      ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
+      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
     }
   }
 
-  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string; stateWitnessHash?: string }): Promise<Record<string, unknown>> {
+  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string; stateWitnessHash?: string; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string }): Promise<Record<string, unknown>> {
     let actionName = input.action
     let payload = input.payload
     let preflightHash = input.preflightHash
@@ -228,6 +313,54 @@ export class AgentEngine {
       throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
     }
     ensureScope(ctx, tool.requiredScopes)
+    const contextDecision = this.contextRisk.checkToolMode(ctx, tool, input)
+    if (contextDecision.mode === 'hidden' || contextDecision.mode === 'read_only') {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.action.create',
+        status: 'denied',
+        code: contextDecision.code,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: contextRiskAuditDetails(contextDecision.snapshot, {
+          actionType: tool.name,
+          mode: contextDecision.mode,
+          reason: contextDecision.reason
+        })
+      })
+      throw new OpenPortError(403, contextDecision.code || ErrorCodes.AGENT_CONTEXT_TOOL_HIDDEN, 'Context policy denied action', {
+        action: tool.name,
+        mode: contextDecision.mode,
+        reason: contextDecision.reason
+      })
+    }
+    const certificate = this.intent.getCertificateForContext(ctx, input.intentCertificateId)
+    const intentDecision = this.intent.checkTool(certificate, tool, { payload, execute: input.execute === true && input.forceDraft !== true })
+    if (intentDecision?.decision === 'deny') {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.action.create',
+        status: 'denied',
+        code: intentDecision.code,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: intentAuditDetails(certificate, {
+          actionType: tool.name,
+          reason: intentDecision.reason,
+          intentDecision: intentDecision.decision
+        })
+      })
+      throw new OpenPortError(403, intentDecision.code || ErrorCodes.AGENT_FORBIDDEN, 'Intent policy denied', {
+        action: tool.name,
+        reason: intentDecision.reason
+      })
+    }
 
     const auto = normalizeAutoExecute(ctx.app.auto_execute)
     const wantsExecute = input.execute === true && input.forceDraft !== true
@@ -257,7 +390,8 @@ export class AgentEngine {
       }
     }
 
-    const impact = tool.risk === 'high'
+    const contextRequiresPreflight = contextDecision.mode === 'preflight_required'
+    const impact = tool.risk === 'high' || contextRequiresPreflight
       ? (tool.computeImpact ? await tool.computeImpact(ctx, payload, { domain: this.domain }) : { summary: 'High impact action' })
       : null
     const computedPreflightHash = impact
@@ -272,6 +406,18 @@ export class AgentEngine {
     const expectedStateWitnessHash = stateWitnessHash?.trim() || null
 
     if (expectedStateWitnessHash && computedStateWitnessHash && computedStateWitnessHash !== expectedStateWitnessHash) {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: ctx.actorUserId,
+        action: 'agent.action.create',
+        status: 'denied',
+        code: ErrorCodes.AGENT_PRECONDITION_FAILED,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        details: intentAuditDetails(certificate, { actionType: tool.name, reason: 'state_witness_mismatch' })
+      })
       throw new OpenPortError(409, ErrorCodes.AGENT_PRECONDITION_FAILED, 'State precondition failed', {
         action: tool.name,
         reason: 'state_witness_mismatch'
@@ -285,7 +431,15 @@ export class AgentEngine {
     let autoExecuteDeniedCode: string | null = null
 
     if (wantsExecute) {
-      if (tool.risk === 'high') {
+      if (intentDecision?.decision === 'review') {
+        autoExecuteDeniedCode = intentDecision.code
+      } else if (contextDecision.mode === 'draft_only' || contextDecision.mode === 'confirm_required') {
+        autoExecuteDeniedCode = ErrorCodes.AGENT_CONTEXT_MODE_DOWNGRADED
+      } else if (contextRequiresPreflight && !preflightHash?.trim()) {
+        autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_REQUIRED
+      } else if (contextRequiresPreflight && computedPreflightHash !== preflightHash?.trim()) {
+        autoExecuteDeniedCode = ErrorCodes.AGENT_PREFLIGHT_MISMATCH
+      } else if (tool.risk === 'high') {
         if (!auto.highRisk.enabled) autoExecuteDeniedCode = ErrorCodes.AGENT_AUTO_EXECUTE_DISABLED
         else if (isExpired(auto.highRisk.expiresAt)) autoExecuteDeniedCode = ErrorCodes.AGENT_AUTO_EXECUTE_EXPIRED
         else if (auto.highRisk.allowedActions && !auto.highRisk.allowedActions.includes(tool.name)) autoExecuteDeniedCode = ErrorCodes.AGENT_AUTO_EXECUTE_DENIED
@@ -322,7 +476,27 @@ export class AgentEngine {
       policy_snapshot: {
         requiredScopes: tool.requiredScopes,
         risk: tool.risk,
-        auto_execute: auto
+        auto_execute: auto,
+        ...(contextDecision.snapshot ? {
+          context: {
+            snapshotId: contextDecision.snapshot.snapshot_id,
+            sessionId: contextDecision.snapshot.session_id,
+            risk: contextDecision.snapshot.risk,
+            mode: contextDecision.mode,
+            reason: contextDecision.reason
+          }
+        } : {}),
+        ...(certificate ? {
+          intent: {
+            certificateId: certificate.id,
+            intentHash: certificate.request_hash,
+            intentClasses: certificate.intent_classes,
+            confidence: certificate.confidence,
+            reviewMode: certificate.review_mode,
+            decision: intentDecision?.decision || null,
+            reason: intentDecision?.reason || null
+          }
+        } : {})
       },
       confirmed_by_user_id: null,
       confirmed_at: canAutoExecute ? new Date().toISOString() : null,
@@ -340,12 +514,14 @@ export class AgentEngine {
       ip: ctx.ip,
       userAgent: ctx.userAgent,
       draftId: draft.id,
-      details: {
+      details: contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
         actionType: tool.name,
         risk: tool.risk,
+        contextMode: contextDecision.mode,
         autoExecuteRequested: wantsExecute,
-        autoExecuteDeniedCode
-      }
+        autoExecuteDeniedCode,
+        intentDecision: intentDecision?.decision || null
+      }))
     })
 
     if (!canAutoExecute) {
@@ -353,7 +529,9 @@ export class AgentEngine {
         status: 'draft',
         draft: this.toPublicDraft(draft),
         autoExecuteDeniedCode,
-        review_path: '/agent-admin/v1/drafts'
+        review_path: '/agent-admin/v1/drafts',
+        ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
+        ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
       }
     }
 
@@ -362,7 +540,9 @@ export class AgentEngine {
     return {
       status: 'executed',
       draft: { id: draft.id, status: execution.draftStatus },
-      execution: execution.execution
+      execution: execution.execution,
+      ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
+      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
     }
   }
 
@@ -395,6 +575,40 @@ export class AgentEngine {
     }
 
     ensureScope(ctx, tool.requiredScopes)
+
+    const contextPolicy = (draft.policy_snapshot && typeof draft.policy_snapshot === 'object')
+      ? (draft.policy_snapshot as { context?: { sessionId?: unknown; snapshotId?: unknown } }).context
+      : null
+    const executeContextDecision = contextPolicy
+      ? this.contextRisk.checkToolMode(ctx, tool, {
+        sessionId: contextPolicy.sessionId ? String(contextPolicy.sessionId) : undefined,
+        contextRiskSnapshotId: contextPolicy.snapshotId ? String(contextPolicy.snapshotId) : undefined
+      })
+      : null
+    if (executeContextDecision && (executeContextDecision.mode === 'hidden' || executeContextDecision.mode === 'read_only')) {
+      await this.audit.log({
+        appId: ctx.app.id,
+        keyId: ctx.key.id,
+        actorUserId: ctx.actorUserId,
+        performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
+        action: 'agent.action.execute',
+        status: 'denied',
+        code: ErrorCodes.AGENT_CONTEXT_MANIFEST_STALE,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        draftId: draft.id,
+        details: contextRiskAuditDetails(executeContextDecision.snapshot, {
+          actionType: tool.name,
+          mode: executeContextDecision.mode,
+          reason: 'current_context_no_longer_allows_draft_execution'
+        })
+      })
+      throw new OpenPortError(403, ErrorCodes.AGENT_CONTEXT_MANIFEST_STALE, 'Current context no longer allows this action', {
+        action: tool.name,
+        mode: executeContextDecision.mode,
+        reason: 'current_context_no_longer_allows_draft_execution'
+      })
+    }
 
     if (draft.idempotency_key) {
       const replay = this.store.findExecutionByIdempotency(ctx.app.id, draft.idempotency_key)
@@ -477,7 +691,9 @@ export class AgentEngine {
         execution
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Execution failed'
+      const known = error instanceof OpenPortError
+      const message = known ? error.message : 'Execution failed'
+      const code = known ? error.code : ErrorCodes.AGENT_EXECUTION_FAILED
       const execution = this.store.saveExecution({
         draft_id: draft.id,
         app_id: draft.app_id,
@@ -496,7 +712,7 @@ export class AgentEngine {
         performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
         action: 'agent.action.execute',
         status: 'failed',
-        code: message,
+        code,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
         draftId: draft.id,
@@ -521,10 +737,24 @@ export class AgentEngine {
       justification: draft.justification,
       preflight_hash: draft.preflight_hash,
       preflight_state_witness_hash: draft.preflight_state_witness_hash,
+      policy_snapshot: draft.policy_snapshot,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
       confirmed_at: draft.confirmed_at,
       canceled_at: draft.canceled_at
+    }
+  }
+
+  private toPublicIntent(certificate: IntentCertificate): Record<string, unknown> {
+    return {
+      id: certificate.id,
+      requestHash: certificate.request_hash,
+      intentClasses: certificate.intent_classes,
+      confidence: certificate.confidence,
+      reviewMode: certificate.review_mode,
+      classifierSource: certificate.classifier_source,
+      auditDigest: certificate.audit_digest,
+      expiresAt: certificate.expires_at
     }
   }
 }

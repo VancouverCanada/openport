@@ -4,6 +4,75 @@ export type AgentAppStatus = 'active' | 'revoked'
 export type DraftStatus = 'draft' | 'confirmed' | 'canceled' | 'failed'
 export type ExecutionStatus = 'success' | 'failed'
 export type ToolRisk = 'low' | 'medium' | 'high'
+export type ContextRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+export type ContextTrust = 'trusted' | 'untrusted' | 'derived' | 'system'
+export type ContextAuthorityMode = 'hidden' | 'read_only' | 'draft_only' | 'preflight_required' | 'confirm_required' | 'execute_allowed'
+export type ContextSourceLabel =
+  | 'trusted_user_instruction'
+  | 'trusted_system_policy'
+  | 'trusted_admin_policy'
+  | 'untrusted_document'
+  | 'untrusted_web_content'
+  | 'untrusted_tool_output'
+  | 'external_message'
+  | 'derived_summary'
+  | 'model_plan'
+  | 'product_preview_block'
+  | 'pending_flow_state'
+  | 'compute_result'
+  | 'provider_fallback_output'
+export type IntentClass = 'read' | 'summarize' | 'transform' | 'create' | 'update' | 'delete' | 'export' | 'delegate' | 'admin' | 'unknown'
+export type IntentReviewMode = 'allow' | 'draft' | 'preflight' | 'confirm' | 'deny' | 'clarify'
+
+export type ContextSegment = {
+  id: string
+  source: ContextSourceLabel
+  author?: string | null
+  trust: ContextTrust
+  instructionLike?: boolean
+  derivedFrom?: string[]
+  hash: string
+  ttlSeconds?: number
+  createdAt: string
+}
+
+export type ContextRiskSnapshot = {
+  snapshot_id: string
+  app_id: string
+  key_id: string
+  actor_user_id: string
+  session_id: string
+  risk: ContextRiskLevel
+  score: number
+  source_labels: ContextSourceLabel[]
+  segment_hashes: string[]
+  reasons: string[]
+  created_at: string
+  expires_at: string | null
+}
+
+export type ToolContextRiskPolicy = Partial<Record<ContextRiskLevel, ContextAuthorityMode>> & {
+  reasonCodes?: string[]
+}
+
+export type IntentCertificate = {
+  id: string
+  app_id: string
+  key_id: string
+  actor_user_id: string
+  request_hash: string
+  request_excerpt: string | null
+  intent_classes: IntentClass[]
+  resource_bounds: Record<string, unknown>
+  effect_bounds: Record<string, unknown>
+  confidence: number
+  review_mode: IntentReviewMode
+  classifier_source: string
+  audit_digest: string
+  created_at: string
+  expires_at: string
+  revoked_at: string | null
+}
 
 export type AgentDataPolicy = {
   allowed_ledger_ids?: string[]
@@ -127,6 +196,8 @@ export type AgentAuditLog = {
   user_agent: string | null
   details: Record<string, unknown> | null
   created_at: string
+  prev_event_hash: string | null
+  event_hash: string
 }
 
 export type Ledger = {
@@ -176,6 +247,7 @@ export type AgentManifestTool = {
   requiredScopes: string[]
   risk: ToolRisk
   requiresConfirmation: boolean
+  contextRiskPolicy?: ToolContextRiskPolicy
   http?: {
     method: 'GET' | 'POST' | 'PATCH'
     path: string
