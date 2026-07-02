@@ -26,17 +26,11 @@ import type {
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceSkillResponse,
   OpenPortWorkspaceTool,
-  OpenPortWorkspaceToolRun,
-  OpenPortWorkspaceToolRunResponse,
-  OpenPortWorkspaceToolExecutionChain,
-  OpenPortWorkspaceToolPackage,
-  OpenPortWorkspaceToolPackageImportResponse,
-  OpenPortWorkspaceToolPackageResponse,
   OpenPortWorkspaceToolResponse,
   OpenPortWorkspaceToolValveSchemaField,
   OpenPortWorkspaceToolValidationResponse
 } from '@openport/product-contracts'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { GroupsService } from '../groups/groups.service.js'
 import { WorkspacesService } from '../workspaces/workspaces.service.js'
 import { ApiStateStoreService } from '../storage/api-state-store.service.js'
@@ -50,9 +44,6 @@ import type { SubmitWorkspacePromptCommunityDto } from './dto/submit-workspace-p
 import type { CreateWorkspaceToolDto } from './dto/create-workspace-tool.dto.js'
 import type { UpdateWorkspaceToolDto } from './dto/update-workspace-tool.dto.js'
 import type { ValidateWorkspaceToolDto } from './dto/validate-workspace-tool.dto.js'
-import type { ImportWorkspaceToolPackageDto } from './dto/import-workspace-tool-package.dto.js'
-import type { RunWorkspaceToolOrchestrationDto } from './dto/run-workspace-tool-orchestration.dto.js'
-import type { ReplayWorkspaceToolOrchestrationRunDto } from './dto/replay-workspace-tool-orchestration-run.dto.js'
 import type { CreateWorkspaceSkillDto } from './dto/create-workspace-skill.dto.js'
 import type { UpdateWorkspaceSkillDto } from './dto/update-workspace-skill.dto.js'
 import type { ShareWorkspaceResourceDto } from './dto/share-workspace-resource.dto.js'
@@ -99,7 +90,6 @@ function rankResourcePermission(permission: OpenPortWorkspaceResourcePermission)
 export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy {
   private connectorScheduler: ReturnType<typeof setInterval> | null = null
   private connectorRunner: Promise<void> | null = null
-  private toolRunner: Promise<void> | null = null
 
   constructor(
     private readonly workspaces: WorkspacesService,
@@ -112,7 +102,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     this.connectorScheduler = setInterval(() => {
       void this.runConnectorSchedulerTick()
       void this.runConnectorQueueTick()
-      void this.runToolQueueTick()
     }, 15_000)
   }
 
@@ -162,6 +151,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       name: dto.name.trim(),
       route: normalized.route,
       provider: normalized.provider,
+      source: 'managed',
       description: dto.description?.trim() || '',
       tags: dto.tags?.filter(Boolean) || [],
       status: dto.status === 'disabled' ? 'disabled' : 'active',
@@ -197,6 +187,35 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     const item = items.find((entry) => entry.id === id)
     if (!item) throw new NotFoundException('Model not found')
     await this.ensureResourcePermission(actor, item.accessGrants, 'write')
+    const currentSource = this.resolveWorkspaceModelSource(item)
+    const nextSource = dto.source === 'runtime' || dto.source === 'managed' ? dto.source : currentSource
+
+    if (currentSource === 'runtime') {
+      const hasNonSourceChanges = [
+        dto.id,
+        dto.name,
+        dto.route,
+        dto.provider,
+        dto.description,
+        dto.tags,
+        dto.status,
+        dto.isDefault,
+        dto.filterIds,
+        dto.defaultFilterIds,
+        dto.actionIds,
+        dto.defaultFeatureIds,
+        dto.capabilities,
+        dto.knowledgeItemIds,
+        dto.toolIds,
+        dto.builtinToolIds,
+        dto.skillIds,
+        dto.promptSuggestions
+      ].some((value) => value !== undefined)
+      const promoteOnly = nextSource === 'managed' && !hasNonSourceChanges
+      if (!promoteOnly) {
+        throw new BadRequestException('Runtime models are read-only. Save as managed preset to edit.')
+      }
+    }
 
     const nextName = dto.name?.trim() || item.name
     const normalized = this.normalizeWorkspaceModelIdentity({
@@ -213,6 +232,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       name: nextName,
       route: normalized.route,
       provider: normalized.provider,
+      source: nextSource,
       description: dto.description?.trim() ?? item.description,
       tags: dto.tags ? dto.tags.filter(Boolean) : item.tags,
       status: dto.status === 'disabled' ? 'disabled' : dto.status === 'active' ? 'active' : item.status,
@@ -250,6 +270,9 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     const items = await this.stateStore.readWorkspaceModels(actor.workspaceId)
     const item = items.find((entry) => entry.id === id)
     if (!item) throw new NotFoundException('Model not found')
+    if (this.resolveWorkspaceModelSource(item) === 'runtime') {
+      throw new BadRequestException('Runtime models cannot be deleted. Promote to managed preset first.')
+    }
     await this.ensureResourcePermission(actor, item.accessGrants, 'write')
     const deleted = items.find((entry) => entry.id === id) || null
     const nextItems = items.filter((entry) => entry.id !== id)
@@ -288,6 +311,9 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     const items = await this.stateStore.readWorkspaceModels(actor.workspaceId)
     const item = items.find((entry) => entry.id === id)
     if (!item) throw new NotFoundException('Model not found')
+    if (this.resolveWorkspaceModelSource(item) === 'runtime') {
+      throw new BadRequestException('Runtime models cannot be shared. Promote to managed preset first.')
+    }
     await this.ensureResourcePermission(actor, item.accessGrants, 'admin')
     const grant = await this.shareResource(actor, 'model', id, item.accessGrants, dto)
     item.accessGrants = this.ensureGrantSafeguards(actor.workspaceId, 'model', id, [...item.accessGrants, grant])
@@ -300,6 +326,9 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     const items = await this.stateStore.readWorkspaceModels(actor.workspaceId)
     const item = items.find((entry) => entry.id === id)
     if (!item) throw new NotFoundException('Model not found')
+    if (this.resolveWorkspaceModelSource(item) === 'runtime') {
+      throw new BadRequestException('Runtime models cannot be shared. Promote to managed preset first.')
+    }
     await this.ensureResourcePermission(actor, item.accessGrants, 'admin')
     item.accessGrants = this.removeResourceGrant(actor.workspaceId, 'model', id, item.accessGrants, grantId)
     await this.stateStore.writeWorkspaceModels(actor.workspaceId, items)
@@ -713,132 +742,13 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
 
   async validateTool(actor: Actor, dto: ValidateWorkspaceToolDto): Promise<OpenPortWorkspaceToolValidationResponse> {
     this.assertModuleManage(actor, 'tools')
-    const availableToolIds = new Set((await this.stateStore.readWorkspaceTools(actor.workspaceId)).map((item) => item.id))
     return this.buildToolValidationReport({
       name: dto.name?.trim() || '',
       manifest: dto.manifest ?? '',
       valves: this.normalizeValves(dto.valves),
       valveSchema: this.normalizeValveSchema(dto.valveSchema),
-      examples: this.normalizeToolExamples(dto.examples),
-      executionChain: this.normalizeToolExecutionChain(dto.executionChain),
-      availableToolIds
+      examples: this.normalizeToolExamples(dto.examples)
     })
-  }
-
-  async exportToolPackage(actor: Actor, id: string): Promise<OpenPortWorkspaceToolPackageResponse> {
-    this.assertModuleRead(actor, 'tools')
-    const item = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
-    if (!item) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, item.accessGrants, 'read')
-
-    const exportedAt = new Date().toISOString()
-    const toolPayload = this.buildToolPackageToolPayload(item)
-    const availableToolIds = new Set((await this.stateStore.readWorkspaceTools(actor.workspaceId)).map((entry) => entry.id))
-    const validation = this.buildToolValidationReport({
-      name: toolPayload.name,
-      manifest: toolPayload.manifest,
-      valves: toolPayload.valves,
-      valveSchema: toolPayload.valveSchema,
-      examples: toolPayload.examples,
-      executionChain: toolPayload.executionChain,
-      availableToolIds
-    })
-
-    const pkgWithoutChecksum = {
-      metadata: {
-        schemaVersion: 1 as const,
-        source: 'openport-workspace-tool' as const,
-        sourceToolId: item.id,
-        sourceWorkspaceId: actor.workspaceId,
-        exportedAt
-      },
-      tool: toolPayload
-    }
-
-    const checksum = createHash('sha256').update(JSON.stringify(pkgWithoutChecksum)).digest('hex')
-    const toolPackage: OpenPortWorkspaceToolPackage = {
-      ...pkgWithoutChecksum,
-      metadata: {
-        ...pkgWithoutChecksum.metadata,
-        checksum
-      },
-      validation
-    }
-
-    return { package: toolPackage }
-  }
-
-  async importToolPackage(actor: Actor, dto: ImportWorkspaceToolPackageDto): Promise<OpenPortWorkspaceToolPackageImportResponse> {
-    this.assertModuleManage(actor, 'tools')
-    const normalized = this.normalizeImportedToolPackage(dto.package)
-    const items = await this.stateStore.readWorkspaceTools(actor.workspaceId)
-    const now = new Date().toISOString()
-    const availableToolIds = new Set(items.map((entry) => entry.id))
-
-    if (dto.targetToolId?.trim()) {
-      const targetId = dto.targetToolId.trim()
-      const existing = items.find((entry) => entry.id === targetId)
-      if (!existing) throw new NotFoundException('Target tool not found')
-      await this.ensureResourcePermission(actor, existing.accessGrants, 'write')
-
-      const updated: OpenPortWorkspaceTool = {
-        ...existing,
-        ...normalized.tool,
-        enabled: dto.forceEnable ? true : normalized.tool.enabled,
-        updatedAt: now
-      }
-
-      const validation = this.buildToolValidationReport({
-        name: updated.name,
-        manifest: updated.manifest,
-        valves: updated.valves,
-        valveSchema: updated.valveSchema,
-        examples: updated.examples,
-        executionChain: updated.executionChain,
-        availableToolIds
-      })
-      if (!validation.valid) {
-        throw new BadRequestException(validation.errors.join('; '))
-      }
-
-      await this.stateStore.writeWorkspaceTools(
-        actor.workspaceId,
-        items.map((entry) => (entry.id === targetId ? updated : entry))
-      )
-      return { item: updated, validation }
-    }
-
-    const existingIds = new Set(items.map((entry) => entry.id))
-    const preferredId =
-      normalized.sourceToolId && !existingIds.has(normalized.sourceToolId)
-        ? normalized.sourceToolId
-        : `tool_${randomUUID()}`
-
-    const created: OpenPortWorkspaceTool = {
-      id: preferredId,
-      workspaceId: actor.workspaceId,
-      ...normalized.tool,
-      enabled: dto.forceEnable ? true : normalized.tool.enabled,
-      accessGrants: this.defaultResourceAccessGrants(actor, 'tool', preferredId),
-      createdAt: now,
-      updatedAt: now
-    }
-
-    const validation = this.buildToolValidationReport({
-      name: created.name,
-      manifest: created.manifest,
-      valves: created.valves,
-      valveSchema: created.valveSchema,
-      examples: created.examples,
-      executionChain: created.executionChain,
-      availableToolIds
-    })
-    if (!validation.valid) {
-      throw new BadRequestException(validation.errors.join('; '))
-    }
-
-    await this.stateStore.writeWorkspaceTools(actor.workspaceId, [created, ...items])
-    return { item: created, validation }
   }
 
   async createTool(actor: Actor, dto: CreateWorkspaceToolDto): Promise<OpenPortWorkspaceToolResponse> {
@@ -863,7 +773,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       valves: this.normalizeValves(dto.valves),
       valveSchema: this.normalizeValveSchema(dto.valveSchema),
       examples: this.normalizeToolExamples(dto.examples),
-      executionChain: this.normalizeToolExecutionChain(dto.executionChain),
       accessGrants: this.defaultResourceAccessGrants(actor, 'tool', id),
       createdAt: now,
       updatedAt: now
@@ -874,9 +783,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       manifest: item.manifest,
       valves: item.valves,
       valveSchema: item.valveSchema,
-      examples: item.examples,
-      executionChain: item.executionChain,
-      availableToolIds: new Set(items.map((entry) => entry.id))
+      examples: item.examples
     })
     if (!validation.valid) {
       throw new BadRequestException(validation.errors.join('; '))
@@ -905,7 +812,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       valves: dto.valves ? this.normalizeValves(dto.valves) : item.valves,
       valveSchema: dto.valveSchema ? this.normalizeValveSchema(dto.valveSchema) : item.valveSchema,
       examples: dto.examples ? this.normalizeToolExamples(dto.examples) : item.examples,
-      executionChain: dto.executionChain ? this.normalizeToolExecutionChain(dto.executionChain, item.executionChain) : item.executionChain,
       updatedAt: new Date().toISOString()
     }
 
@@ -914,9 +820,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       manifest: updated.manifest,
       valves: updated.valves,
       valveSchema: updated.valveSchema,
-      examples: updated.examples,
-      executionChain: updated.executionChain,
-      availableToolIds: new Set(items.map((entry) => entry.id))
+      examples: updated.examples
     })
     if (!validation.valid) {
       throw new BadRequestException(validation.errors.join('; '))
@@ -1391,107 +1295,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
         .filter((entry) => entry.connectorId === connectorId)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     }
-  }
-
-  async runToolOrchestration(
-    actor: Actor,
-    id: string,
-    dto: RunWorkspaceToolOrchestrationDto
-  ): Promise<OpenPortWorkspaceToolRunResponse> {
-    this.assertModuleManage(actor, 'tools')
-    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
-    if (!tool) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
-
-    const run = await this.enqueueToolRun(actor.workspaceId, tool, {
-      trigger: 'manual',
-      replayOfRunId: null,
-      debug: Boolean(dto.debug),
-      inputPayload: dto.inputPayload ?? '',
-      stepLimit: dto.stepLimit
-    })
-    void this.runToolQueueTick()
-    return { item: run }
-  }
-
-  async listToolOrchestrationRuns(actor: Actor, id: string): Promise<OpenPortListResponse<OpenPortWorkspaceToolRun>> {
-    this.assertModuleRead(actor, 'tools')
-    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
-    if (!tool) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
-    const items = await this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
-    return {
-      items: items
-        .filter((entry) => entry.toolId === id)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    }
-  }
-
-  async getToolOrchestrationRun(actor: Actor, id: string, runId: string): Promise<OpenPortWorkspaceToolRunResponse> {
-    this.assertModuleRead(actor, 'tools')
-    const tool = (await this.stateStore.readWorkspaceTools(actor.workspaceId)).find((entry) => entry.id === id)
-    if (!tool) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
-    const run = (await this.stateStore.readWorkspaceToolRuns(actor.workspaceId)).find(
-      (entry) => entry.id === runId && entry.toolId === id
-    )
-    if (!run) throw new NotFoundException('Tool orchestration run not found')
-    return { item: run }
-  }
-
-  async replayToolOrchestrationRun(
-    actor: Actor,
-    id: string,
-    runId: string,
-    dto: ReplayWorkspaceToolOrchestrationRunDto
-  ): Promise<OpenPortWorkspaceToolRunResponse> {
-    this.assertModuleManage(actor, 'tools')
-    const [tools, runs] = await Promise.all([
-      this.stateStore.readWorkspaceTools(actor.workspaceId),
-      this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
-    ])
-    const tool = tools.find((entry) => entry.id === id)
-    if (!tool) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
-    const sourceRun = runs.find((entry) => entry.id === runId && entry.toolId === id)
-    if (!sourceRun) throw new NotFoundException('Tool orchestration run not found')
-
-    const run = await this.enqueueToolRun(actor.workspaceId, tool, {
-      trigger: 'replay',
-      replayOfRunId: sourceRun.id,
-      debug: dto.debug ?? sourceRun.debug,
-      inputPayload: dto.inputPayload ?? sourceRun.inputPayload,
-      stepLimit: undefined
-    })
-    void this.runToolQueueTick()
-    return { item: run }
-  }
-
-  async cancelToolOrchestrationRun(actor: Actor, id: string, runId: string): Promise<OpenPortWorkspaceToolRunResponse> {
-    this.assertModuleManage(actor, 'tools')
-    const [tools, runs] = await Promise.all([
-      this.stateStore.readWorkspaceTools(actor.workspaceId),
-      this.stateStore.readWorkspaceToolRuns(actor.workspaceId)
-    ])
-    const tool = tools.find((entry) => entry.id === id)
-    if (!tool) throw new NotFoundException('Tool not found')
-    await this.ensureResourcePermission(actor, tool.accessGrants, 'read')
-    const run = runs.find((entry) => entry.id === runId && entry.toolId === id)
-    if (!run) throw new NotFoundException('Tool orchestration run not found')
-    if (run.status !== 'queued' && run.status !== 'running') {
-      return { item: run }
-    }
-    const updated: OpenPortWorkspaceToolRun = {
-      ...run,
-      status: 'cancelled',
-      finishedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    await this.stateStore.writeWorkspaceToolRuns(
-      actor.workspaceId,
-      runs.map((entry) => (entry.id === runId ? updated : entry))
-    )
-    return { item: updated }
   }
 
   private normalizeConnectorAdapter(input: string): OpenPortWorkspaceConnectorAdapter {
@@ -2027,257 +1830,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     })
   }
 
-  private async enqueueToolRun(
-    workspaceId: string,
-    tool: OpenPortWorkspaceTool,
-    input: {
-      trigger: OpenPortWorkspaceToolRun['trigger']
-      replayOfRunId: string | null
-      debug: boolean
-      inputPayload: string
-      stepLimit?: number
-    }
-  ): Promise<OpenPortWorkspaceToolRun> {
-    const tools = await this.stateStore.readWorkspaceTools(workspaceId)
-    const toolNameById = new Map(tools.map((entry) => [entry.id, entry.name] as const))
-    const limitedSteps =
-      typeof input.stepLimit === 'number' && input.stepLimit > 0
-        ? tool.executionChain.steps.slice(0, Math.floor(input.stepLimit))
-        : tool.executionChain.steps
-    const steps: OpenPortWorkspaceToolRun['steps'] = limitedSteps.map((step, index) => ({
-      id: `tool_run_step_${randomUUID()}`,
-      chainStepId: step.id,
-      toolId: step.toolId,
-      toolName: toolNameById.get(step.toolId) || step.toolId,
-      mode: step.mode,
-      when: step.when,
-      condition: step.condition,
-      conditionMatched: false,
-      branchPath: `step-${index + 1}`,
-      outputKey: step.outputKey,
-      status: 'pending',
-      inputSnapshot: '',
-      outputSnapshot: '',
-      errorMessage: null,
-      startedAt: null,
-      finishedAt: null
-    }))
-    const now = new Date().toISOString()
-    const run: OpenPortWorkspaceToolRun = {
-      id: `tool_run_${randomUUID()}`,
-      workspaceId,
-      toolId: tool.id,
-      trigger: input.trigger,
-      status: 'queued',
-      debug: input.debug,
-      replayOfRunId: input.replayOfRunId,
-      inputPayload: input.inputPayload,
-      outputPayload: '',
-      errorMessage: null,
-      steps,
-      startedAt: null,
-      finishedAt: null,
-      createdAt: now,
-      updatedAt: now
-    }
-    const runs = await this.stateStore.readWorkspaceToolRuns(workspaceId)
-    await this.stateStore.writeWorkspaceToolRuns(workspaceId, [run, ...runs].slice(0, 1000))
-    return run
-  }
-
-  private evaluateStepCondition(
-    condition: string,
-    context: {
-      inputPayload: string
-      previousError: string | null
-      previousOutput: string
-    }
-  ): boolean {
-    const trimmed = condition.trim()
-    if (!trimmed) return true
-    if (trimmed === 'prev_error') return Boolean(context.previousError)
-    if (trimmed === 'prev_success') return !context.previousError
-    if (trimmed.startsWith('contains:')) {
-      const expected = trimmed.slice('contains:'.length).trim()
-      if (!expected) return true
-      return context.inputPayload.toLowerCase().includes(expected.toLowerCase())
-    }
-    if (trimmed.startsWith('output_contains:')) {
-      const expected = trimmed.slice('output_contains:'.length).trim()
-      if (!expected) return true
-      return context.previousOutput.toLowerCase().includes(expected.toLowerCase())
-    }
-    return true
-  }
-
-  private async runToolQueueTick(): Promise<void> {
-    if (this.toolRunner) return
-    this.toolRunner = (async () => {
-      while (true) {
-        const workspaceIds = await this.stateStore.listWorkspaceIdsWithToolRuns()
-        let target: { workspaceId: string; run: OpenPortWorkspaceToolRun } | null = null
-        for (const workspaceId of workspaceIds) {
-          const runs = await this.stateStore.readWorkspaceToolRuns(workspaceId)
-          const run = runs
-            .filter((entry) => entry.status === 'queued')
-            .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]
-          if (!run) continue
-          if (!target || run.createdAt < target.run.createdAt) {
-            target = { workspaceId, run }
-          }
-        }
-        if (!target) {
-          return
-        }
-        await this.executeToolRun(target.workspaceId, target.run.id)
-      }
-    })().finally(() => {
-      this.toolRunner = null
-    })
-    await this.toolRunner
-  }
-
-  private async executeToolRun(workspaceId: string, runId: string): Promise<void> {
-    const [runs, tools] = await Promise.all([
-      this.stateStore.readWorkspaceToolRuns(workspaceId),
-      this.stateStore.readWorkspaceTools(workspaceId)
-    ])
-    const run = runs.find((entry) => entry.id === runId)
-    if (!run || run.status !== 'queued') return
-    const tool = tools.find((entry) => entry.id === run.toolId)
-    if (!tool) {
-      const failed: OpenPortWorkspaceToolRun = {
-        ...run,
-        status: 'failed',
-        errorMessage: 'Tool not found.',
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-      await this.stateStore.writeWorkspaceToolRuns(
-        workspaceId,
-        runs.map((entry) => (entry.id === runId ? failed : entry))
-      )
-      return
-    }
-
-    let previousError: string | null = null
-    let previousOutput = ''
-    let hasFailure = false
-    const startedAt = new Date().toISOString()
-    const stepRuns = run.steps.map((step) => ({ ...step }))
-    const running: OpenPortWorkspaceToolRun = {
-      ...run,
-      status: 'running',
-      startedAt,
-      updatedAt: startedAt,
-      steps: stepRuns
-    }
-    await this.stateStore.writeWorkspaceToolRuns(
-      workspaceId,
-      runs.map((entry) => (entry.id === runId ? running : entry))
-    )
-
-    for (let index = 0; index < stepRuns.length; index += 1) {
-      const step = stepRuns[index]
-      const whenAllowed =
-        step.when === 'always' ||
-        (step.when === 'on_success' && !hasFailure) ||
-        (step.when === 'on_error' && hasFailure)
-      const conditionMatched = whenAllowed && this.evaluateStepCondition(step.condition, {
-        inputPayload: run.inputPayload,
-        previousError,
-        previousOutput
-      })
-      if (!conditionMatched) {
-        stepRuns[index] = {
-          ...step,
-          conditionMatched: false,
-          status: 'skipped',
-          branchPath: `step-${index + 1}:skip`,
-          startedAt: null,
-          finishedAt: new Date().toISOString()
-        }
-        continue
-      }
-
-      const stepStart = new Date().toISOString()
-      const triggerFailure = step.condition.toLowerCase().includes('force_fail')
-      const outputPayload = JSON.stringify(
-        {
-          step: index + 1,
-          toolId: step.toolId,
-          mode: step.mode,
-          outputKey: step.outputKey || `step_${index + 1}`,
-          debug: run.debug
-        },
-        null,
-        2
-      )
-
-      if (triggerFailure) {
-        hasFailure = true
-        previousError = `Step ${index + 1} forced failure by condition.`
-        stepRuns[index] = {
-          ...step,
-          conditionMatched: true,
-          status: 'failed',
-          branchPath: `step-${index + 1}:failed`,
-          inputSnapshot: run.inputPayload,
-          outputSnapshot: '',
-          errorMessage: previousError,
-          startedAt: stepStart,
-          finishedAt: new Date().toISOString()
-        }
-        if (step.mode !== 'fallback') {
-          break
-        }
-      } else {
-        previousOutput = outputPayload
-        previousError = null
-        stepRuns[index] = {
-          ...step,
-          conditionMatched: true,
-          status: 'success',
-          branchPath: `step-${index + 1}:${step.mode}`,
-          inputSnapshot: run.inputPayload,
-          outputSnapshot: outputPayload,
-          errorMessage: null,
-          startedAt: stepStart,
-          finishedAt: new Date().toISOString()
-        }
-      }
-    }
-
-    const finishedAt = new Date().toISOString()
-    const status: OpenPortWorkspaceToolRun['status'] = hasFailure ? 'failed' : 'success'
-    const outputPayload = JSON.stringify(
-      {
-        toolId: tool.id,
-        toolName: tool.name,
-        status,
-        executedSteps: stepRuns.filter((step) => step.status === 'success').length,
-        skippedSteps: stepRuns.filter((step) => step.status === 'skipped').length,
-        failedSteps: stepRuns.filter((step) => step.status === 'failed').length
-      },
-      null,
-      2
-    )
-    const completed: OpenPortWorkspaceToolRun = {
-      ...running,
-      status,
-      outputPayload,
-      errorMessage: hasFailure ? (previousError || 'Execution failed.') : null,
-      steps: stepRuns,
-      finishedAt,
-      updatedAt: finishedAt
-    }
-    await this.stateStore.writeWorkspaceToolRuns(
-      workspaceId,
-      runs.map((entry) => (entry.id === runId ? completed : entry))
-    )
-  }
-
   private defaultResourceAccessGrants(
     actor: Actor,
     resourceType: OpenPortWorkspaceResourceType,
@@ -2509,6 +2061,7 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       name: 'OpenPort Local',
       route: 'openport/local',
       provider: 'openport',
+      source: 'managed',
       description: 'Default local route for self-hosted chat.',
       tags: ['default'],
       status: 'active',
@@ -2560,6 +2113,11 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
     }
 
     return { provider, route }
+  }
+
+  private resolveWorkspaceModelSource(model: OpenPortWorkspaceModel): 'runtime' | 'managed' {
+    if (model.source === 'runtime' || model.source === 'managed') return model.source
+    return model.id.startsWith('model_ollama_') && model.route.startsWith('ollama/') ? 'runtime' : 'managed'
   }
 
   private normalizeWorkspaceModelProvider(value: string | null | undefined, route: string): string {
@@ -2661,200 +2219,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       .filter((example) => example.name.length > 0)
   }
 
-  private normalizeToolExecutionChain(
-    input:
-      | {
-          enabled?: boolean
-          steps?: Array<{
-            id?: string
-            toolId?: string
-            mode?: 'sequential' | 'parallel' | 'fallback'
-            when?: 'always' | 'on_success' | 'on_error'
-            condition?: string
-            outputKey?: string
-          }>
-        }
-      | undefined
-      | null,
-    existing?: OpenPortWorkspaceToolExecutionChain
-  ): OpenPortWorkspaceToolExecutionChain {
-    const fallback = existing || { enabled: false, steps: [] }
-    if (!input || typeof input !== 'object') {
-      return fallback
-    }
-
-    const steps = Array.isArray(input.steps)
-      ? input.steps
-          .map((step, index) => {
-            const mode: OpenPortWorkspaceToolExecutionChain['steps'][number]['mode'] =
-              step?.mode === 'parallel' || step?.mode === 'fallback' ? step.mode : 'sequential'
-            const when: OpenPortWorkspaceToolExecutionChain['steps'][number]['when'] =
-              step?.when === 'on_success' || step?.when === 'on_error' ? step.when : 'always'
-            return {
-              id: step?.id?.trim() || `tool_chain_step_${index}_${randomUUID()}`,
-              toolId: step?.toolId?.trim() || '',
-              mode,
-              when,
-              condition: step?.condition?.trim() || '',
-              outputKey: step?.outputKey?.trim() || ''
-            }
-          })
-          .filter((step) => step.toolId.length > 0)
-      : fallback.steps
-
-    return {
-      enabled: input.enabled ?? fallback.enabled,
-      steps
-    }
-  }
-
-  private normalizeImportedToolPackage(
-    input: Record<string, unknown>
-  ): {
-    sourceToolId: string | null
-    tool: OpenPortWorkspaceToolPackage['tool']
-  } {
-    const packageRecord = this.unwrapPackageRecord(input)
-    const metadataRecord =
-      packageRecord.metadata && typeof packageRecord.metadata === 'object' && !Array.isArray(packageRecord.metadata)
-        ? (packageRecord.metadata as Record<string, unknown>)
-        : {}
-    const toolRecord =
-      packageRecord.tool && typeof packageRecord.tool === 'object' && !Array.isArray(packageRecord.tool)
-        ? (packageRecord.tool as Record<string, unknown>)
-        : null
-
-    if (!toolRecord) {
-      throw new BadRequestException('Tool package payload must contain "tool".')
-    }
-
-    const name = typeof toolRecord.name === 'string' ? toolRecord.name.trim() : ''
-    if (!name) {
-      throw new BadRequestException('Tool package "tool.name" is required.')
-    }
-
-    const valvesInput =
-      toolRecord.valves && typeof toolRecord.valves === 'object' && !Array.isArray(toolRecord.valves)
-        ? Object.entries(toolRecord.valves as Record<string, unknown>).reduce<Record<string, string>>((result, [key, value]) => {
-            if (typeof value !== 'string') return result
-            result[key] = value
-            return result
-          }, {})
-        : undefined
-
-    const valveSchemaInput = Array.isArray(toolRecord.valveSchema)
-      ? toolRecord.valveSchema.map((field) => {
-          const schemaField =
-            field && typeof field === 'object' && !Array.isArray(field)
-              ? (field as Record<string, unknown>)
-              : {}
-          const schemaType =
-            schemaField.type === 'number'
-              ? 'number'
-              : schemaField.type === 'boolean'
-                ? 'boolean'
-                : schemaField.type === 'json'
-                  ? 'json'
-                  : 'string'
-          return {
-            id: typeof schemaField.id === 'string' ? schemaField.id : undefined,
-            key: typeof schemaField.key === 'string' ? schemaField.key : undefined,
-            label: typeof schemaField.label === 'string' ? schemaField.label : undefined,
-            type: schemaType as 'string' | 'number' | 'boolean' | 'json',
-            description: typeof schemaField.description === 'string' ? schemaField.description : undefined,
-            defaultValue: typeof schemaField.defaultValue === 'string' ? schemaField.defaultValue : undefined,
-            required: Boolean(schemaField.required)
-          }
-        })
-      : undefined
-
-    const examplesInput = Array.isArray(toolRecord.examples)
-      ? toolRecord.examples.map((example) => {
-          const exampleRecord =
-            example && typeof example === 'object' && !Array.isArray(example)
-              ? (example as Record<string, unknown>)
-              : {}
-          return {
-            id: typeof exampleRecord.id === 'string' ? exampleRecord.id : undefined,
-            name: typeof exampleRecord.name === 'string' ? exampleRecord.name : undefined,
-            input: typeof exampleRecord.input === 'string' ? exampleRecord.input : undefined,
-            output: typeof exampleRecord.output === 'string' ? exampleRecord.output : undefined
-          }
-        })
-      : undefined
-
-    const executionChainRecord =
-      toolRecord.executionChain && typeof toolRecord.executionChain === 'object' && !Array.isArray(toolRecord.executionChain)
-        ? (toolRecord.executionChain as Record<string, unknown>)
-        : null
-    const executionChainInput = executionChainRecord
-      ? {
-          enabled: Boolean(executionChainRecord.enabled),
-          steps: Array.isArray(executionChainRecord.steps)
-            ? executionChainRecord.steps.map((step) => {
-                const stepRecord =
-                  step && typeof step === 'object' && !Array.isArray(step)
-                    ? (step as Record<string, unknown>)
-                    : {}
-                const mode: OpenPortWorkspaceToolExecutionChain['steps'][number]['mode'] =
-                  stepRecord.mode === 'parallel'
-                    ? 'parallel'
-                    : stepRecord.mode === 'fallback'
-                      ? 'fallback'
-                      : 'sequential'
-                const when: OpenPortWorkspaceToolExecutionChain['steps'][number]['when'] =
-                  stepRecord.when === 'on_success'
-                    ? 'on_success'
-                    : stepRecord.when === 'on_error'
-                      ? 'on_error'
-                      : 'always'
-                return {
-                  id: typeof stepRecord.id === 'string' ? stepRecord.id : undefined,
-                  toolId: typeof stepRecord.toolId === 'string' ? stepRecord.toolId : undefined,
-                  mode,
-                  when,
-                  condition: typeof stepRecord.condition === 'string' ? stepRecord.condition : undefined,
-                  outputKey: typeof stepRecord.outputKey === 'string' ? stepRecord.outputKey : undefined
-                }
-              })
-            : undefined
-        }
-      : undefined
-
-    const tool: OpenPortWorkspaceToolPackage['tool'] = {
-      name,
-      description: typeof toolRecord.description === 'string' ? toolRecord.description.trim() : '',
-      integrationId: typeof toolRecord.integrationId === 'string' ? toolRecord.integrationId.trim() || null : null,
-      enabled: typeof toolRecord.enabled === 'boolean' ? toolRecord.enabled : true,
-      scopes: this.normalizeStringList(toolRecord.scopes),
-      tags: this.normalizeStringList(toolRecord.tags),
-      manifest: typeof toolRecord.manifest === 'string' ? toolRecord.manifest : '',
-      valves: this.normalizeValves(valvesInput),
-      valveSchema: this.normalizeValveSchema(valveSchemaInput),
-      examples: this.normalizeToolExamples(examplesInput),
-      executionChain: this.normalizeToolExecutionChain(executionChainInput)
-    }
-
-    return {
-      sourceToolId:
-        typeof metadataRecord.sourceToolId === 'string' && metadataRecord.sourceToolId.trim()
-          ? metadataRecord.sourceToolId.trim()
-          : null,
-      tool
-    }
-  }
-
-  private unwrapPackageRecord(input: Record<string, unknown>): Record<string, unknown> {
-    if (
-      input.package &&
-      typeof input.package === 'object' &&
-      !Array.isArray(input.package)
-    ) {
-      return input.package as Record<string, unknown>
-    }
-    return input
-  }
-
   private normalizeStringList(input: unknown): string[] {
     if (!Array.isArray(input)) {
       return []
@@ -2865,33 +2229,12 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
       .filter(Boolean)
   }
 
-  private buildToolPackageToolPayload(item: OpenPortWorkspaceTool): OpenPortWorkspaceToolPackage['tool'] {
-    return {
-      name: item.name,
-      description: item.description,
-      integrationId: item.integrationId,
-      enabled: item.enabled,
-      scopes: [...item.scopes],
-      tags: [...item.tags],
-      manifest: item.manifest,
-      valves: { ...item.valves },
-      valveSchema: item.valveSchema.map((field) => ({ ...field })),
-      examples: item.examples.map((example) => ({ ...example })),
-      executionChain: {
-        enabled: item.executionChain.enabled,
-        steps: item.executionChain.steps.map((step) => ({ ...step }))
-      }
-    }
-  }
-
   private buildToolValidationReport(input: {
     name: string
     manifest: string
     valves: Record<string, string>
     valveSchema: OpenPortWorkspaceToolValveSchemaField[]
     examples: OpenPortWorkspaceTool['examples']
-    executionChain: OpenPortWorkspaceToolExecutionChain
-    availableToolIds?: Set<string>
   }): OpenPortWorkspaceToolValidationResponse {
     const errors: string[] = []
     const warnings: string[] = []
@@ -2976,23 +2319,6 @@ export class WorkspaceResourcesService implements OnModuleInit, OnModuleDestroy 
 
     if (input.examples.length === 0) {
       warnings.push('No runtime examples defined.')
-    }
-
-    const chainStepIds = input.executionChain.steps.map((step) => step.id.trim()).filter(Boolean)
-    const duplicateStepIds = chainStepIds.filter((id, index) => chainStepIds.indexOf(id) !== index)
-    if (duplicateStepIds.length > 0) {
-      errors.push(`Duplicate execution chain step ids: ${Array.from(new Set(duplicateStepIds)).join(', ')}`)
-    }
-
-    if (input.executionChain.enabled && input.executionChain.steps.length === 0) {
-      warnings.push('Execution chain is enabled, but no steps are configured.')
-    }
-
-    const unknownToolsInChain = input.executionChain.steps
-      .map((step) => step.toolId.trim())
-      .filter((toolId) => Boolean(toolId) && input.availableToolIds && !input.availableToolIds.has(toolId))
-    if (unknownToolsInChain.length > 0) {
-      warnings.push(`Execution chain references unknown tools: ${Array.from(new Set(unknownToolsInChain)).join(', ')}`)
     }
 
     return {

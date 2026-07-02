@@ -44,7 +44,7 @@ export class InMemoryDomainAdapter implements DomainAdapter {
         id: 'txn_2',
         ledger_id: 'ledger_main',
         kind: 'expense',
-        title: 'Software subscription',
+        title: 'Software license',
         amount_home: 80,
         currency_home: 'USD',
         date: now,

@@ -23,8 +23,13 @@ echo "[4/5] Safety checks"
 npm run safety
 
 echo "[5/5] Boundary leak scan"
-if grep -RInE "(figena|fidelock|Fidelock-Web)" src docs spec templates test conformance README.md CHANGELOG.md ROADMAP.md SUPPORT.md .github --exclude-dir=node_modules --exclude-dir=dist; then
+if grep -RInE "(figena|fidelock|Fidelock-Web)" src spec templates test conformance README.md CHANGELOG.md ROADMAP.md SUPPORT.md .github --exclude-dir=node_modules --exclude-dir=dist; then
   echo "Blocked: product-specific marker found in public assets."
+  exit 1
+fi
+
+if [ -d docs ] || [ -d research ]; then
+  echo "Blocked: private docs or research directory found in public repo."
   exit 1
 fi
 

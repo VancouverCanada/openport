@@ -8,7 +8,7 @@ import type {
 
 const ROLE_TEMPLATES: Record<OpenPortRoleScope, OpenPortRoleTemplate[]> = {
   workspace: [
-    { id: 'workspace_owner', name: 'Workspace Owner', capabilities: ['workspace.manage', 'member.manage', 'billing.read'] },
+    { id: 'workspace_owner', name: 'Workspace Owner', capabilities: ['workspace.manage', 'member.manage', 'audit.read'] },
     { id: 'workspace_admin', name: 'Workspace Admin', capabilities: ['workspace.manage', 'member.manage'] },
     { id: 'workspace_member', name: 'Workspace Member', capabilities: ['workspace.read', 'chat.use', 'integration.read'] },
     { id: 'workspace_viewer', name: 'Workspace Viewer', capabilities: ['workspace.read'] }

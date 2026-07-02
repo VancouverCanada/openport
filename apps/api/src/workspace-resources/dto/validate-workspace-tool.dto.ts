@@ -59,18 +59,4 @@ export class ValidateWorkspaceToolDto {
     input?: string
     output?: string
   }>
-
-  @IsOptional()
-  @IsObject()
-  executionChain?: {
-    enabled?: boolean
-    steps?: Array<{
-      id?: string
-      toolId?: string
-      mode?: 'sequential' | 'parallel' | 'fallback'
-      when?: 'always' | 'on_success' | 'on_error'
-      condition?: string
-      outputKey?: string
-    }>
-  }
 }

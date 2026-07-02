@@ -14,7 +14,7 @@ Describe the bug clearly.
 
 - OpenPort version:
 - Node version:
-- Runtime mode (`memory` / `postgres` / `prisma`):
+- Runtime mode (`memory` / `postgres`):
 
 ## Steps to reproduce
 

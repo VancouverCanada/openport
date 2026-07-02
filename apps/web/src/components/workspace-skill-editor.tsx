@@ -15,6 +15,7 @@ import {
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
 import { PageHeader } from './ui/page-header'
 import { ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -142,7 +143,7 @@ export function WorkspaceSkillEditor({ skillId }: WorkspaceSkillEditorProps) {
             <CapsuleButton href="/workspace/skills" variant="secondary">Back to skills</CapsuleButton>
           )
         }
-        description="Define reusable skill instructions and lightweight capability modules, similar to upstream UI skills."
+        description="Define reusable skill instructions and lightweight capability modules."
         label="Workspace"
         title={skillId ? 'Edit skill' : 'Create skill'}
       />
@@ -151,13 +152,13 @@ export function WorkspaceSkillEditor({ skillId }: WorkspaceSkillEditorProps) {
       {!loading ? (
         <form className="workspace-editor-form" onSubmit={(event) => void handleSubmit(event)}>
           <Field label="Name">
-            <input onChange={(event) => setName(event.target.value)} required value={name} />
+            <FieldInput onChange={(event) => setName(event.target.value)} required value={name} />
           </Field>
           <Field label="Description">
-            <input onChange={(event) => setDescription(event.target.value)} value={description} />
+            <FieldInput onChange={(event) => setDescription(event.target.value)} value={description} />
           </Field>
           <Field label="Tags">
-            <input onChange={(event) => setTags(event.target.value)} placeholder="analysis, writing, retrieval" value={tags} />
+            <FieldInput onChange={(event) => setTags(event.target.value)} placeholder="analysis, writing, retrieval" value={tags} />
           </Field>
           <label className="workspace-editor-checkbox">
             <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />
@@ -168,7 +169,7 @@ export function WorkspaceSkillEditor({ skillId }: WorkspaceSkillEditorProps) {
           </Field>
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
-              <ResourceCardHeading><strong>Orchestration links</strong></ResourceCardHeading>
+              <ResourceCardHeading><strong>Resource links</strong></ResourceCardHeading>
               <span>Attach this skill to models and tools for reusable composition across workspace assets.</span>
             </ResourceCardCopy>
             <div className="workspace-module-chip-row">

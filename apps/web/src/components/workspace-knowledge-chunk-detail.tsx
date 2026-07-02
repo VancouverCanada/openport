@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { FieldInput } from './ui/field-input'
 import {
   fetchKnowledgeCollections,
   fetchProjectKnowledge,
@@ -247,7 +248,7 @@ export function WorkspaceKnowledgeChunkDetail({ chunkId }: WorkspaceKnowledgeChu
         <ResourceCard stacked>
           <ResourceCardCopy className="workspace-editor-section-heading">
             <ResourceCardHeading><strong>Chunk quality analysis</strong></ResourceCardHeading>
-            <span>Heuristic inspection for retrieval quality, similar to the kind of chunk review you end up doing in upstream UI knowledge ops.</span>
+            <span>Heuristic inspection for retrieval quality and chunk review.</span>
           </ResourceCardCopy>
           <div className="workspace-resource-detail-grid">
             <article className="workspace-resource-detail-card">
@@ -276,7 +277,7 @@ export function WorkspaceKnowledgeChunkDetail({ chunkId }: WorkspaceKnowledgeChu
             <span>Run a query against sibling chunks to inspect likely retrieval hits and ranking order.</span>
           </ResourceCardCopy>
           <div className="workspace-resource-filters">
-            <input
+            <FieldInput
               onChange={(event) => setProbeQuery(event.target.value)}
               placeholder="Probe query"
               value={probeQuery}

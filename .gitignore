@@ -18,5 +18,6 @@ coverage/
 .openport-product/
 
 # Private research drafts and submission materials live outside this public repo.
+docs/
 research/
 docs/research/

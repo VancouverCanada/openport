@@ -54,6 +54,8 @@
     "compose:down": "docker compose -f compose/docker-compose.yml down",
     "conformance:local": "node scripts/run-conformance.mjs --local",
     "conformance:remote": "node scripts/run-conformance.mjs --remote",
+    "conformance:security": "npm run build:core && vitest run test/security-conformance-v02.test.ts",
+    "conformance:abuse-resistance": "npm run build:core && vitest run test/abuse-resistance.test.ts",
     "safety": "bash scripts/safety-check.sh",
     "gate": "bash scripts/release-gate.sh",
     "release:prepare": "bash scripts/prepare-release.sh"

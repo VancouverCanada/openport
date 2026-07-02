@@ -48,35 +48,14 @@ Repository slug: **openport**
 
 Rationale: clear intent (open interface + data/action port), short, and broad enough for multi-product adoption.
 
-## Documents
+## Public Project Files
 
-- docs/01-vision-and-scope.md
-- docs/02-extraction-boundary.md
-- docs/03-architecture.md
-- docs/04-security-threat-model.md
-- docs/05-migration-plan.md
-- docs/06-release-gate.md
-- docs/07-implementation-blueprint.md
-- docs/08-v0.1.0-release-checklist.md
-- docs/09-tag-and-release-strategy.md
-- docs/10-public-adapter-template.md
-- docs/11-security-hardening.md
-- docs/12-llm-openclaw-integration.md
-- docs/13-openport-mcp-profile.md
-- docs/14-openport-productization-plan.md
-- docs/15-openport-productization-progress.md
-- docs/16-openport-core-extraction-map.md
-- docs/17-openport-runtime-validation.md
-- docs/18-openport-validation-failure-guide.md
-- docs/19-openport-app-acceptance-checklist.md
-- docs/20-openport-oss-vs-cloud-edition-plan.md
-- docs/releases/v0.1.0.md
-- conformance/README.md
-- ROADMAP.md
-- SUPPORT.md
-- spec/openport-v1.openapi.yaml
-- CHANGELOG.md
-- AUTHORS.md
+- `conformance/README.md`
+- `ROADMAP.md`
+- `SUPPORT.md`
+- `spec/openport-v1.openapi.yaml`
+- `CHANGELOG.md`
+- `AUTHORS.md`
 
 ## Product Apps
 
@@ -88,8 +67,8 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 
 ## Quick start (governance-first)
 
-1. Read `docs/02-extraction-boundary.md` and classify every candidate module as `OPEN`, `ADAPTER`, or `PRIVATE`.
-2. Apply `docs/06-release-gate.md` before every public push.
+1. Classify every candidate module as `OPEN`, `ADAPTER`, or `PRIVATE`.
+2. Run the release gate before every public push.
 3. Publish only schema/contracts and replace all tenant/auth/audit implementations with adapter interfaces.
 
 ## Reference runtime
@@ -125,20 +104,6 @@ OPENPORT_DOMAIN_ADAPTER=postgres OPENPORT_DATABASE_URL='postgres://user:pass@hos
 ```
 
 The Postgres adapter expects `ledgers` and `transactions` tables with fields used by `src/adapters/postgres-domain-adapter.ts`.
-
-For product embedding with an existing Prisma client, use Prisma adapter mode:
-
-```ts
-import { createOpenPortRuntime } from 'openport'
-import { prisma } from './prisma-client'
-
-const runtime = createOpenPortRuntime({
-  domainAdapter: 'prisma',
-  prismaClient: prisma as any
-})
-```
-
-Prisma mode is intended for library embedding, not the standalone demo server.
 
 ### Main endpoints
 
@@ -258,7 +223,7 @@ npm run stop:product
 - auto-select a free `reference` port near `8080`
 - auto-select a free `api` port near `4000/4100`
 - auto-select a free `web` port near `3000/3100`
-- avoid conflicts with already-running services such as `[redacted]-Web`
+- avoid conflicts with already-running local services
 - write runtime metadata to `.openport-product/runtime.json`
 
 ## Docker Skeleton
@@ -294,9 +259,8 @@ Health endpoints currently planned for container/runtime checks:
 - `GET /api/health` for the product API
 - `GET /api/health` for the web app
 
-Full runtime validation guidance lives in `docs/17-openport-runtime-validation.md`.
-Failure handling guidance lives in `docs/18-openport-validation-failure-guide.md`.
-Acceptance command matrix lives in `docs/19-openport-app-acceptance-checklist.md`.
+Runtime validation is covered by the health endpoints, conformance profiles,
+and release gate checks included in this repository.
 
 GitHub Actions now also includes a Node 20 product validation workflow:
 

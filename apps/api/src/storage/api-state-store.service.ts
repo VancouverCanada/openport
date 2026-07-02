@@ -26,7 +26,6 @@ import type {
   OpenPortWorkspaceResourcePrincipalType,
   OpenPortWorkspaceResourceType,
   OpenPortWorkspaceSkill,
-  OpenPortWorkspaceToolRun,
   OpenPortWorkspaceGroup,
   OpenPortWorkspaceToolExample,
   OpenPortWorkspaceTool,
@@ -38,8 +37,9 @@ import path from 'node:path'
 import { Pool } from 'pg'
 
 type ProductApiState = {
-  version: 18
+  version: 19
   chatSessionsByUser: Record<string, OpenPortChatSession[]>
+  chatTasksByUser: Record<string, ApiChatTaskRecord[]>
   projectsByWorkspace: Record<string, OpenPortProject[]>
   knowledgeItemsByWorkspace: Record<string, OpenPortProjectKnowledgeItem[]>
   knowledgeCollectionsByWorkspace: Record<string, OpenPortKnowledgeCollection[]>
@@ -58,7 +58,6 @@ type ProductApiState = {
   workspaceConnectorsByWorkspace: Record<string, OpenPortWorkspaceConnector[]>
   workspaceConnectorTasksByWorkspace: Record<string, OpenPortWorkspaceConnectorTask[]>
   workspaceConnectorAuditEventsByWorkspace: Record<string, OpenPortWorkspaceConnectorAuditEvent[]>
-  workspaceToolRunsByWorkspace: Record<string, OpenPortWorkspaceToolRun[]>
   searchHistoryByScope: Record<string, OpenPortSearchHistoryItem[]>
   ollamaConfigByWorkspace: Record<string, OllamaWorkspaceConfig>
 }
@@ -67,6 +66,14 @@ type OllamaWorkspaceConfig = {
   enabled: boolean
   baseUrls: string[]
   updatedAt: string
+}
+
+export type ApiChatTaskRecord = {
+  id: string
+  userId: string
+  sessionId: string
+  createdAt: string
+  status: 'running'
 }
 
 export type ProjectKnowledgeChunkRecord = {
@@ -224,8 +231,9 @@ function buildSearchHistoryScopeKey(workspaceId: string, userId: string): string
 
 function createEmptyState(): ProductApiState {
   return {
-    version: 18,
+    version: 19,
     chatSessionsByUser: {},
+    chatTasksByUser: {},
     projectsByWorkspace: {},
     knowledgeItemsByWorkspace: {},
     knowledgeCollectionsByWorkspace: {},
@@ -244,7 +252,6 @@ function createEmptyState(): ProductApiState {
     workspaceConnectorsByWorkspace: {},
     workspaceConnectorTasksByWorkspace: {},
     workspaceConnectorAuditEventsByWorkspace: {},
-    workspaceToolRunsByWorkspace: {},
     searchHistoryByScope: {},
     ollamaConfigByWorkspace: {}
   }
@@ -528,12 +535,19 @@ function normalizeProjectAsset(asset: OpenPortProjectAsset): OpenPortProjectAsse
 }
 
 function normalizeWorkspaceModel(model: OpenPortWorkspaceModel): OpenPortWorkspaceModel {
+  const source =
+    model.source === 'runtime' || model.source === 'managed'
+      ? model.source
+      : model.id.startsWith('model_ollama_') && model.route.startsWith('ollama/')
+        ? 'runtime'
+        : 'managed'
   return {
     id: model.id,
     workspaceId: model.workspaceId,
     name: model.name.trim() || 'Untitled model',
     route: model.route.trim() || 'openport/local',
     provider: model.provider.trim() || 'openport',
+    source,
     description: model.description ?? '',
     tags: Array.isArray(model.tags) ? model.tags.filter((tag) => typeof tag === 'string') : [],
     status: model.status === 'disabled' ? 'disabled' : 'active',
@@ -622,7 +636,6 @@ function normalizeWorkspaceTool(tool: OpenPortWorkspaceTool): OpenPortWorkspaceT
         : {},
     valveSchema: normalizeWorkspaceToolValveSchema(tool.valveSchema),
     examples: normalizeWorkspaceToolExamples(tool.examples),
-    executionChain: normalizeWorkspaceToolExecutionChain(tool.executionChain),
     accessGrants: normalizeWorkspaceResourceGrants('tool', tool.id, tool.workspaceId, tool.accessGrants),
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt
@@ -644,41 +657,6 @@ function normalizeWorkspaceToolExamples(
       output: example?.output ?? ''
     }))
       .filter((example) => example.name.length > 0)
-}
-
-function normalizeWorkspaceToolExecutionChain(
-  input: OpenPortWorkspaceTool['executionChain'] | undefined | null
-): OpenPortWorkspaceTool['executionChain'] {
-  if (!input || typeof input !== 'object') {
-    return {
-      enabled: false,
-      steps: []
-    }
-  }
-
-  const steps = Array.isArray(input.steps)
-    ? input.steps
-        .map((step, index) => {
-          const mode: OpenPortWorkspaceTool['executionChain']['steps'][number]['mode'] =
-            step?.mode === 'parallel' || step?.mode === 'fallback' ? step.mode : 'sequential'
-          const when: OpenPortWorkspaceTool['executionChain']['steps'][number]['when'] =
-            step?.when === 'on_success' || step?.when === 'on_error' ? step.when : 'always'
-          return {
-            id: step?.id?.trim() || `tool_chain_step_${index}`,
-            toolId: step?.toolId?.trim() || '',
-            mode,
-            when,
-            condition: step?.condition?.trim() || '',
-            outputKey: step?.outputKey?.trim() || ''
-          }
-        })
-        .filter((step) => step.toolId.length > 0)
-    : []
-
-  return {
-    enabled: Boolean(input.enabled),
-    steps
-  }
 }
 
 function normalizeWorkspaceSkill(skill: OpenPortWorkspaceSkill): OpenPortWorkspaceSkill {
@@ -891,63 +869,6 @@ function normalizeWorkspaceConnectorAuditEvent(
   }
 }
 
-function normalizeWorkspaceToolRunStep(
-  step: OpenPortWorkspaceToolRun['steps'][number],
-  index: number
-): OpenPortWorkspaceToolRun['steps'][number] {
-  return {
-    id: step.id || `tool_run_step_${index}`,
-    chainStepId: step.chainStepId || `chain_step_${index}`,
-    toolId: step.toolId || '',
-    toolName: step.toolName || step.toolId || 'unknown',
-    mode: step.mode === 'parallel' || step.mode === 'fallback' ? step.mode : 'sequential',
-    when: step.when === 'on_success' || step.when === 'on_error' ? step.when : 'always',
-    condition: step.condition ?? '',
-    conditionMatched: Boolean(step.conditionMatched),
-    branchPath: step.branchPath || `step-${index + 1}`,
-    outputKey: step.outputKey ?? '',
-    status:
-      step.status === 'running' ||
-      step.status === 'success' ||
-      step.status === 'failed' ||
-      step.status === 'skipped'
-        ? step.status
-        : 'pending',
-    inputSnapshot: step.inputSnapshot ?? '',
-    outputSnapshot: step.outputSnapshot ?? '',
-    errorMessage: step.errorMessage || null,
-    startedAt: step.startedAt || null,
-    finishedAt: step.finishedAt || null
-  }
-}
-
-function normalizeWorkspaceToolRun(run: OpenPortWorkspaceToolRun): OpenPortWorkspaceToolRun {
-  return {
-    id: run.id,
-    workspaceId: run.workspaceId,
-    toolId: run.toolId,
-    trigger: run.trigger === 'replay' ? 'replay' : run.trigger === 'api' ? 'api' : 'manual',
-    status:
-      run.status === 'queued' ||
-      run.status === 'running' ||
-      run.status === 'success' ||
-      run.status === 'failed' ||
-      run.status === 'cancelled'
-        ? run.status
-        : 'queued',
-    debug: Boolean(run.debug),
-    replayOfRunId: run.replayOfRunId || null,
-    inputPayload: run.inputPayload ?? '',
-    outputPayload: run.outputPayload ?? '',
-    errorMessage: run.errorMessage || null,
-    steps: Array.isArray(run.steps) ? run.steps.map((step, index) => normalizeWorkspaceToolRunStep(step, index)) : [],
-    startedAt: run.startedAt || null,
-    finishedAt: run.finishedAt || null,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt
-  }
-}
-
 function resolveStateFilePath(): string {
   const configured = process.env.OPENPORT_API_STATE_FILE?.trim()
   if (configured) {
@@ -1026,6 +947,23 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS openport_chat_sessions_user_folder_updated_idx
       ON openport_chat_sessions (user_id, folder_id, updated_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS openport_chat_tasks (
+        task_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'running',
+        created_at TIMESTAMPTZ NOT NULL
+      )
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_chat_tasks_user_created_idx
+      ON openport_chat_tasks (user_id, created_at DESC)
+    `)
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS openport_chat_tasks_user_session_created_idx
+      ON openport_chat_tasks (user_id, session_id, created_at DESC)
     `)
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS openport_projects (
@@ -1398,7 +1336,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
         valves JSONB NOT NULL DEFAULT '{}'::jsonb,
         valve_schema JSONB NOT NULL DEFAULT '[]'::jsonb,
         examples JSONB NOT NULL DEFAULT '[]'::jsonb,
-        execution_chain JSONB NOT NULL DEFAULT '{}'::jsonb,
         access_grants JSONB NOT NULL DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
@@ -1419,10 +1356,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query(`
       ALTER TABLE openport_workspace_tools
       ADD COLUMN IF NOT EXISTS examples JSONB NOT NULL DEFAULT '[]'::jsonb
-    `)
-    await this.pool.query(`
-      ALTER TABLE openport_workspace_tools
-      ADD COLUMN IF NOT EXISTS execution_chain JSONB NOT NULL DEFAULT '{}'::jsonb
     `)
     await this.pool.query(`
       ALTER TABLE openport_workspace_tools
@@ -1515,33 +1448,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS openport_workspace_connector_audit_events_workspace_created_idx
       ON openport_workspace_connector_audit_events (workspace_id, created_at DESC)
-    `)
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS openport_workspace_tool_runs (
-        run_id TEXT PRIMARY KEY,
-        workspace_id TEXT NOT NULL,
-        tool_id TEXT NOT NULL,
-        trigger TEXT NOT NULL,
-        status TEXT NOT NULL,
-        debug BOOLEAN NOT NULL DEFAULT FALSE,
-        replay_of_run_id TEXT,
-        input_payload TEXT NOT NULL DEFAULT '',
-        output_payload TEXT NOT NULL DEFAULT '',
-        error_message TEXT,
-        steps JSONB NOT NULL DEFAULT '[]'::jsonb,
-        started_at TIMESTAMPTZ,
-        finished_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL
-      )
-    `)
-    await this.pool.query(`
-      CREATE INDEX IF NOT EXISTS openport_workspace_tool_runs_workspace_created_idx
-      ON openport_workspace_tool_runs (workspace_id, created_at DESC)
-    `)
-    await this.pool.query(`
-      CREATE INDEX IF NOT EXISTS openport_workspace_tool_runs_workspace_status_created_idx
-      ON openport_workspace_tool_runs (workspace_id, status, created_at ASC)
     `)
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS openport_workspace_skills (
@@ -1750,6 +1656,112 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     this.state.chatSessionsByUser[userId] = structuredClone(sessions).map((session) =>
       normalizeChatSession(session)
     )
+    this.flush()
+  }
+
+  async readChatTasks(userId: string, sessionId?: string): Promise<ApiChatTaskRecord[]> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      if (sessionId) {
+        const result = await pool.query<{
+          task_id: string
+          user_id: string
+          session_id: string
+          status: string
+          created_at: Date | string
+        }>(
+          `
+            SELECT task_id, user_id, session_id, status, created_at
+            FROM openport_chat_tasks
+            WHERE user_id = $1 AND session_id = $2
+            ORDER BY created_at DESC
+          `,
+          [userId, sessionId]
+        )
+        return result.rows
+          .filter((row) => row.status === 'running')
+          .map((row) => ({
+            id: row.task_id,
+            userId: row.user_id,
+            sessionId: row.session_id,
+            createdAt: new Date(row.created_at).toISOString(),
+            status: 'running' as const
+          }))
+      }
+
+      const result = await pool.query<{
+        task_id: string
+        user_id: string
+        session_id: string
+        status: string
+        created_at: Date | string
+      }>(
+        `
+          SELECT task_id, user_id, session_id, status, created_at
+          FROM openport_chat_tasks
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+        `,
+        [userId]
+      )
+      return result.rows
+        .filter((row) => row.status === 'running')
+        .map((row) => ({
+          id: row.task_id,
+          userId: row.user_id,
+          sessionId: row.session_id,
+          createdAt: new Date(row.created_at).toISOString(),
+          status: 'running' as const
+        }))
+    }
+
+    const tasks = structuredClone(this.state.chatTasksByUser[userId] || [])
+    const normalized = tasks
+      .filter((task) => task && task.status === 'running')
+      .map((task) => ({
+        id: task.id,
+        userId: userId,
+        sessionId: task.sessionId,
+        createdAt: task.createdAt,
+        status: 'running' as const
+      }))
+    if (!sessionId) return normalized
+    return normalized.filter((task) => task.sessionId === sessionId)
+  }
+
+  async upsertChatTask(task: ApiChatTaskRecord): Promise<void> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      await pool.query(
+        `
+          INSERT INTO openport_chat_tasks (task_id, user_id, session_id, status, created_at)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (task_id) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            session_id = EXCLUDED.session_id,
+            status = EXCLUDED.status,
+            created_at = EXCLUDED.created_at
+        `,
+        [task.id, task.userId, task.sessionId, task.status, task.createdAt]
+      )
+      return
+    }
+
+    const current = this.state.chatTasksByUser[task.userId] || []
+    const next = current.filter((item) => item.id !== task.id)
+    next.push(task)
+    this.state.chatTasksByUser[task.userId] = next.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    this.flush()
+  }
+
+  async deleteChatTask(userId: string, taskId: string): Promise<void> {
+    if (this.backend === 'postgres') {
+      const pool = this.requirePool()
+      await pool.query('DELETE FROM openport_chat_tasks WHERE user_id = $1 AND task_id = $2', [userId, taskId])
+      return
+    }
+
+    this.state.chatTasksByUser[userId] = (this.state.chatTasksByUser[userId] || []).filter((task) => task.id !== taskId)
     this.flush()
   }
 
@@ -3459,13 +3471,12 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
         valves: Record<string, string>
         valve_schema: OpenPortWorkspaceToolValveSchemaField[]
         examples: OpenPortWorkspaceToolExample[]
-        execution_chain: OpenPortWorkspaceTool['executionChain']
         access_grants: OpenPortWorkspaceResourceGrant[]
         created_at: Date | string
         updated_at: Date | string
       }>(
         `
-          SELECT tool_id, workspace_id, name, description, integration_id, enabled, scopes, tags, manifest, valves, valve_schema, examples, execution_chain, access_grants, created_at, updated_at
+          SELECT tool_id, workspace_id, name, description, integration_id, enabled, scopes, tags, manifest, valves, valve_schema, examples, access_grants, created_at, updated_at
           FROM openport_workspace_tools
           WHERE workspace_id = $1
           ORDER BY updated_at DESC
@@ -3487,7 +3498,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
           valves: row.valves,
           valveSchema: row.valve_schema,
           examples: row.examples,
-          executionChain: row.execution_chain,
           accessGrants: row.access_grants,
           createdAt: new Date(row.created_at).toISOString(),
           updatedAt: new Date(row.updated_at).toISOString()
@@ -3589,12 +3599,11 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
                 valves,
                 valve_schema,
                 examples,
-                execution_chain,
                 access_grants,
                 created_at,
                 updated_at
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16)
+              VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15)
               ON CONFLICT (tool_id) DO UPDATE SET
                 workspace_id = EXCLUDED.workspace_id,
                 name = EXCLUDED.name,
@@ -3607,7 +3616,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
                 valves = EXCLUDED.valves,
                 valve_schema = EXCLUDED.valve_schema,
                 examples = EXCLUDED.examples,
-                execution_chain = EXCLUDED.execution_chain,
                 access_grants = EXCLUDED.access_grants,
                 created_at = EXCLUDED.created_at,
                 updated_at = EXCLUDED.updated_at
@@ -3625,7 +3633,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
               JSON.stringify(item.valves),
               JSON.stringify(item.valveSchema),
               JSON.stringify(item.examples),
-              JSON.stringify(item.executionChain),
               JSON.stringify(item.accessGrants),
               item.createdAt,
               item.updatedAt
@@ -3763,22 +3770,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     }
 
     return Object.keys(this.state.workspaceConnectorTasksByWorkspace)
-  }
-
-  async listWorkspaceIdsWithToolRuns(): Promise<string[]> {
-    if (this.backend === 'postgres') {
-      const pool = this.requirePool()
-      const result = await pool.query<{ workspace_id: string }>(
-        `
-          SELECT DISTINCT workspace_id
-          FROM openport_workspace_tool_runs
-          ORDER BY workspace_id
-        `
-      )
-      return result.rows.map((row) => row.workspace_id)
-    }
-
-    return Object.keys(this.state.workspaceToolRunsByWorkspace)
   }
 
   async readWorkspaceConnectorCredentials(workspaceId: string): Promise<OpenPortWorkspaceConnectorCredential[]> {
@@ -4305,151 +4296,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
     this.flush()
   }
 
-  async readWorkspaceToolRuns(workspaceId: string): Promise<OpenPortWorkspaceToolRun[]> {
-    if (this.backend === 'postgres') {
-      const pool = this.requirePool()
-      const result = await pool.query<{
-        run_id: string
-        workspace_id: string
-        tool_id: string
-        trigger: OpenPortWorkspaceToolRun['trigger']
-        status: OpenPortWorkspaceToolRun['status']
-        debug: boolean
-        replay_of_run_id: string | null
-        input_payload: string
-        output_payload: string
-        error_message: string | null
-        steps: OpenPortWorkspaceToolRun['steps']
-        started_at: Date | string | null
-        finished_at: Date | string | null
-        created_at: Date | string
-        updated_at: Date | string
-      }>(
-        `
-          SELECT run_id, workspace_id, tool_id, trigger, status, debug, replay_of_run_id, input_payload, output_payload, error_message, steps, started_at, finished_at, created_at, updated_at
-          FROM openport_workspace_tool_runs
-          WHERE workspace_id = $1
-          ORDER BY created_at DESC
-        `,
-        [workspaceId]
-      )
-      return result.rows.map((row) =>
-        normalizeWorkspaceToolRun({
-          id: row.run_id,
-          workspaceId: row.workspace_id,
-          toolId: row.tool_id,
-          trigger: row.trigger,
-          status: row.status,
-          debug: row.debug,
-          replayOfRunId: row.replay_of_run_id,
-          inputPayload: row.input_payload,
-          outputPayload: row.output_payload,
-          errorMessage: row.error_message,
-          steps: row.steps,
-          startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
-          finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null,
-          createdAt: new Date(row.created_at).toISOString(),
-          updatedAt: new Date(row.updated_at).toISOString()
-        })
-      )
-    }
-
-    return structuredClone(this.state.workspaceToolRunsByWorkspace[workspaceId] || []).map((item) =>
-      normalizeWorkspaceToolRun(item)
-    )
-  }
-
-  async writeWorkspaceToolRuns(workspaceId: string, items: OpenPortWorkspaceToolRun[]): Promise<void> {
-    const normalizedItems = structuredClone(items).map((item) => normalizeWorkspaceToolRun(item))
-    if (this.backend === 'postgres') {
-      const pool = this.requirePool()
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        const ids = normalizedItems.map((item) => item.id)
-        if (ids.length > 0) {
-          await client.query(
-            `
-              DELETE FROM openport_workspace_tool_runs
-              WHERE workspace_id = $1
-                AND NOT (run_id = ANY($2::text[]))
-            `,
-            [workspaceId, ids]
-          )
-        } else {
-          await client.query('DELETE FROM openport_workspace_tool_runs WHERE workspace_id = $1', [workspaceId])
-        }
-
-        for (const item of normalizedItems) {
-          await client.query(
-            `
-              INSERT INTO openport_workspace_tool_runs (
-                run_id,
-                workspace_id,
-                tool_id,
-                trigger,
-                status,
-                debug,
-                replay_of_run_id,
-                input_payload,
-                output_payload,
-                error_message,
-                steps,
-                started_at,
-                finished_at,
-                created_at,
-                updated_at
-              )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
-              ON CONFLICT (run_id) DO UPDATE SET
-                workspace_id = EXCLUDED.workspace_id,
-                tool_id = EXCLUDED.tool_id,
-                trigger = EXCLUDED.trigger,
-                status = EXCLUDED.status,
-                debug = EXCLUDED.debug,
-                replay_of_run_id = EXCLUDED.replay_of_run_id,
-                input_payload = EXCLUDED.input_payload,
-                output_payload = EXCLUDED.output_payload,
-                error_message = EXCLUDED.error_message,
-                steps = EXCLUDED.steps,
-                started_at = EXCLUDED.started_at,
-                finished_at = EXCLUDED.finished_at,
-                created_at = EXCLUDED.created_at,
-                updated_at = EXCLUDED.updated_at
-            `,
-            [
-              item.id,
-              item.workspaceId,
-              item.toolId,
-              item.trigger,
-              item.status,
-              item.debug,
-              item.replayOfRunId,
-              item.inputPayload,
-              item.outputPayload,
-              item.errorMessage,
-              JSON.stringify(item.steps),
-              item.startedAt,
-              item.finishedAt,
-              item.createdAt,
-              item.updatedAt
-            ]
-          )
-        }
-        await client.query('COMMIT')
-        return
-      } catch (error) {
-        await client.query('ROLLBACK')
-        throw error
-      } finally {
-        client.release()
-      }
-    }
-
-    this.state.workspaceToolRunsByWorkspace[workspaceId] = normalizedItems
-    this.flush()
-  }
-
   async readSearchHistory(workspaceId: string, userId: string, limit = 12): Promise<OpenPortSearchHistoryItem[]> {
     const cappedLimit = Math.max(1, Math.min(limit, 50))
 
@@ -4665,10 +4511,14 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
       const parsed = JSON.parse(raw) as Partial<ProductApiState>
 
       return {
-        version: 18,
+        version: 19,
         chatSessionsByUser:
           parsed.chatSessionsByUser && typeof parsed.chatSessionsByUser === 'object'
             ? parsed.chatSessionsByUser
+            : {},
+        chatTasksByUser:
+          parsed.chatTasksByUser && typeof parsed.chatTasksByUser === 'object'
+            ? (parsed.chatTasksByUser as Record<string, ApiChatTaskRecord[]>)
             : {},
         projectsByWorkspace:
           parsed.projectsByWorkspace && typeof parsed.projectsByWorkspace === 'object'
@@ -4741,10 +4591,6 @@ export class ApiStateStoreService implements OnModuleInit, OnModuleDestroy {
         workspaceConnectorAuditEventsByWorkspace:
           parsed.workspaceConnectorAuditEventsByWorkspace && typeof parsed.workspaceConnectorAuditEventsByWorkspace === 'object'
             ? parsed.workspaceConnectorAuditEventsByWorkspace
-            : {},
-        workspaceToolRunsByWorkspace:
-          parsed.workspaceToolRunsByWorkspace && typeof parsed.workspaceToolRunsByWorkspace === 'object'
-            ? parsed.workspaceToolRunsByWorkspace
             : {},
         searchHistoryByScope:
           parsed.searchHistoryByScope && typeof parsed.searchHistoryByScope === 'object'

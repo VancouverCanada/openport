@@ -11,6 +11,7 @@ import {
   useState,
   useTransition
 } from 'react'
+import { flushSync } from 'react-dom'
 import type { OpenPortProjectCollaborationState, OpenPortProjectKnowledgeMatch } from '@openport/product-contracts'
 import {
   buildProjectEventsUrl,
@@ -18,6 +19,7 @@ import {
   createChatSession,
   deleteChatSession,
   fetchChatSession,
+  fetchChatTasksBySession,
   fetchChatSessions,
   fetchProjectCollaboration,
   fetchProjects,
@@ -25,11 +27,12 @@ import {
   fetchWorkspaceModels,
   importChatSessions,
   loadSession,
-  postChatMessage,
+  cancelChatTask,
   postChatMessageStream,
   searchProjectKnowledge,
   updateChatSessionMeta,
   updateChatSessionSettings,
+  OpenPortApiError,
   type OpenPortChatMessage,
   type OpenPortChatSession,
   type OpenPortWorkspaceModel
@@ -50,7 +53,9 @@ import { getChatUiPreferencesEventName, loadChatUiPreferences, togglePinnedModel
 import { getInheritedChatSettings } from '../lib/chat-defaults'
 import { ChatComposerToolsMenu, type ComposerAttachment } from './chat-composer-tools-menu'
 import { ChatControlsPanel } from './chat-controls-panel'
+import { ChatMarkdown } from './chat-markdown'
 import { ChatSettingsModal, type ChatSettingsSection } from './chat-settings-modal'
+import { ChatStatusHistory } from './chat-status-history'
 import { useAppShellState } from './app-shell-state'
 import { Iconify } from './iconify'
 import { WorkspaceResourceMenu, type WorkspaceResourceMenuItem } from './workspace-resource-menu'
@@ -60,6 +65,21 @@ import { IconButton } from './ui/icon-button'
 import { TextButton } from './ui/text-button'
 
 type OpenPortChatAttachment = NonNullable<OpenPortChatMessage['attachments']>[number]
+type AssistantStatusEntry = NonNullable<OpenPortChatMessage['statusHistory']>[number]
+type QueuedSubmission = {
+  id: string
+  content: string
+  attachments: OpenPortChatMessage['attachments']
+}
+
+const RUNTIME_MODEL_ROUTE = 'openport/local'
+const CHAT_ACTIVE_EVENT = 'chat:active'
+const CHAT_TASKS_EVENT = 'chat:tasks'
+const CHAT_TASKS_CANCEL_EVENT = 'chat:tasks:cancel'
+
+function isRuntimeModelRoute(route: string | null | undefined): boolean {
+  return (route || '').trim().toLowerCase() === RUNTIME_MODEL_ROUTE
+}
 
 function slugifyOllamaName(name: string): string {
   return name
@@ -76,6 +96,130 @@ function createLocalId(prefix: string): string {
       ? (crypto as any).randomUUID()
       : Math.random().toString(16).slice(2)
   return `${prefix}_${uuid}_${Date.now()}`
+}
+
+type ChatErrorPresentation = {
+  code: string
+  title: string
+  message: string
+  statusAction: string
+}
+
+function toChatErrorPresentation(error: unknown): ChatErrorPresentation {
+  const fallback = {
+    code: 'GENERATION_FAILED',
+    title: '生成失败',
+    message: '当前无法完成回复，请稍后重试。',
+    statusAction: 'error_generation_failed'
+  }
+
+  const fromCode = (code: string, fallbackMessage: string): ChatErrorPresentation => {
+    switch (code) {
+      case 'MODEL_UNAVAILABLE':
+        return {
+          code,
+          title: '模型不可用',
+          message: '当前模型离线或不可访问，请检查模型服务后重试。',
+          statusAction: 'error_model_unavailable'
+        }
+      case 'MODEL_TIMEOUT':
+        return {
+          code,
+          title: '模型响应超时',
+          message: '模型响应超时，请稍后重试。',
+          statusAction: 'error_model_timeout'
+        }
+      case 'MODEL_ROUTE_INVALID':
+        return {
+          code,
+          title: '模型配置异常',
+          message: '当前会话模型配置无效，请重新选择模型后重试。',
+          statusAction: 'error_model_route_invalid'
+        }
+      case 'MODEL_EMPTY_RESPONSE':
+        return {
+          code,
+          title: '模型返回为空',
+          message: '模型未返回有效内容，请重试。',
+          statusAction: 'error_model_empty_response'
+        }
+      case 'MODEL_REQUEST_FAILED':
+        return {
+          code,
+          title: '请求被模型拒绝',
+          message: fallbackMessage || '请求参数不被当前模型接受，请调整后重试。',
+          statusAction: 'error_model_request_failed'
+        }
+      default:
+        return {
+          ...fallback,
+          message: fallbackMessage || fallback.message
+        }
+    }
+  }
+
+  if (error instanceof OpenPortApiError) {
+    return fromCode(error.code || fallback.code, error.message || fallback.message)
+  }
+
+  if (error instanceof Error) {
+    const raw = error.message || ''
+    if (!raw) return fallback
+    try {
+      const parsed = JSON.parse(raw) as { message?: string | string[]; code?: string }
+      const parsedMessage =
+        typeof parsed?.message === 'string'
+          ? parsed.message.trim()
+          : Array.isArray(parsed?.message)
+            ? parsed.message.filter((value): value is string => typeof value === 'string').join('; ').trim()
+            : ''
+      return fromCode(parsed?.code || fallback.code, parsedMessage || raw)
+    } catch {
+      return fromCode(fallback.code, raw)
+    }
+  }
+
+  return fallback
+}
+
+function mapOllamaTagsToModels(payload: any, workspaceId: string): OpenPortWorkspaceModel[] {
+  const names = (payload?.models || [])
+    .map((entry: any) =>
+      typeof entry?.name === 'string' ? entry.name : typeof entry?.model === 'string' ? entry.model : ''
+    )
+    .map((name: string) => name.trim())
+    .filter(Boolean)
+
+  return names.map((name: string) => ({
+    id: `runtime_ollama_${slugifyOllamaName(name)}`,
+    workspaceId,
+    name,
+    route: `ollama/${name}`,
+    provider: 'ollama' as const,
+    source: 'runtime' as const,
+    description: '',
+    tags: ['local'],
+    status: 'active' as const,
+    isDefault: false,
+    filterIds: [],
+    defaultFilterIds: [],
+    actionIds: [],
+    defaultFeatureIds: [],
+    capabilities: {
+      vision: false,
+      webSearch: false,
+      imageGeneration: false,
+      codeInterpreter: false
+    },
+    knowledgeItemIds: [],
+    toolIds: [],
+    builtinToolIds: [],
+    skillIds: [],
+    promptSuggestions: [],
+    accessGrants: [],
+    createdAt: '',
+    updatedAt: ''
+  }))
 }
 
 const suggestions = [
@@ -109,8 +253,6 @@ const accountMenuItems: AccountMenuItem[] = [
   { href: '/?view=archived', label: 'Archived Chats', icon: 'solar:archive-outline' },
   { href: '/workspace/models', label: 'Playground', icon: 'solar:code-square-outline' },
   { href: '/dashboard', label: 'Admin Panel', icon: 'solar:user-id-outline' },
-  { href: 'https://github.com/upstream-ui/upstream-ui#readme', label: 'Documentation', icon: 'solar:question-circle-outline', external: true },
-  { href: 'https://github.com/upstream-ui/upstream-ui/releases', label: 'Releases', icon: 'solar:map-arrow-square-outline', external: true },
   { label: 'Keyboard shortcuts', icon: 'solar:keyboard-outline', action: 'showShortcuts' }
 ]
 
@@ -122,6 +264,7 @@ export function ChatShell() {
   const [threads, setThreads] = useState<OpenPortChatSession[]>([])
   const [models, setModels] = useState<OpenPortWorkspaceModel[]>([])
   const [ollamaLiveModels, setOllamaLiveModels] = useState<OpenPortWorkspaceModel[]>([])
+  const [modelsBootstrapped, setModelsBootstrapped] = useState(false)
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -144,7 +287,18 @@ export function ChatShell() {
   const [isSearchingKnowledge, setIsSearchingKnowledge] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isGenerating, setIsGenerating] = useState(false)
+  const [messageQueue, setMessageQueue] = useState<QueuedSubmission[]>([])
+  const [taskSyncReady, setTaskSyncReady] = useState(false)
+  const [activeTaskIds, setActiveTaskIds] = useState<string[]>([])
   const collaborationModeRef = useRef<'viewing' | 'editing'>('viewing')
+  const isGeneratingRef = useRef(false)
+  const activeGenerationAbortsRef = useRef<Set<AbortController>>(new Set())
+  const pendingGenerationsRef = useRef(0)
+  const activeTaskIdsRef = useRef<string[]>([])
+  const messageQueueRef = useRef<QueuedSubmission[]>([])
+  const activeQueueKeyRef = useRef<string | null>(null)
+  const queueDrainInFlightRef = useRef(false)
+  const priorityQueuedSubmissionRef = useRef<QueuedSubmission | null>(null)
   const projectRealtimeRef = useRef<OpenPortProjectRealtime | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const accountMenuRef = useRef<HTMLDivElement | null>(null)
@@ -160,14 +314,15 @@ export function ChatShell() {
   const seededPrompt = searchParams.get('q')?.trim() || ''
   const view = searchParams.get('view')
   const isArchivedView = view === 'archived'
+  const isTemporaryChat = (() => {
+    const value = searchParams.get('temporary-chat')
+    return value === 'true' || value === '1'
+  })()
+  const temporaryChatKey = searchParams.get('tempKey') || 'default'
   const [speechMode, setSpeechMode] = useState<'dictation' | 'voice' | null>(null)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
-  const [assistantThoughtSeconds, setAssistantThoughtSeconds] = useState<Record<string, number>>({})
-  const [streamingAssistantIds, setStreamingAssistantIds] = useState<Record<string, true>>({})
-  const [assistantStatusHistoryById, setAssistantStatusHistoryById] = useState<
-    Record<string, Array<{ done: boolean; action: string; description: string; urls?: string[]; query?: string }>>
-  >({})
   const [expandedStatusHistory, setExpandedStatusHistory] = useState<Record<string, boolean>>({})
+  const runtimeRouteUpgradeAttemptedRef = useRef<Record<string, true>>({})
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
   const autoScrollRef = useRef(true)
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
@@ -184,13 +339,17 @@ export function ChatShell() {
     const merged = new Map<string, OpenPortWorkspaceModel>()
     ;[...ollamaLiveModels, ...models].forEach((model) => {
       if (!model?.route) return
-      if (!merged.has(model.route)) merged.set(model.route, model)
+      const key = model.route.trim().toLowerCase()
+      if (!merged.has(key)) merged.set(key, model)
     })
     return Array.from(merged.values())
   }, [models, ollamaLiveModels])
+  const hasNonRuntimeModels = mergedModels.some((model) => model.route && !isRuntimeModelRoute(model.route))
+  const defaultNonRuntimeRoute = mergedModels.find((model) => model.route && !isRuntimeModelRoute(model.route))?.route || null
   const currentModelRoute = activeThread?.settings.valves.modelRoute || pendingSettings.valves.modelRoute
+  const normalizedCurrentModelRoute = (currentModelRoute || '').trim().toLowerCase()
   const currentModel =
-    mergedModels.find((model) => model.route === currentModelRoute) || {
+    mergedModels.find((model) => (model.route || '').trim().toLowerCase() === normalizedCurrentModelRoute) || {
       id: currentModelRoute,
       name: currentModelRoute,
       route: currentModelRoute,
@@ -221,19 +380,40 @@ export function ChatShell() {
     }
   const showEmptyStage = !activeThread || messages.length === 0
   const activeProjectId = selectedProject?.id || null
+  const queueStorageKey =
+    isTemporaryChat
+      ? `openport:chat:queue:temporary:${temporaryChatKey}`
+      : activeThreadId
+        ? `openport:chat:queue:${activeThreadId}`
+        : null
+  const enableMessageQueue = uiPreferences.enableMessageQueue
   const projectBackgroundImage = selectedProject?.meta.backgroundImageUrl?.trim() || ''
-  const chatMainStageStyle = projectBackgroundImage
+  const chatMainStageStyle = !isTemporaryChat && projectBackgroundImage
     ? ({
         backgroundImage: `linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)), url("${projectBackgroundImage.replace(/"/g, '\\"')}")`
       } as CSSProperties)
     : undefined
   const availableModels = useMemo(() => {
-    const next = [...mergedModels]
-    if (!next.some((model) => model.route === currentModelRoute)) {
+    const next = hasNonRuntimeModels
+      ? mergedModels.filter((model) => model.route && !isRuntimeModelRoute(model.route))
+      : [...mergedModels]
+    if (
+      !next.some((model) => (model.route || '').trim().toLowerCase() === normalizedCurrentModelRoute) &&
+      !(hasNonRuntimeModels && isRuntimeModelRoute(currentModelRoute))
+    ) {
       next.unshift(currentModel)
     }
     return next
-  }, [currentModel, currentModelRoute, mergedModels])
+  }, [currentModel, currentModelRoute, hasNonRuntimeModels, mergedModels, normalizedCurrentModelRoute])
+
+  const modelLabel = useMemo(() => {
+    if (!modelsBootstrapped) return 'Loading models…'
+    if (!hasNonRuntimeModels && isRuntimeModelRoute(currentModelRoute)) return 'OpenPort: No models available'
+    if (hasNonRuntimeModels && isRuntimeModelRoute(currentModelRoute)) {
+      return 'OpenPort: Selecting model…'
+    }
+    return currentModel?.name || currentModelRoute
+  }, [currentModel?.name, currentModelRoute, hasNonRuntimeModels, modelsBootstrapped])
 
   const filteredModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
@@ -335,11 +515,23 @@ export function ChatShell() {
   function extractThinkBlocks(raw: string): { thought: string; visible: string } {
     const input = raw || ''
     const parts: string[] = []
-    const visible = input.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, inner: string) => {
+    let visible = input.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, inner: string) => {
       const trimmed = typeof inner === 'string' ? inner.trim() : ''
       if (trimmed) parts.push(trimmed)
       return ''
     })
+
+    // Some local model stacks emit a leading "Thinking..." line instead of <think> blocks.
+    // Treat only a leading thinking line as thought, and keep the rest of the response intact.
+    if (parts.length === 0) {
+      const leadingThinking = visible.match(
+        /^\s*(?:[-*•]\s*)?(?:thinking|思考中)(?:\s*\.\.\.)?\s*(?:\r?\n)+(.*)$/is
+      )
+      if (leadingThinking) {
+        parts.push(visible.slice(0, visible.length - leadingThinking[1].length).trim())
+        visible = leadingThinking[1]
+      }
+    }
 
     return {
       thought: parts.join('\n\n').trim(),
@@ -379,6 +571,133 @@ export function ChatShell() {
     })
 
     return { short: shortDate, full }
+  }
+
+  function formatStatusDescription(entry: AssistantStatusEntry): string {
+    const action = String(entry.action || '')
+    const description = String(entry.description || '')
+    const urls = Array.isArray(entry.urls) ? entry.urls : []
+    const extra = entry as { items?: unknown[]; queries?: unknown[]; count?: unknown }
+    const items = Array.isArray(extra.items) ? extra.items : []
+    const queries = Array.isArray(extra.queries) ? extra.queries.filter((query): query is string => typeof query === 'string') : []
+    const countValue = typeof extra.count === 'number' ? Number(extra.count) : null
+
+    if (action === 'knowledge_search' && entry.query) {
+      return `Searching Knowledge for "${entry.query}"`
+    }
+    if ((action === 'web_search_queries_generated' || action === 'queries_generated') && queries.length > 0) {
+      return action === 'web_search_queries_generated' ? 'Searching' : 'Querying'
+    }
+    if (action === 'sources_retrieved' && countValue !== null) {
+      if (countValue <= 0) return 'No sources found'
+      if (countValue === 1) return 'Retrieved 1 source'
+      return `Retrieved ${countValue} sources`
+    }
+    if (action === 'web_search' && description.includes('{{count}}')) {
+      return description.replace('{{count}}', String(Math.max(urls.length, items.length)))
+    }
+    if (description === 'No search query generated') return 'No search query generated'
+    if (description === 'Generating search query') return 'Generating search query'
+    if (description === 'Searching the web') return 'Searching the web'
+    if (description.includes('{{searchQuery}}')) {
+      return description.replace('{{searchQuery}}', entry.query || '')
+    }
+    return description || 'Working…'
+  }
+
+  function isSameStatusEntry(left: AssistantStatusEntry, right: AssistantStatusEntry): boolean {
+    return (
+      left.done === right.done &&
+      String(left.action || '') === String(right.action || '') &&
+      String(left.description || '') === String(right.description || '') &&
+      Boolean(left.hidden) === Boolean(right.hidden) &&
+      String(left.query || '') === String(right.query || '') &&
+      Number(left.count ?? -1) === Number(right.count ?? -1) &&
+      JSON.stringify(Array.isArray(left.urls) ? left.urls : []) === JSON.stringify(Array.isArray(right.urls) ? right.urls : []) &&
+      JSON.stringify(Array.isArray(left.queries) ? left.queries : []) ===
+        JSON.stringify(Array.isArray(right.queries) ? right.queries : [])
+    )
+  }
+
+  function dedupeStatusHistory(entries: AssistantStatusEntry[]): AssistantStatusEntry[] {
+    if (entries.length <= 1) return entries
+    const next: AssistantStatusEntry[] = []
+    for (const entry of entries) {
+      const previous = next.at(-1)
+      if (previous && isSameStatusEntry(previous, entry)) continue
+      next.push(entry)
+    }
+    return next
+  }
+
+  function extractStatusTags(entry: AssistantStatusEntry): string[] {
+    const action = String(entry.action || '')
+    if (action === 'web_search_queries_generated' || action === 'queries_generated') {
+      return Array.isArray(entry.queries)
+        ? entry.queries.filter((query): query is string => typeof query === 'string').slice(0, 6)
+        : []
+    }
+    if (action === 'web_search') {
+      const urls = Array.isArray(entry.urls) ? entry.urls : []
+      const items = Array.isArray(entry.items) ? entry.items : []
+      const itemUrls = items
+        .map((item) => {
+          const value = (item?.url || item?.link || item?.href || item?.source || '') as unknown
+          return typeof value === 'string' ? value : ''
+        })
+        .filter(Boolean)
+      return [...urls, ...itemUrls].slice(0, 6)
+    }
+    return []
+  }
+
+  function deriveReasoningFromStatuses(entries: AssistantStatusEntry[]): string {
+    if (entries.length === 0) return ''
+    const ignoredActions = new Set(['queued', 'response_stream_start', 'persisting', 'reasoning_complete'])
+    const lines: string[] = []
+    for (const entry of entries) {
+      const action = String(entry.action || '')
+      const description = String(entry.description || '').trim()
+      if (!description || ignoredActions.has(action) || entry.hidden === true) continue
+      if (lines.at(-1) === description) continue
+      lines.push(description)
+    }
+    return lines.join('\n')
+  }
+
+  function mergeMessagesWithUiState(
+    nextMessages: OpenPortChatMessage[],
+    currentMessages: OpenPortChatMessage[]
+  ): OpenPortChatMessage[] {
+    if (currentMessages.length === 0) return nextMessages
+    const currentById = new Map(currentMessages.map((message) => [message.id, message]))
+    return nextMessages.map((message) => {
+      const current = currentById.get(message.id)
+      if (!current) return message
+      return {
+        ...message,
+        streamState: message.streamState ?? current.streamState,
+        thoughtSeconds: message.thoughtSeconds ?? current.thoughtSeconds,
+        reasoningContent: message.reasoningContent ?? current.reasoningContent,
+        statusHistory: message.statusHistory ?? current.statusHistory
+      }
+    })
+  }
+
+  function resolveSessionMessages(
+    serverMessages: OpenPortChatMessage[],
+    localMessages: OpenPortChatMessage[],
+    responseMessages: OpenPortChatMessage[] = []
+  ): OpenPortChatMessage[] {
+    if (serverMessages.length >= localMessages.length) {
+      return mergeMessagesWithUiState(serverMessages, localMessages)
+    }
+    if (responseMessages.length > 0) {
+      return [...localMessages, ...responseMessages].filter(
+        (message, index, all) => all.findIndex((item) => item.id === message.id) === index
+      )
+    }
+    return localMessages
   }
 
   function scrollToLatest(behavior: ScrollBehavior = 'auto'): void {
@@ -520,6 +839,118 @@ export function ChatShell() {
     return () => stopSpeaking()
   }, [])
 
+  useEffect(() => {
+    activeTaskIdsRef.current = activeTaskIds
+    const nextGenerating = pendingGenerationsRef.current > 0 || activeTaskIds.length > 0
+    setIsGenerating(nextGenerating)
+    isGeneratingRef.current = nextGenerating
+  }, [activeTaskIds])
+
+  useEffect(() => {
+    messageQueueRef.current = messageQueue
+  }, [messageQueue])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const previousKey = activeQueueKeyRef.current
+    if (previousKey && previousKey !== queueStorageKey) {
+      const previousQueue = messageQueueRef.current
+      if (previousQueue.length === 0) {
+        window.sessionStorage.removeItem(previousKey)
+      } else {
+        window.sessionStorage.setItem(previousKey, JSON.stringify(previousQueue))
+      }
+    }
+
+    activeQueueKeyRef.current = queueStorageKey
+
+    if (!queueStorageKey) {
+      setMessageQueue([])
+      return
+    }
+
+    try {
+      const raw = window.sessionStorage.getItem(queueStorageKey)
+      if (!raw) {
+        setMessageQueue([])
+        return
+      }
+      const parsed = JSON.parse(raw) as QueuedSubmission[]
+      if (!Array.isArray(parsed)) {
+        setMessageQueue([])
+        return
+      }
+      const normalized = parsed
+        .filter((item) => item && typeof item.content === 'string')
+        .map((item) => ({
+          id: typeof item.id === 'string' && item.id.trim().length > 0 ? item.id : createLocalId('queued'),
+          content: item.content,
+          attachments: Array.isArray(item.attachments) ? item.attachments : []
+        }))
+      setMessageQueue(normalized)
+    } catch {
+      setMessageQueue([])
+    }
+  }, [queueStorageKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = activeQueueKeyRef.current
+    if (!key) return
+    if (messageQueue.length === 0) {
+      window.sessionStorage.removeItem(key)
+      return
+    }
+    window.sessionStorage.setItem(key, JSON.stringify(messageQueue))
+  }, [messageQueue])
+
+  useEffect(() => {
+    if (enableMessageQueue) return
+    setMessageQueue([])
+    if (typeof window === 'undefined') return
+    const key = activeQueueKeyRef.current
+    if (!key) return
+    window.sessionStorage.removeItem(key)
+  }, [enableMessageQueue])
+
+  useEffect(() => {
+    if (isGenerating) return
+    if (!taskSyncReady) return
+    const target = priorityQueuedSubmissionRef.current
+    if (!target) return
+    priorityQueuedSubmissionRef.current = null
+    submitMessage(target.content, target.attachments)
+  }, [isGenerating, taskSyncReady])
+
+  useEffect(() => {
+    if (isGenerating) return
+    if (!taskSyncReady) return
+    if (priorityQueuedSubmissionRef.current) return
+    if (messageQueue.length === 0) return
+    if (queueDrainInFlightRef.current) return
+
+    queueDrainInFlightRef.current = true
+    const queueSnapshot = [...messageQueue]
+    setMessageQueue([])
+
+    const dedupedAttachments = queueSnapshot
+      .flatMap((entry) => (Array.isArray(entry.attachments) ? entry.attachments : []))
+      .filter(
+        (attachment, index, all) =>
+          all.findIndex((candidate) => (candidate?.id || '') === (attachment?.id || '')) === index
+      )
+    const combinedPrompt = queueSnapshot
+      .map((entry) => entry.content.trim())
+      .filter(Boolean)
+      .join('\n\n')
+
+    window.setTimeout(() => {
+      queueDrainInFlightRef.current = false
+      submitMessage(combinedPrompt, dedupedAttachments)
+    }, 0)
+  }, [isGenerating, messageQueue, taskSyncReady])
+
   function onControlsResizeStart(startEvent: ReactMouseEvent<HTMLDivElement>): void {
     if (isMobile) return
     const startX = startEvent.clientX
@@ -543,10 +974,13 @@ export function ChatShell() {
 
     async function load(): Promise<void> {
       try {
-        const [projectsResponse, response, modelsResponse] = await Promise.all([
-          fetchProjects(loadSession()),
-          fetchChatSessions({ archived: isArchivedView }, loadSession()),
-          fetchWorkspaceModels(loadSession()).catch(() => ({ items: [] }))
+        const session = loadSession()
+        const workspaceId = session?.workspaceId || ''
+        const [projectsResponse, response, modelsResponse, ollamaResponse] = await Promise.all([
+          fetchProjects(session),
+          fetchChatSessions({ archived: isArchivedView }, session),
+          fetchWorkspaceModels(session).catch(() => ({ items: [] })),
+          fetchOllamaTags(null, session).catch(() => null)
         ])
         if (!isActive) return
 
@@ -555,10 +989,13 @@ export function ChatShell() {
         saveProjectsToCache(projectsResponse.items)
         setProjects(projectsResponse.items)
         setModels(modelsResponse.items)
+        if (ollamaResponse) setOllamaLiveModels(mapOllamaTagsToModels(ollamaResponse, workspaceId))
+        setModelsBootstrapped(true)
       } catch (loadError) {
         if (!isActive) return
         setError(loadError instanceof Error ? loadError.message : 'Unable to load chat sessions')
         setProjects(loadProjects())
+        setModelsBootstrapped(true)
       }
     }
 
@@ -567,6 +1004,87 @@ export function ChatShell() {
       isActive = false
     }
   }, [isArchivedView])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.dataset.openportTemporaryChat = isTemporaryChat ? 'true' : 'false'
+    return () => {
+      document.documentElement.dataset.openportTemporaryChat = 'false'
+    }
+  }, [isTemporaryChat])
+
+  useEffect(() => {
+    setTaskSyncReady(false)
+    if (!activeThreadId) {
+      setActiveTaskIds([])
+      setTaskSyncReady(true)
+      return
+    }
+    let cancelled = false
+    const sessionSnapshot = loadSession()
+
+    void fetchChatTasksBySession(activeThreadId, sessionSnapshot)
+      .then((result) => {
+        if (cancelled) return
+        const taskIds = Array.isArray(result.task_ids)
+          ? result.task_ids.filter((taskId): taskId is string => typeof taskId === 'string')
+          : []
+        setActiveTaskIds(taskIds)
+        setTaskSyncReady(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setActiveTaskIds([])
+        setTaskSyncReady(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeThreadId])
+
+  useEffect(() => {
+    if (!activeThreadId || activeTaskIds.length === 0) return
+    let cancelled = false
+    const sessionSnapshot = loadSession()
+    const intervalId = window.setInterval(() => {
+      void fetchChatTasksBySession(activeThreadId, sessionSnapshot)
+        .then((result) => {
+          if (cancelled) return
+          const taskIds = Array.isArray(result.task_ids)
+            ? result.task_ids.filter((taskId): taskId is string => typeof taskId === 'string')
+            : []
+          if (taskIds.length > 0) {
+            setActiveTaskIds(taskIds)
+            return
+          }
+          setActiveTaskIds([])
+          void fetchChatSession(activeThreadId, sessionSnapshot)
+            .then(({ session: nextSession }) => {
+              if (cancelled) return
+              setThreads((current) =>
+                sortThreads(
+                  current.map((thread) =>
+                    thread.id === nextSession.id
+                      ? {
+                          ...nextSession,
+                          messages: resolveSessionMessages(nextSession.messages, thread.messages)
+                        }
+                      : thread
+                  )
+                )
+              )
+            })
+            .catch(() => {})
+        })
+        .catch(() => {})
+    }, 1400)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [activeThreadId, activeTaskIds.length])
 
   useEffect(() => {
     if (activeThreadId) return
@@ -609,6 +1127,64 @@ export function ChatShell() {
           }
     )
   }, [activeThreadId, requestedModelRoute])
+
+  useEffect(() => {
+    if (activeThreadId) return
+    if (!hasNonRuntimeModels) return
+    if (!isRuntimeModelRoute(pendingSettings.valves.modelRoute)) return
+
+    if (!defaultNonRuntimeRoute) return
+
+    setPendingSettings((current) =>
+      isRuntimeModelRoute(current.valves.modelRoute)
+        ? {
+            ...current,
+            valves: {
+              ...current.valves,
+              modelRoute: defaultNonRuntimeRoute
+            }
+          }
+        : current
+    )
+  }, [activeThreadId, defaultNonRuntimeRoute, hasNonRuntimeModels, pendingSettings.valves.modelRoute])
+
+  useEffect(() => {
+    if (!activeThreadId) return
+    if (!activeThread) return
+    if (!hasNonRuntimeModels) return
+    if (!defaultNonRuntimeRoute) return
+
+    const route = activeThread.settings?.valves?.modelRoute
+    if (!isRuntimeModelRoute(route)) {
+      delete runtimeRouteUpgradeAttemptedRef.current[activeThreadId]
+      return
+    }
+
+    if (runtimeRouteUpgradeAttemptedRef.current[activeThreadId]) return
+    runtimeRouteUpgradeAttemptedRef.current[activeThreadId] = true
+
+    const nextSettings = {
+      ...activeThread.settings,
+      valves: {
+        ...activeThread.settings.valves,
+        modelRoute: defaultNonRuntimeRoute
+      }
+    }
+
+    setThreads((current) =>
+      sortThreads(
+        current.map((thread) => (thread.id === activeThreadId ? { ...thread, settings: nextSettings } : thread))
+      )
+    )
+
+    void updateChatSessionSettings(activeThreadId, nextSettings, loadSession())
+      .then(({ session: nextSession }) => {
+        setThreads((current) =>
+          sortThreads(current.map((thread) => (thread.id === nextSession.id ? nextSession : thread)))
+        )
+      })
+      .catch(() => {})
+  }, [activeThread, activeThreadId, defaultNonRuntimeRoute, hasNonRuntimeModels])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -698,8 +1274,38 @@ export function ChatShell() {
 
   useEffect(() => {
     const nextThreadId = searchParams.get('thread')
+
+    // In Temporary chat we keep the active thread in memory and do not require `thread=<id>` in the URL.
+    // Avoid clobbering the in-memory `activeThreadId` after the first message creates a session.
+    if (isTemporaryChat && !nextThreadId) return
+
     setActiveThreadId(nextThreadId)
-  }, [searchParams])
+  }, [isTemporaryChat, searchParams])
+
+  useEffect(() => {
+    if (!isTemporaryChat) return
+    // Starting a new temporary chat (tempKey changes) should reset the in-memory thread.
+    setActiveThreadId(null)
+    setDraft('')
+    setError(null)
+    setComposerAttachments([])
+    setKnowledgeMatches([])
+    setIsSearchingKnowledge(false)
+    activeGenerationAbortsRef.current.forEach((controller) => controller.abort())
+    activeGenerationAbortsRef.current.clear()
+    pendingGenerationsRef.current = 0
+    queueDrainInFlightRef.current = false
+    setIsGenerating(false)
+    isGeneratingRef.current = false
+    setTaskSyncReady(true)
+    setActiveTaskIds([])
+    setMessageQueue([])
+    setExpandedStatusHistory({})
+    setShowJumpToLatest(false)
+    setShowToolsMenu(false)
+    setShowAccountMenu(false)
+    setShowModelMenu(false)
+  }, [isTemporaryChat, temporaryChatKey])
 
   useEffect(() => {
     if (activeThreadId) return
@@ -724,7 +1330,17 @@ export function ChatShell() {
             return [session, ...current]
           }
 
-          return current.map((thread) => (thread.id === session.id ? session : thread))
+          return current.map((thread) => {
+            if (thread.id !== session.id) return thread
+            const serverMessages = Array.isArray(session.messages) ? session.messages : []
+            const localMessages = Array.isArray(thread.messages) ? thread.messages : []
+            return {
+              ...thread,
+              ...session,
+              // Avoid clobbering optimistic/local messages (especially right after creating a session).
+              messages: resolveSessionMessages(serverMessages, localMessages)
+            }
+          })
         })
       } catch (loadError) {
         if (!isActive) return
@@ -781,7 +1397,14 @@ export function ChatShell() {
             setThreads((current) => {
               const exists = current.some((thread) => thread.id === nextSession.id)
               const nextThreads = exists
-                ? current.map((thread) => (thread.id === nextSession.id ? nextSession : thread))
+                ? current.map((thread) =>
+                    thread.id === nextSession.id
+                      ? {
+                          ...nextSession,
+                          messages: resolveSessionMessages(nextSession.messages, thread.messages)
+                        }
+                      : thread
+                  )
                 : [nextSession, ...current]
               return sortThreads(nextThreads)
             })
@@ -830,7 +1453,14 @@ export function ChatShell() {
               setThreads((current) => {
                 const exists = current.some((thread) => thread.id === nextSession.id)
                 const nextThreads = exists
-                  ? current.map((thread) => (thread.id === nextSession.id ? nextSession : thread))
+                  ? current.map((thread) =>
+                      thread.id === nextSession.id
+                        ? {
+                            ...nextSession,
+                            messages: resolveSessionMessages(nextSession.messages, thread.messages)
+                          }
+                        : thread
+                    )
                   : [nextSession, ...current]
                 return sortThreads(nextThreads)
               })
@@ -1109,47 +1739,7 @@ export function ChatShell() {
                 .then((payload) => {
                   const session = loadSession()
                   const workspaceId = session?.workspaceId || ''
-                  const mapped = (payload.models || [])
-                    .map((entry) =>
-                      typeof entry?.name === 'string'
-                        ? entry.name
-                        : typeof entry?.model === 'string'
-                          ? entry.model
-                          : ''
-                    )
-                    .map((name) => name.trim())
-                    .filter(Boolean)
-                    .map((name) => ({
-                      id: `runtime_ollama_${slugifyOllamaName(name)}`,
-                      workspaceId,
-                      name,
-                      route: `ollama/${name}`,
-                      provider: 'ollama' as const,
-                      description: '',
-                      tags: ['local'],
-                      status: 'active' as const,
-                      isDefault: false,
-                      filterIds: [],
-                      defaultFilterIds: [],
-                      actionIds: [],
-                      defaultFeatureIds: [],
-                      capabilities: {
-                        vision: false,
-                        webSearch: false,
-                        imageGeneration: false,
-                        codeInterpreter: false
-                      },
-                      knowledgeItemIds: [],
-                      toolIds: [],
-                      builtinToolIds: [],
-                      skillIds: [],
-                      promptSuggestions: [],
-                      accessGrants: [],
-                      createdAt: '',
-                      updatedAt: ''
-                    }))
-
-                  setOllamaLiveModels(mapped)
+                  setOllamaLiveModels(mapOllamaTagsToModels(payload, workspaceId))
                 })
                 .catch(() => undefined)
               void fetchWorkspaceModels(loadSession())
@@ -1164,10 +1754,10 @@ export function ChatShell() {
           >
             {placement === 'hero' ? (
               <span className="chat-model-trigger-copy is-hero">
-                <span>{currentModel?.name || currentModelRoute}</span>
+                <span>{modelLabel}</span>
               </span>
             ) : (
-              <span>{currentModel?.name || currentModelRoute}</span>
+              <span>{modelLabel}</span>
             )}
             <Iconify icon="solar:alt-arrow-down-outline" size={15} />
           </TextButton>
@@ -1182,47 +1772,7 @@ export function ChatShell() {
                     .then((payload) => {
                       const session = loadSession()
                       const workspaceId = session?.workspaceId || ''
-                      const mapped = (payload.models || [])
-                        .map((entry) =>
-                          typeof entry?.name === 'string'
-                            ? entry.name
-                            : typeof entry?.model === 'string'
-                              ? entry.model
-                              : ''
-                        )
-                        .map((name) => name.trim())
-                        .filter(Boolean)
-                        .map((name) => ({
-                          id: `runtime_ollama_${slugifyOllamaName(name)}`,
-                          workspaceId,
-                          name,
-                          route: `ollama/${name}`,
-                          provider: 'ollama' as const,
-                          description: '',
-                          tags: ['local'],
-                          status: 'active' as const,
-                          isDefault: false,
-                          filterIds: [],
-                          defaultFilterIds: [],
-                          actionIds: [],
-                          defaultFeatureIds: [],
-                          capabilities: {
-                            vision: false,
-                            webSearch: false,
-                            imageGeneration: false,
-                            codeInterpreter: false
-                          },
-                          knowledgeItemIds: [],
-                          toolIds: [],
-                          builtinToolIds: [],
-                          skillIds: [],
-                          promptSuggestions: [],
-                          accessGrants: [],
-                          createdAt: '',
-                          updatedAt: ''
-                        }))
-
-                      setOllamaLiveModels(mapped)
+                      setOllamaLiveModels(mapOllamaTagsToModels(payload, workspaceId))
                     })
                     .catch(() => undefined)
                   void fetchWorkspaceModels(loadSession())
@@ -1262,9 +1812,14 @@ export function ChatShell() {
             </div>
             <div className="chat-model-menu-list">
               {filteredModels.map((model) => (
-                <div className={`chat-model-menu-item-row${model.route === currentModelRoute ? ' is-active' : ''}`} key={model.id}>
+                <div
+                  className={`chat-model-menu-item-row${
+                    (model.route || '').trim().toLowerCase() === normalizedCurrentModelRoute ? ' is-active' : ''
+                  }`}
+                  key={model.id}
+                >
                   <TextButton
-                    active={model.route === currentModelRoute}
+                    active={(model.route || '').trim().toLowerCase() === normalizedCurrentModelRoute}
                     className="chat-model-menu-item"
                     onClick={() => selectModelRoute(model.route)}
                     type="button"
@@ -1351,7 +1906,6 @@ export function ChatShell() {
             if ((event.nativeEvent as any)?.isComposing) return
 
             event.preventDefault()
-            if (isGenerating) return
             submitMessage(draft)
           }}
           placeholder={
@@ -1422,7 +1976,17 @@ export function ChatShell() {
               <Iconify icon="solar:microphone-3-outline" size={17} />
             </IconButton>
 
-            {!draft.trim() && composerAttachments.length === 0 ? (
+            {isGenerating ? (
+              <CapsuleButton
+                className="chat-send-button"
+                onClick={stopGeneration}
+                size="icon"
+                type="button"
+                variant="primary"
+              >
+                <Iconify icon="solar:stop-circle-outline" size={17} />
+              </CapsuleButton>
+            ) : !draft.trim() && composerAttachments.length === 0 ? (
               <IconButton
                 active={speechMode === 'voice'}
                 aria-label="Voice mode"
@@ -1437,17 +2001,56 @@ export function ChatShell() {
             ) : (
               <CapsuleButton
                 className="chat-send-button"
-                disabled={isGenerating || (!draft.trim() && composerAttachments.length === 0)}
+                disabled={!draft.trim() && composerAttachments.length === 0}
                 size="icon"
                 type="submit"
                 variant="primary"
               >
-                <Iconify icon={isGenerating ? 'solar:refresh-outline' : 'solar:arrow-up-outline'} size={17} />
+                <Iconify icon="solar:arrow-up-outline" size={17} />
               </CapsuleButton>
             )}
           </div>
         </div>
         </form>
+        {messageQueue.length > 0 ? (
+          <div className="chat-composer-queue-panel">
+            <div className="chat-composer-queue-head">
+              <span className="chat-composer-queue-note">Queued messages: {messageQueue.length}</span>
+            </div>
+            <ul className="chat-composer-queue-list">
+              {messageQueue.map((item, index) => (
+                <li className="chat-composer-queue-item" key={item.id}>
+                  <p className="chat-composer-queue-content">{(item.content || '').trim() || 'Attachment-only message'}</p>
+                  <div className="chat-composer-queue-actions">
+                    <TextButton
+                      onClick={() => prioritizeQueuedSubmission(item.id)}
+                      size="sm"
+                      type="button"
+                      variant="inline"
+                    >
+                      {index === 0 ? 'Next' : 'Move next'}
+                    </TextButton>
+                    <TextButton onClick={() => sendQueuedSubmissionNow(item.id)} size="sm" type="button" variant="inline">
+                      Send now
+                    </TextButton>
+                    <TextButton onClick={() => editQueuedSubmission(item.id)} size="sm" type="button" variant="inline">
+                      Edit
+                    </TextButton>
+                    <TextButton
+                      danger
+                      onClick={() => removeQueuedSubmission(item.id)}
+                      size="sm"
+                      type="button"
+                      variant="inline"
+                    >
+                      Remove
+                    </TextButton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -1475,6 +2078,20 @@ export function ChatShell() {
       }
     }
 
+    setThreads((current) =>
+      sortThreads(
+        current.map((thread) =>
+          thread.id === activeThreadId
+            ? {
+                ...thread,
+                settings: nextSettings,
+                updatedAt: new Date().toISOString()
+              }
+            : thread
+        )
+      )
+    )
+
     void updateChatSessionSettings(activeThreadId, nextSettings, loadSession())
       .then(({ session: nextSession }) => {
         setThreads((current) => sortThreads(current.map((thread) => (thread.id === nextSession.id ? nextSession : thread))))
@@ -1488,11 +2105,51 @@ export function ChatShell() {
     setUiPreferences(togglePinnedModelRoute(route))
   }
 
-  function submitMessage(rawContent: string): void {
-    if (!rawContent.trim() && composerAttachments.length === 0) return
+  function stopGeneration(): void {
+    const taskIds = activeTaskIdsRef.current
+    if (taskIds.length > 0) {
+      void Promise.all(taskIds.map((taskId) => cancelChatTask(taskId, loadSession()).catch(() => ({ ok: false }))))
+    }
+    activeGenerationAbortsRef.current.forEach((controller) => controller.abort())
+    activeGenerationAbortsRef.current.clear()
+    pendingGenerationsRef.current = 0
+    const nextGenerating = activeTaskIdsRef.current.length > 0
+    setIsGenerating(nextGenerating)
+    isGeneratingRef.current = nextGenerating
+  }
 
-    const content = rawContent.trim() || 'Use the attached context.'
-    const messageAttachments = composerAttachments.map((attachment) => ({
+  function removeQueuedSubmission(id: string): void {
+    setMessageQueue((current) => current.filter((entry) => entry.id !== id))
+  }
+
+  function prioritizeQueuedSubmission(id: string): void {
+    setMessageQueue((current) => {
+      const index = current.findIndex((entry) => entry.id === id)
+      if (index <= 0) return current
+      const next = [...current]
+      const [target] = next.splice(index, 1)
+      next.unshift(target)
+      return next
+    })
+  }
+
+  function sendQueuedSubmissionNow(id: string): void {
+    const target = messageQueueRef.current.find((entry) => entry.id === id) ?? null
+    if (!target) return
+    setMessageQueue((current) => current.filter((entry) => entry.id !== id))
+    if (isGeneratingRef.current) {
+      priorityQueuedSubmissionRef.current = target
+      stopGeneration()
+      return
+    }
+    submitMessage(target.content, target.attachments)
+  }
+
+  function editQueuedSubmission(id: string): void {
+    const target = messageQueueRef.current.find((entry) => entry.id === id) ?? null
+    if (!target) return
+    setMessageQueue((current) => current.filter((entry) => entry.id !== id))
+    const restoredAttachments: ComposerAttachment[] = (Array.isArray(target.attachments) ? target.attachments : []).map((attachment) => ({
       id: attachment.id,
       type: attachment.type,
       label: attachment.label,
@@ -1501,9 +2158,78 @@ export function ChatShell() {
       assetId: attachment.assetId ?? null,
       contentUrl: attachment.contentUrl ?? null
     }))
-    setDraft('')
-    setError(null)
+    setDraft(target.content)
+    setComposerAttachments(restoredAttachments)
     setShowToolsMenu(false)
+  }
+
+  function emitLifecycleEvent(name: string, detail: Record<string, unknown>): void {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent(name, { detail }))
+  }
+
+  function submitMessage(
+    rawContent: string,
+    prebuiltAttachments: OpenPortChatMessage['attachments'] | null = null
+  ): void {
+    const content = rawContent.trim() || 'Use the attached context.'
+    const messageAttachments =
+      prebuiltAttachments ??
+      composerAttachments.map((attachment) => ({
+        id: attachment.id,
+        type: attachment.type,
+        label: attachment.label,
+        meta: attachment.meta,
+        payload: attachment.payload,
+        assetId: attachment.assetId ?? null,
+        contentUrl: attachment.contentUrl ?? null
+      }))
+
+    if (!content.trim() && (messageAttachments?.length ?? 0) === 0) return
+
+    const selectedRouteForSubmit = String(
+      activeThread?.settings?.valves?.modelRoute || pendingSettings?.valves?.modelRoute || ''
+    ).trim()
+    if (isRuntimeModelRoute(selectedRouteForSubmit) && !defaultNonRuntimeRoute) {
+      const message = '当前没有可用模型在线，请先启动模型服务后再发送。'
+      setError(message)
+      notify('error', message)
+      return
+    }
+
+    if (isGeneratingRef.current) {
+      const queued: QueuedSubmission = {
+        id: createLocalId('queued'),
+        content,
+        attachments: messageAttachments
+      }
+
+      if (enableMessageQueue) {
+        setMessageQueue((current) => [...current, queued])
+        if (!prebuiltAttachments) {
+          setDraft('')
+          setComposerAttachments([])
+          setShowToolsMenu(false)
+        }
+        return
+      }
+
+      stopGeneration()
+      setMessageQueue((current) => [queued, ...current])
+      if (!prebuiltAttachments) {
+        setDraft('')
+        setComposerAttachments([])
+        setShowToolsMenu(false)
+      }
+      return
+    }
+
+    if (!prebuiltAttachments) {
+      setDraft('')
+      setComposerAttachments([])
+      setShowToolsMenu(false)
+    }
+    setError(null)
 
     void (async () => {
       try {
@@ -1513,18 +2239,33 @@ export function ChatShell() {
         // If we're starting a brand new chat, create the session and navigate first.
         // Avoid blocking the optimistic render on slow non-critical calls (like project refresh).
         if (!sessionId) {
+          const sessionSettingsToCreate =
+            hasNonRuntimeModels && isRuntimeModelRoute(pendingSettings.valves.modelRoute) && defaultNonRuntimeRoute
+              ? {
+                  ...pendingSettings,
+                  valves: {
+                    ...pendingSettings.valves,
+                    modelRoute: defaultNonRuntimeRoute
+                  }
+                }
+              : pendingSettings
+
           const created = await createChatSession(`New chat ${threads.length + 1}`, loadSession(), {
-            settings: pendingSettings
+            settings: sessionSettingsToCreate
           })
           sessionId = created.session.id
           createdSession = created.session
           setActiveThreadId(sessionId)
 
           const params = new URLSearchParams()
-          params.set('thread', sessionId)
-          if (selectedProjectId) params.set('project', selectedProjectId)
-          if (isArchivedView) params.set('view', 'archived')
-          router.push(buildChatHref(params))
+          if (isTemporaryChat) {
+            // Stay on the temporary chat URL. The active thread lives in memory.
+          } else {
+            params.set('thread', sessionId)
+            if (selectedProjectId) params.set('project', selectedProjectId)
+            if (isArchivedView) params.set('view', 'archived')
+            router.push(buildChatHref(params))
+          }
 
           // Best-effort: assign and refresh projects in the background.
           void (async () => {
@@ -1541,6 +2282,28 @@ export function ChatShell() {
           })()
         }
 
+        if (sessionId && activeThread && activeThread.id === sessionId && defaultNonRuntimeRoute) {
+          const currentRoute = activeThread.settings?.valves?.modelRoute
+          if (isRuntimeModelRoute(currentRoute)) {
+            const nextSettings = {
+              ...activeThread.settings,
+              valves: {
+                ...activeThread.settings.valves,
+                modelRoute: defaultNonRuntimeRoute
+              }
+            }
+
+            try {
+              const { session: upgradedSession } = await updateChatSessionSettings(sessionId, nextSettings, loadSession())
+              setThreads((current) =>
+                sortThreads(current.map((thread) => (thread.id === upgradedSession.id ? upgradedSession : thread)))
+              )
+            } catch {
+              // Keep existing behavior if settings update fails.
+            }
+          }
+        }
+
         const optimisticBaseId = createLocalId('local_msg')
         const now = new Date().toISOString()
         const optimisticUserMessage: OpenPortChatMessage = {
@@ -1554,109 +2317,256 @@ export function ChatShell() {
           id: `${optimisticBaseId}_assistant`,
           role: 'assistant',
           content: '',
-          createdAt: new Date(Date.now() + 1).toISOString()
+          createdAt: new Date(Date.now() + 1).toISOString(),
+          streamState: 'pending',
+          reasoningContent: '',
+          statusHistory: []
         }
+        const optimisticUserId = optimisticUserMessage.id
         const optimisticAssistantId = optimisticAssistantMessage.id
+        pendingGenerationsRef.current += 1
         setIsGenerating(true)
-        setStreamingAssistantIds((current) => ({ ...current, [optimisticAssistantId]: true }))
-        setAssistantStatusHistoryById((current) => ({ ...current, [optimisticAssistantId]: [{ done: false, action: 'thinking', description: 'Thinking…' }] }))
+        isGeneratingRef.current = true
 
-        // Optimistic render: show the user message immediately and a placeholder assistant "Thinking..." bubble.
-        if (createdSession) {
-          setThreads((current) => [
-            {
-              ...createdSession,
-              updatedAt: optimisticAssistantMessage.createdAt,
-              messages: [...createdSession.messages, optimisticUserMessage, optimisticAssistantMessage]
-            },
-            ...current
-          ])
-        } else if (sessionId) {
-          setThreads((current) => {
-            const nextThreads = current.map((thread) =>
-              thread.id === sessionId
-                ? {
-                    ...thread,
-                    updatedAt: optimisticAssistantMessage.createdAt,
-                    messages: [...thread.messages, optimisticUserMessage, optimisticAssistantMessage]
-                  }
-                : thread
-            )
-            return sortThreads(nextThreads)
-          })
-        }
+        // Optimistic render: show the user message immediately and a placeholder assistant bubble.
+        flushSync(() => {
+          if (createdSession) {
+            setThreads((current) => [
+              {
+                ...createdSession,
+                updatedAt: optimisticAssistantMessage.createdAt,
+                messages: [...createdSession.messages, optimisticUserMessage, optimisticAssistantMessage]
+              },
+              ...current
+            ])
+            return
+          }
+          if (sessionId) {
+            setThreads((current) => {
+              const nextThreads = current.map((thread) =>
+                thread.id === sessionId
+                  ? {
+                      ...thread,
+                      updatedAt: optimisticAssistantMessage.createdAt,
+                      messages: [...thread.messages, optimisticUserMessage, optimisticAssistantMessage]
+                    }
+                  : thread
+              )
+              return sortThreads(nextThreads)
+            })
+          }
+        })
 
         if (autoScrollRef.current) {
           scrollToLatest('smooth')
         }
 
         const abort = new AbortController()
+        activeGenerationAbortsRef.current.add(abort)
+        let streamTaskIds: string[] = []
+        const appendAssistantDelta = (delta: string) => {
+          setThreads((current) => {
+            const nextThreads = current.map((thread) => {
+              if (thread.id !== sessionId) return thread
+              const nextMessages = thread.messages.map((msg) =>
+                msg.id === optimisticAssistantId
+                  ? {
+                      ...msg,
+                      content: `${msg.content}${delta}`,
+                      streamState: 'streaming' as OpenPortChatMessage['streamState']
+                    }
+                  : msg
+              )
+              return { ...thread, messages: nextMessages }
+            })
+            return sortThreads(nextThreads)
+          })
+          if (autoScrollRef.current) {
+            scrollToLatest('auto')
+          }
+        }
+        let streamUsesChatDelta = false
         const onEvent = (evt: any) => {
           if (!evt || !evt.event) return
-          if (evt.event === 'status' && typeof evt.data?.description === 'string') {
-            setAssistantStatusHistoryById((current) => {
-              const next = { ...current }
-              const existing = next[optimisticAssistantId] || []
-              const entry = {
-                done: Boolean(evt.data?.done),
-                action: String(evt.data?.action || 'status'),
-                description: String(evt.data.description || ''),
-                urls: Array.isArray(evt.data?.urls) ? evt.data.urls : undefined,
-                query: typeof evt.data?.query === 'string' ? evt.data.query : undefined
-              }
-              next[optimisticAssistantId] = [...existing, entry]
-              return next
-            })
+          if (evt.event === 'tasks') {
+            const taskIds = Array.isArray(evt.data?.taskIds)
+              ? evt.data.taskIds.filter((taskId: unknown): taskId is string => typeof taskId === 'string')
+              : []
+            if (taskIds.length > 0) {
+              streamTaskIds = taskIds
+              setActiveTaskIds((current) => Array.from(new Set([...current, ...taskIds])))
+            } else if (streamTaskIds.length > 0) {
+              setActiveTaskIds((current) => current.filter((taskId) => !streamTaskIds.includes(taskId)))
+              streamTaskIds = []
+            }
             return
           }
-          if (evt.event === 'delta' && typeof evt.data?.delta === 'string') {
-            const delta = evt.data.delta
+          if (evt.event === 'chat:tasks:cancel') {
+            if (streamTaskIds.length > 0) {
+              setActiveTaskIds((current) => current.filter((taskId) => !streamTaskIds.includes(taskId)))
+              streamTaskIds = []
+            }
             setThreads((current) => {
               const nextThreads = current.map((thread) => {
                 if (thread.id !== sessionId) return thread
-                const nextMessages = thread.messages.map((msg) =>
-                  msg.id === optimisticAssistantId ? { ...msg, content: `${msg.content}${delta}` } : msg
-                )
+                const nextMessages = thread.messages.map((message) => {
+                  if (message.id !== optimisticAssistantId) return message
+                  return {
+                    ...message,
+                    streamState: 'done' as OpenPortChatMessage['streamState'],
+                    statusHistory: [
+                      ...(Array.isArray(message.statusHistory) ? message.statusHistory : []),
+                      {
+                        done: true,
+                        action: 'cancel',
+                        description: 'Request cancelled'
+                      }
+                    ]
+                  }
+                })
                 return { ...thread, messages: nextMessages }
               })
               return sortThreads(nextThreads)
             })
-            if (autoScrollRef.current) {
-              scrollToLatest('auto')
-            }
+            return
           }
+          if (evt.event === 'active' && typeof evt.data?.active === 'boolean') {
+            if (evt.data.active === false) {
+              setThreads((current) => {
+                const nextThreads = current.map((thread) => {
+                  if (thread.id !== sessionId) return thread
+                  const nextMessages = thread.messages.map((message) => {
+                    if (message.id !== optimisticAssistantId) return message
+                    if (message.streamState === 'done' || message.streamState === 'error') return message
+                    return {
+                      ...message,
+                      streamState: 'done' as OpenPortChatMessage['streamState']
+                    }
+                  })
+                  return { ...thread, messages: nextMessages }
+                })
+                return sortThreads(nextThreads)
+              })
+            }
+            return
+          }
+          if (evt.event === 'chat:active' && typeof evt.data?.active === 'boolean') {
+            if (evt.data.active === false) {
+              if (streamTaskIds.length > 0) {
+                setActiveTaskIds((current) => current.filter((taskId) => !streamTaskIds.includes(taskId)))
+                streamTaskIds = []
+              }
+            }
+            return
+          }
+          if (evt.event === 'cancel') {
+            if (streamTaskIds.length > 0) {
+              setActiveTaskIds((current) => current.filter((taskId) => !streamTaskIds.includes(taskId)))
+              streamTaskIds = []
+            }
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== sessionId) return thread
+                const nextMessages = thread.messages.map((message) => {
+                  if (message.id !== optimisticAssistantId) return message
+                  return {
+                    ...message,
+                    streamState: 'done' as OpenPortChatMessage['streamState'],
+                    statusHistory: [
+                      ...(Array.isArray(message.statusHistory) ? message.statusHistory : []),
+                      {
+                        done: true,
+                        action: 'cancel',
+                        description: 'Request cancelled'
+                      }
+                    ]
+                  }
+                })
+                return { ...thread, messages: nextMessages }
+              })
+              return sortThreads(nextThreads)
+            })
+            return
+          }
+          if ((evt.event === 'status' || evt.event === 'chat:status') && typeof evt.data?.description === 'string') {
+            const action = String(evt.data?.action || 'status')
+            const entry: AssistantStatusEntry = {
+              done: Boolean(evt.data?.done),
+              action,
+              description: String(evt.data.description || ''),
+              hidden: Boolean(evt.data?.hidden) || action === 'reasoning_complete',
+              urls: Array.isArray(evt.data?.urls) ? evt.data.urls : undefined,
+              query: typeof evt.data?.query === 'string' ? evt.data.query : undefined,
+              items: Array.isArray(evt.data?.items) ? evt.data.items : undefined,
+              queries: Array.isArray(evt.data?.queries)
+                ? evt.data.queries.filter((query: unknown): query is string => typeof query === 'string')
+                : undefined,
+              count: typeof evt.data?.count === 'number' ? evt.data.count : undefined
+            }
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== sessionId) return thread
+                const nextMessages = thread.messages.map((message) => {
+                  if (message.id !== optimisticAssistantId) return message
+                  const existing = Array.isArray(message.statusHistory) ? message.statusHistory : []
+                  const previous = existing.at(-1)
+                  if (previous && isSameStatusEntry(previous, entry)) return message
+                  return {
+                    ...message,
+                    streamState: (message.streamState || 'pending') as OpenPortChatMessage['streamState'],
+                    statusHistory: [...existing, entry]
+                  }
+                })
+                return { ...thread, messages: nextMessages }
+              })
+              return sortThreads(nextThreads)
+            })
+            return
+          }
+          if ((evt.event === 'reasoning' || evt.event === 'chat:reasoning') && typeof evt.data?.content === 'string') {
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== sessionId) return thread
+                const nextMessages = thread.messages.map((message) => {
+                  if (message.id !== optimisticAssistantId) return message
+                  return {
+                    ...message,
+                    reasoningContent: evt.data.content
+                  }
+                })
+                return { ...thread, messages: nextMessages }
+              })
+              return sortThreads(nextThreads)
+            })
+            return
+          }
+          if (evt.event === 'delta' && typeof evt.data?.delta === 'string') {
+            if (streamUsesChatDelta) return
+            appendAssistantDelta(evt.data.delta)
+            return
+          }
+          if (evt.event === 'chat:message:delta' && typeof evt.data?.content === 'string') {
+            streamUsesChatDelta = true
+            appendAssistantDelta(evt.data.content)
+            return
+          }
+          if (evt.event === 'message' && typeof evt.data?.content === 'string') return
         }
 
-        // Prefer streaming (upstream UI parity). Fall back to JSON if streaming fails (older deployments).
+        // Prefer streaming (upstream UI parity). Keep a single send path to avoid duplicate requests.
         void postChatMessageStream(sessionId!, content, messageAttachments, loadSession(), {
           signal: abort.signal,
-          onEvent
+          onEvent,
+          messageIds: {
+            userMessageId: optimisticUserId,
+            assistantMessageId: optimisticAssistantId
+          }
         })
-          .catch(async () => postChatMessage(sessionId!, content, messageAttachments, loadSession()))
           .then((response) => {
             const assistant = Array.isArray(response.messages)
               ? response.messages.find((message) => message.role === 'assistant')
               : null
-            if (assistant) {
-              const seconds = Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000))
-              setAssistantThoughtSeconds((current) => ({ ...current, [assistant.id]: seconds }))
-              setAssistantStatusHistoryById((current) => {
-                const next = { ...current }
-                if (next[optimisticAssistantId] && !next[assistant.id]) {
-                  next[assistant.id] = next[optimisticAssistantId]
-                }
-                delete next[optimisticAssistantId]
-                return next
-              })
-              setExpandedStatusHistory((current) => {
-                const next = { ...current }
-                if (typeof next[optimisticAssistantId] === 'boolean' && typeof next[assistant.id] !== 'boolean') {
-                  next[assistant.id] = next[optimisticAssistantId]
-                }
-                delete next[optimisticAssistantId]
-                return next
-              })
-            }
+            const seconds = assistant ? Math.max(1, Math.round((Date.now() - Date.parse(now)) / 1000)) : undefined
 
             setThreads((current) => {
               const nextThreads = current.map((thread) => {
@@ -1664,20 +2574,21 @@ export function ChatShell() {
 
                 const serverMessages = Array.isArray(response.session.messages) ? response.session.messages : []
                 const responseMessages = Array.isArray(response.messages) ? response.messages : []
-
-                const mergedMessages =
-                  serverMessages.length >= thread.messages.length
-                    ? serverMessages
-                    : responseMessages.length > 0
-                      ? [...thread.messages, ...responseMessages].filter(
-                          (msg, idx, all) => all.findIndex((m) => m.id === msg.id) === idx
-                        )
-                      : thread.messages
+                const mergedMessages = resolveSessionMessages(serverMessages, thread.messages, responseMessages)
+                const finalizedMessages = mergedMessages.map((message) => {
+                  if (message.role !== 'assistant') return message
+                  if (message.id !== optimisticAssistantId) return message
+                  return {
+                    ...message,
+                    streamState: 'done' as OpenPortChatMessage['streamState'],
+                    thoughtSeconds: seconds
+                  }
+                })
 
                 return {
                   ...thread,
                   ...response.session,
-                  messages: mergedMessages
+                  messages: finalizedMessages
                 }
               })
               return sortThreads(nextThreads)
@@ -1685,18 +2596,78 @@ export function ChatShell() {
             setComposerAttachments([])
           })
           .catch((submitError) => {
+            const isAbortLike =
+              (submitError instanceof DOMException && submitError.name === 'AbortError') ||
+              (submitError instanceof Error && /aborted|cancelled|canceled/i.test(submitError.message))
+            if (isAbortLike) {
+              setThreads((current) => {
+                const nextThreads = current.map((thread) => {
+                  if (thread.id !== sessionId) return thread
+                  const nextMessages = thread.messages.map((message) => {
+                    if (message.id !== optimisticAssistantId) return message
+                    const existing = Array.isArray(message.statusHistory) ? message.statusHistory : []
+                    const alreadyCancelled = existing.some((entry) => entry.action === 'cancel')
+                    return {
+                      ...message,
+                      streamState: 'done' as OpenPortChatMessage['streamState'],
+                      statusHistory: alreadyCancelled
+                        ? existing
+                        : [
+                            ...existing,
+                            {
+                              done: true,
+                              action: 'cancel',
+                              description: 'Request cancelled'
+                            }
+                          ]
+                    }
+                  })
+                  return { ...thread, messages: nextMessages }
+                })
+                return sortThreads(nextThreads)
+              })
+              return
+            }
             setDraft(content)
-            setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
-            notify('error', 'Unable to send message.')
+            const errorPresentation = toChatErrorPresentation(submitError)
+            setError(errorPresentation.message)
+            notify('error', errorPresentation.message)
+            setThreads((current) => {
+              const nextThreads = current.map((thread) => {
+                if (thread.id !== sessionId) return thread
+                const nextMessages = thread.messages.map((message) =>
+                  message.id === optimisticAssistantId
+                    ? {
+                        ...message,
+                        streamState: 'error' as OpenPortChatMessage['streamState'],
+                        statusHistory: [
+                          ...(Array.isArray(message.statusHistory) ? message.statusHistory : []),
+                          {
+                            done: true,
+                            action: errorPresentation.statusAction,
+                            description: errorPresentation.message
+                          }
+                        ]
+                      }
+                    : message
+                )
+                return { ...thread, messages: nextMessages }
+              })
+              return sortThreads(nextThreads)
+            })
           })
           .finally(() => {
-            setIsGenerating(false)
-            setStreamingAssistantIds((current) => {
-              const next = { ...current }
-              delete next[optimisticAssistantId]
-              return next
-            })
-            setAssistantStatusHistoryById((current) => {
+            activeGenerationAbortsRef.current.delete(abort)
+            pendingGenerationsRef.current = Math.max(0, pendingGenerationsRef.current - 1)
+            if (streamTaskIds.length > 0) {
+              setActiveTaskIds((current) => current.filter((taskId) => !streamTaskIds.includes(taskId)))
+              streamTaskIds = []
+            }
+            const nextGenerating = pendingGenerationsRef.current > 0 || activeTaskIdsRef.current.length > 0
+            setIsGenerating(nextGenerating)
+            isGeneratingRef.current = nextGenerating
+            setExpandedStatusHistory((current) => {
+              if (typeof current[optimisticAssistantId] === 'undefined') return current
               const next = { ...current }
               delete next[optimisticAssistantId]
               return next
@@ -1704,8 +2675,9 @@ export function ChatShell() {
           })
       } catch (submitError) {
         setDraft(content)
-        setError(submitError instanceof Error ? submitError.message : 'Unable to send message')
-        notify('error', 'Unable to send message.')
+        const errorPresentation = toChatErrorPresentation(submitError)
+        setError(errorPresentation.message)
+        notify('error', errorPresentation.message)
       }
     })()
   }
@@ -1714,6 +2686,26 @@ export function ChatShell() {
     event.preventDefault()
     submitMessage(draft)
   }
+
+  useEffect(() => {
+    const handler = () => stopGeneration()
+    window.addEventListener(CHAT_TASKS_CANCEL_EVENT, handler as EventListener)
+    return () => {
+      window.removeEventListener(CHAT_TASKS_CANCEL_EVENT, handler as EventListener)
+    }
+  }, [])
+
+  useEffect(() => {
+    emitLifecycleEvent(CHAT_TASKS_EVENT, {
+      active: isGenerating,
+      queue: messageQueue.length,
+      taskIds: activeTaskIds
+    })
+  }, [isGenerating, messageQueue.length, activeTaskIds])
+
+  useEffect(() => {
+    emitLifecycleEvent(CHAT_ACTIVE_EVENT, { active: isGenerating, taskIds: activeTaskIds })
+  }, [isGenerating, activeTaskIds])
 
   return (
     <div
@@ -1733,103 +2725,90 @@ export function ChatShell() {
         />
       ) : null}
       <section
-        className={`chat-main-stage${projectBackgroundImage ? ' has-project-background' : ''}`}
+        className={`chat-main-stage${!isTemporaryChat && projectBackgroundImage ? ' has-project-background' : ''}${isTemporaryChat ? ' is-temporary-chat' : ''}`}
         style={chatMainStageStyle}
       >
         <div className={`chat-main-header${activeThread ? ' has-thread' : ''}`}>
-          <div className="chat-main-header-copy">{renderModelSelector('header')}</div>
-          <div className="chat-topbar">
-            <IconButton
-              aria-label="New chat"
-              className="chat-topbar-icon"
-              onClick={() => {
-                // Mirror upstream UI's top-right quick action: start a new chat from anywhere.
-                setActiveThreadId(null)
-                const params = new URLSearchParams()
-                if (selectedProjectId) params.set('project', selectedProjectId)
-                if (isArchivedView) params.set('view', 'archived')
-                router.push(buildChatHref(params))
-              }}
-              size="md"
-              variant="topbar"
-            >
-              <Iconify icon="solar:chat-round-line-outline" size={19} />
-            </IconButton>
-
-            {activeThread ? (
-              <WorkspaceResourceMenu
-                ariaLabel="Open chat menu"
-                items={getThreadMenuItems(activeThread)}
-              />
-            ) : null}
-            <IconButton
-              active={showControls}
-              aria-label="Toggle controls"
-              className="chat-topbar-icon"
-              id="chat-controls-toggle-button"
-              onClick={toggleControls}
-              size="md"
-              variant="topbar"
-            >
-              <Iconify icon="solar:tuning-4-outline" size={19} />
-            </IconButton>
-            <div className="chat-account-menu-wrap" ref={accountMenuRef}>
+          <div className="chat-main-header-inner">
+            <div className="chat-main-header-copy">{renderModelSelector('header')}</div>
+            <div className="chat-topbar">
+              {activeThread ? (
+                <WorkspaceResourceMenu
+                  ariaLabel="Open chat menu"
+                  items={getThreadMenuItems(activeThread)}
+                />
+              ) : null}
               <IconButton
-                aria-expanded={showAccountMenu}
-                aria-label="Open account menu"
-                className={`chat-account-trigger${showAccountMenu ? ' is-active' : ''}`}
-                onClick={() => setShowAccountMenu((current) => !current)}
+                active={showControls}
+                aria-label="Toggle controls"
+                className="chat-topbar-icon"
+                id="chat-controls-toggle-button"
+                onClick={toggleControls}
                 size="md"
-                type="button"
                 variant="topbar"
               >
-                <span className="chat-account-trigger-badge">{accountInitial}</span>
+                <Iconify icon="solar:tuning-4-outline" size={19} />
               </IconButton>
+              {isMobile ? (
+                <div className="chat-account-menu-wrap" ref={accountMenuRef}>
+                  <IconButton
+                    aria-expanded={showAccountMenu}
+                    aria-label="Open account menu"
+                    className={`chat-account-trigger${showAccountMenu ? ' is-active' : ''}`}
+                    onClick={() => setShowAccountMenu((current) => !current)}
+                    size="md"
+                    type="button"
+                    variant="topbar"
+                  >
+                    <span className="chat-account-trigger-badge">{accountInitial}</span>
+                  </IconButton>
 
-              {accountMenuMounted ? (
-                <div className={`chat-account-menu${accountMenuVisible ? ' is-open' : ' is-closing'}`}>
-                  <div className="chat-account-menu-list">
-                    {accountMenuItems.map((item) =>
-                      item.action ? (
-                        <TextButton
-                          key={item.label}
-                          onClick={() => onAccountMenuAction(item)}
-                          variant="menu"
-                          type="button"
-                        >
-                          <Iconify icon={item.icon} size={19} />
-                          <span>{item.label}</span>
-                        </TextButton>
-                      ) : item.external ? (
-                        <TextButton
-                          key={item.label}
-                          external
-                          href={item.href}
-                          rel="noreferrer"
-                          target="_blank"
-                          variant="menu"
-                        >
-                          <Iconify icon={item.icon} size={19} />
-                          <span>{item.label}</span>
-                        </TextButton>
-                      ) : (
-                        <TextButton key={item.label} href={item.href} onClick={() => setShowAccountMenu(false)} variant="menu">
-                          <Iconify icon={item.icon} size={19} />
-                          <span>{item.label}</span>
-                        </TextButton>
-                      )
-                    )}
+                  {accountMenuMounted ? (
+                    <div className={`chat-account-menu${accountMenuVisible ? ' is-open' : ' is-closing'}`}>
+                      <div className="chat-account-menu-list">
+                        {accountMenuItems.map((item) =>
+                          item.action ? (
+                            <TextButton
+                              key={item.label}
+                              onClick={() => onAccountMenuAction(item)}
+                              variant="menu"
+                              type="button"
+                            >
+                              <Iconify icon={item.icon} size={19} />
+                              <span>{item.label}</span>
+                            </TextButton>
+                          ) : item.external ? (
+                            <TextButton
+                              key={item.label}
+                              external
+                              href={item.href}
+                              rel="noreferrer"
+                              target="_blank"
+                              variant="menu"
+                            >
+                              <Iconify icon={item.icon} size={19} />
+                              <span>{item.label}</span>
+                            </TextButton>
+                          ) : (
+                            <TextButton key={item.label} href={item.href} onClick={() => setShowAccountMenu(false)} variant="menu">
+                              <Iconify icon={item.icon} size={19} />
+                              <span>{item.label}</span>
+                            </TextButton>
+                          )
+                        )}
 
-                    <TextButton onClick={onSignOut} variant="menu" type="button">
-                      <Iconify icon="solar:logout-2-outline" size={19} />
-                      <span>Sign Out</span>
-                    </TextButton>
-                  </div>
+                        <TextButton onClick={onSignOut} variant="menu" type="button">
+                          <Iconify icon="solar:logout-2-outline" size={19} />
+                          <span>Sign Out</span>
+                        </TextButton>
+                      </div>
 
-                  <div className="chat-account-menu-footer">
-                    <span className="chat-account-menu-status-dot" />
-                    <span>Active Users: 1</span>
-                  </div>
+                      <div className="chat-account-menu-footer">
+                        <span className="chat-account-menu-status-dot" />
+                        <span>Active Users: 1</span>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1866,34 +2845,72 @@ export function ChatShell() {
           </div>
         ) : activeThread ? (
           <>
-            <div className="chat-conversation-flow">
-              {messages.map((message, index) => {
+            <div className="chat-thread-stage">
+              <div className="chat-thread-scroll">
+                <div className="chat-conversation-flow">
+                  {messages.map((message, index) => {
                 const isLast = index === messages.length - 1
                 const attachments = Array.isArray(message.attachments) ? message.attachments : []
                 const modelLabel = currentModel?.name || currentModelRoute
-                const thoughtSeconds = message.role === 'assistant' ? assistantThoughtSeconds[message.id] : undefined
-                const isAssistantPending = message.role === 'assistant' && Boolean(streamingAssistantIds[message.id])
+                const thoughtSeconds = message.role === 'assistant' ? message.thoughtSeconds : undefined
+                const isAssistantPending =
+                  message.role === 'assistant' &&
+                  (message.streamState === 'pending' || message.streamState === 'streaming')
                 const showAssistantThinkingPlaceholder = isAssistantPending && !message.content.trim()
+                const statusHistoryRaw = message.role === 'assistant' ? message.statusHistory || [] : []
+                const statusHistory = dedupeStatusHistory(statusHistoryRaw)
+                const visibleStatusHistory = statusHistory.filter((entry) => entry.hidden !== true)
                 const assistantThought =
                   message.role === 'assistant' && !isAssistantPending ? extractThinkBlocks(message.content) : null
+                const assistantReasoningLive = message.role === 'assistant' ? (message.reasoningContent?.trim() || '') : ''
+                const assistantReasoningRaw =
+                  message.role === 'assistant' ? (assistantReasoningLive || assistantThought?.thought || '') : ''
+                const assistantReasoning = assistantReasoningRaw || deriveReasoningFromStatuses(visibleStatusHistory)
                 const assistantTimestamp =
                   message.role === 'assistant' && !isAssistantPending ? formatChatTimestamp(message.createdAt) : null
                 const userTimestamp = message.role === 'user' ? formatChatTimestamp(message.createdAt) : null
-                const statusHistory = message.role === 'assistant' ? assistantStatusHistoryById[message.id] || [] : []
+                const latestStatus = statusHistory.at(-1)
+                const latestStatusVisible = latestStatus && latestStatus.hidden !== true ? latestStatus : null
                 const statusExpanded = message.role === 'assistant' ? Boolean(expandedStatusHistory[message.id]) : false
                 const showAssistantSkeleton =
                   message.role === 'assistant' &&
                   showAssistantThinkingPlaceholder &&
-                  statusHistory.length === 0
+                  (statusHistory.length === 0 || latestStatus?.hidden === true)
+                const isAssistantError = message.role === 'assistant' && message.streamState === 'error'
+                const assistantErrorEntry =
+                  message.role === 'assistant'
+                    ? [...statusHistory]
+                        .reverse()
+                        .find((entry) => entry.action.startsWith('error') && typeof entry.description === 'string')
+                    : null
+                const assistantErrorMessage =
+                  assistantErrorEntry?.description?.trim() || '当前无法完成回复，请稍后重试。'
+                const assistantErrorTitle = (() => {
+                  const action = String(assistantErrorEntry?.action || '')
+                  if (action === 'error_model_unavailable') return '模型不可用'
+                  if (action === 'error_model_timeout') return '模型响应超时'
+                  if (action === 'error_model_route_invalid') return '模型配置异常'
+                  if (action === 'error_model_empty_response') return '模型返回为空'
+                  if (action === 'error_model_request_failed') return '请求被模型拒绝'
+                  return '生成失败'
+                })()
+                const retryPrompt =
+                  message.role === 'assistant'
+                    ? messages
+                        .slice(0, index)
+                        .reverse()
+                        .find((entry) => entry.role === 'user')
+                        ?.content?.trim() || ''
+                    : ''
 
-                return (
-                  <article
-                    className={`owui-message owui-message--${message.role}`}
-                    data-message-role={message.role}
-                    key={message.id}
-                    style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
-                  >
-                    <div className="owui-message-inner">
+                    return (
+                      <article
+                        className={`owui-message owui-message--${message.role}`}
+                        data-message-role={message.role}
+                        key={message.id}
+                        style={{ '--message-enter-delay': `${Math.min(index, 10) * 26}ms` } as CSSProperties}
+                      >
+                        <div className="owui-message-inner">
                       {message.role === 'user' ? (
                         <div className="owui-user-head">
                           {userTimestamp ? (
@@ -1925,11 +2942,35 @@ export function ChatShell() {
                             ) : null}
                           </div>
                           <div className="owui-assistant-meta">
+                            {message.role === 'assistant' && latestStatusVisible ? (
+                              <ChatStatusHistory
+                                entries={visibleStatusHistory}
+                                expanded={statusExpanded}
+                                formatStatusDescription={formatStatusDescription}
+                                getStatusTags={extractStatusTags}
+                                onToggle={() =>
+                                  setExpandedStatusHistory((current) => ({
+                                    ...current,
+                                    [message.id]: !Boolean(current[message.id])
+                                  }))
+                                }
+                              />
+                            ) : null}
+                            {isAssistantPending && assistantReasoningLive ? (
+                              <details className="owui-thoughts">
+                                <summary>Thinking…</summary>
+                                <div className="owui-thoughts-body">
+                                  <ChatMarkdown content={assistantReasoningLive} />
+                                </div>
+                              </details>
+                            ) : null}
                             {!isAssistantPending && thoughtSeconds ? (
-                              assistantThought?.thought ? (
+                              assistantReasoning ? (
                                 <details className="owui-thoughts">
                                   <summary>Thought for {thoughtSeconds} seconds</summary>
-                                  <pre className="owui-thoughts-body">{assistantThought.thought}</pre>
+                                  <div className="owui-thoughts-body">
+                                    <ChatMarkdown content={assistantReasoning} />
+                                  </div>
                                 </details>
                               ) : (
                                 <span className="owui-thoughts-label">Thought for {thoughtSeconds} seconds</span>
@@ -1970,46 +3011,30 @@ export function ChatShell() {
                           </div>
                         ) : null}
 
-                        {message.role === 'assistant' && statusHistory.length > 0 ? (
-                          <div className="owui-status-history">
-                            <button
-                              aria-expanded={statusExpanded}
-                              className="owui-status-toggle"
-                              onClick={() =>
-                                setExpandedStatusHistory((current) => ({
-                                  ...current,
-                                  [message.id]: !Boolean(current[message.id])
-                                }))
-                              }
-                              type="button"
-                            >
-                              <span className="owui-status-item">
-                                <span className="owui-status-dot" />
-                                <span className="owui-status-copy">{statusHistory.at(-1)?.description || 'Working…'}</span>
-                              </span>
-                            </button>
-                            {statusExpanded ? (
-                              <div className="owui-status-list">
-                                {statusHistory.map((entry, entryIndex) => (
-                                  <div className="owui-status-row" key={`${entry.action}-${entryIndex}`}>
-                                    <div className="owui-status-rail" aria-hidden="true">
-                                      <span className="owui-status-dot is-muted" />
-                                      {entryIndex < statusHistory.length - 1 ? <span className="owui-status-line" /> : null}
-                                    </div>
-                                    <span className="owui-status-copy is-muted">{entry.description}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
                         <div className="owui-message-content" data-copy-response-source>
                           {showAssistantSkeleton ? (
                             <span className="owui-skeleton-dot" aria-label="Generating response" />
+                          ) : isAssistantError && !message.content.trim() ? (
+                            <div className="owui-error-card" role="alert">
+                              <span className="owui-error-card-title">{assistantErrorTitle}</span>
+                              <p className="owui-error-card-copy">{assistantErrorMessage}</p>
+                              {retryPrompt ? (
+                                <button
+                                  className="owui-error-card-retry"
+                                  onClick={() => submitMessage(retryPrompt)}
+                                  type="button"
+                                >
+                                  重试
+                                </button>
+                              ) : null}
+                            </div>
                           ) : (
                             <>
-                              {assistantThought ? assistantThought.visible : message.content}
+                              {message.role === 'assistant' ? (
+                                <ChatMarkdown content={assistantThought ? assistantThought.visible : message.content} />
+                              ) : (
+                                assistantThought ? assistantThought.visible : message.content
+                              )}
                               {isAssistantPending && message.content.trim() ? (
                                 <span className="owui-stream-cursor" aria-hidden="true" />
                               ) : null}
@@ -2064,28 +3089,30 @@ export function ChatShell() {
                           </button>
                         </div>
                       ) : null}
-                    </div>
-                  </article>
-                )
-              })}
-              <div aria-hidden="true" ref={bottomSentinelRef} />
+                        </div>
+                      </article>
+                    )
+                  })}
+                  <div aria-hidden="true" ref={bottomSentinelRef} />
+                </div>
+
+                {showJumpToLatest ? (
+                  <button
+                    className="owui-jump-latest"
+                    onClick={() => {
+                      autoScrollRef.current = true
+                      setShowJumpToLatest(false)
+                      scrollToLatest('smooth')
+                    }}
+                    type="button"
+                  >
+                    Jump to latest
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="chat-main-composer">{renderComposer('thread')}</div>
             </div>
-
-            {showJumpToLatest ? (
-              <button
-                className="owui-jump-latest"
-                onClick={() => {
-                  autoScrollRef.current = true
-                  setShowJumpToLatest(false)
-                  scrollToLatest('smooth')
-                }}
-                type="button"
-              >
-                Jump to latest
-              </button>
-            ) : null}
-
-            <div className="chat-main-composer">{renderComposer('thread')}</div>
           </>
         ) : null}
 

@@ -6,20 +6,13 @@ import {
   createWorkspaceTool,
   fetchIntegrations,
   fetchWorkspaceModels,
-  fetchWorkspaceToolOrchestrationRuns,
-  fetchWorkspaceTools,
   fetchWorkspaceTool,
   loadSession,
-  replayWorkspaceToolOrchestrationRun,
-  runWorkspaceToolOrchestration,
-  cancelWorkspaceToolOrchestrationRun,
   updateWorkspaceModel,
   validateWorkspaceTool,
   updateWorkspaceTool,
   type OpenPortIntegration,
   type OpenPortWorkspaceModel,
-  type OpenPortWorkspaceTool,
-  type OpenPortWorkspaceToolRun,
   type OpenPortWorkspaceToolValidationResponse
 } from '../lib/openport-api'
 import type { OpenPortWorkspaceToolValveSchemaField } from '../lib/openport-api'
@@ -31,6 +24,8 @@ import { WorkspaceToolValvesModal } from './workspace-tool-valves-modal'
 import { CapsuleButton } from './ui/capsule-button'
 import { FeedbackBanner } from './ui/feedback-banner'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -41,48 +36,6 @@ import { WorkspaceResourceAccessModal } from './workspace-resource-access-modal'
 type WorkspaceToolEditorProps = {
   resourceKind?: 'tool' | 'function'
   toolId?: string
-}
-
-function normalizeExecutionChain(
-  value: unknown
-): OpenPortWorkspaceTool['executionChain'] {
-  if (!value || typeof value !== 'object') {
-    return { enabled: false, steps: [] }
-  }
-
-  const record = value as Record<string, unknown>
-  const steps = Array.isArray(record.steps)
-    ? record.steps
-        .map((step, index) => {
-          const parsed = step && typeof step === 'object' ? (step as Record<string, unknown>) : {}
-          const toolId = typeof parsed.toolId === 'string' ? parsed.toolId.trim() : ''
-          if (!toolId) return null
-          return {
-            id: typeof parsed.id === 'string' && parsed.id.trim() ? parsed.id.trim() : `chain_step_${index}_${Date.now()}`,
-            toolId,
-            mode:
-              parsed.mode === 'parallel'
-                ? 'parallel'
-                : parsed.mode === 'fallback'
-                  ? 'fallback'
-                  : 'sequential',
-            when:
-              parsed.when === 'on_success'
-                ? 'on_success'
-                : parsed.when === 'on_error'
-                  ? 'on_error'
-                  : 'always',
-            condition: typeof parsed.condition === 'string' ? parsed.condition : '',
-            outputKey: typeof parsed.outputKey === 'string' ? parsed.outputKey : ''
-          }
-        })
-        .filter((step): step is OpenPortWorkspaceTool['executionChain']['steps'][number] => Boolean(step))
-    : []
-
-  return {
-    enabled: Boolean(record.enabled),
-    steps
-  }
 }
 
 export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: WorkspaceToolEditorProps) {
@@ -104,11 +57,8 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
   ])
   const [integrations, setIntegrations] = useState<OpenPortIntegration[]>([])
   const [models, setModels] = useState<OpenPortWorkspaceModel[]>([])
-  const [availableTools, setAvailableTools] = useState<OpenPortWorkspaceTool[]>([])
   const [linkedModelIds, setLinkedModelIds] = useState<string[]>([])
   const [builtinModelIds, setBuiltinModelIds] = useState<string[]>([])
-  const [executionChainEnabled, setExecutionChainEnabled] = useState(false)
-  const [executionChainSteps, setExecutionChainSteps] = useState<OpenPortWorkspaceTool['executionChain']['steps']>([])
   const [loading, setLoading] = useState(Boolean(toolId))
   const [saving, setSaving] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -118,25 +68,8 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
   const [manifestModalOpen, setManifestModalOpen] = useState(false)
   const [valvesModalOpen, setValvesModalOpen] = useState(false)
   const [syncingBindings, setSyncingBindings] = useState(false)
-  const [runInputPayload, setRunInputPayload] = useState('')
-  const [orchestrationRuns, setOrchestrationRuns] = useState<OpenPortWorkspaceToolRun[]>([])
-  const [orchestrationRunsLoading, setOrchestrationRunsLoading] = useState(false)
-  const [orchestrationRunning, setOrchestrationRunning] = useState(false)
-  const [orchestrationWorkingRunId, setOrchestrationWorkingRunId] = useState<string | null>(null)
   const { canManageModule } = useWorkspaceAuthority()
   const canManageModelBindings = canManageModule('models')
-
-  async function refreshOrchestrationRuns(targetToolId: string): Promise<void> {
-    setOrchestrationRunsLoading(true)
-    try {
-      const response = await fetchWorkspaceToolOrchestrationRuns(targetToolId, loadSession())
-      setOrchestrationRuns(response.items)
-    } catch {
-      setOrchestrationRuns([])
-    } finally {
-      setOrchestrationRunsLoading(false)
-    }
-  }
 
   useEffect(() => {
     let isActive = true
@@ -144,15 +77,11 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
     void Promise.all([
       fetchIntegrations(loadSession()).catch(() => ({ items: [] })),
       fetchWorkspaceModels(loadSession()).catch(() => ({ items: [] })),
-      fetchWorkspaceTools(loadSession()).catch(() => ({ items: [] })),
-      toolId ? fetchWorkspaceTool(toolId, loadSession()).catch(() => null) : Promise.resolve(null),
-      toolId ? fetchWorkspaceToolOrchestrationRuns(toolId, loadSession()).catch(() => ({ items: [] })) : Promise.resolve({ items: [] })
-    ]).then(([integrationsResponse, modelsResponse, toolsResponse, toolResponse, runsResponse]) => {
+      toolId ? fetchWorkspaceTool(toolId, loadSession()).catch(() => null) : Promise.resolve(null)
+    ]).then(([integrationsResponse, modelsResponse, toolResponse]) => {
       if (!isActive) return
       setIntegrations(integrationsResponse.items)
       setModels(modelsResponse.items)
-      setAvailableTools(toolsResponse.items)
-      setOrchestrationRuns(toolId ? runsResponse.items : [])
       if (toolId) {
         setLinkedModelIds(
           modelsResponse.items
@@ -167,9 +96,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
       } else {
         setLinkedModelIds([])
         setBuiltinModelIds([])
-        setExecutionChainEnabled(false)
-        setExecutionChainSteps([])
-        setOrchestrationRuns([])
       }
       if (toolResponse?.item) {
         setName(toolResponse.item.name)
@@ -195,8 +121,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
             ? toolResponse.item.examples
             : [{ id: 'example_0', name: '', input: '', output: '' }]
         )
-        setExecutionChainEnabled(Boolean(toolResponse.item.executionChain?.enabled))
-        setExecutionChainSteps(toolResponse.item.executionChain?.steps || [])
       }
       setLoading(false)
     })
@@ -227,11 +151,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
               return result
             }, {}),
             valveSchema,
-            examples,
-            executionChain: {
-              enabled: executionChainEnabled,
-              steps: executionChainSteps
-            }
+            examples
           }
         ]
       }
@@ -289,9 +209,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
             .filter((example) => example.name || example.input || example.output)
         : []
       setExamples(importedExamples.length > 0 ? importedExamples : [{ id: 'example_0', name: '', input: '', output: '' }])
-      const importedChain = normalizeExecutionChain(next.executionChain)
-      setExecutionChainEnabled(importedChain.enabled)
-      setExecutionChainSteps(importedChain.steps)
 
       notify('success', 'Tool draft imported.')
     } catch {
@@ -351,9 +268,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
             .filter((example) => example.name || example.input || example.output)
         : []
       setExamples(importedExamples.length > 0 ? importedExamples : [{ id: 'example_0', name: '', input: '', output: '' }])
-      const importedChain = normalizeExecutionChain(next.executionChain)
-      setExecutionChainEnabled(importedChain.enabled)
-      setExecutionChainSteps(importedChain.steps)
       notify('success', 'Tool draft imported from clipboard.')
     } catch {
       notify('error', 'Unable to import tool draft from clipboard.')
@@ -401,18 +315,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
           ...example,
           name: example.name.trim()
         }))
-        .filter((example) => example.name || example.input || example.output),
-      executionChain: {
-        enabled: executionChainEnabled,
-        steps: executionChainSteps
-          .map((step) => ({
-            ...step,
-            toolId: step.toolId.trim(),
-            condition: step.condition.trim(),
-            outputKey: step.outputKey.trim()
-          }))
-          .filter((step) => step.toolId)
-      }
+        .filter((example) => example.name || example.input || example.output)
     }
   }
 
@@ -580,69 +483,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
     }
   }
 
-  async function handleRunOrchestration(): Promise<void> {
-    const persistedToolId = toolId || ''
-    if (!persistedToolId) {
-      notify('error', 'Save the tool before running orchestration.')
-      return
-    }
-    setOrchestrationRunning(true)
-    try {
-      await runWorkspaceToolOrchestration(
-        persistedToolId,
-        {
-          inputPayload: runInputPayload,
-          debug: true
-        },
-        loadSession()
-      )
-      notify('success', 'Orchestration run queued.')
-      await refreshOrchestrationRuns(persistedToolId)
-    } catch {
-      notify('error', 'Unable to run orchestration.')
-    } finally {
-      setOrchestrationRunning(false)
-    }
-  }
-
-  async function handleReplayRun(runId: string): Promise<void> {
-    const persistedToolId = toolId || ''
-    if (!persistedToolId) return
-    setOrchestrationWorkingRunId(runId)
-    try {
-      await replayWorkspaceToolOrchestrationRun(
-        persistedToolId,
-        runId,
-        {
-          inputPayload: runInputPayload || undefined,
-          debug: true
-        },
-        loadSession()
-      )
-      notify('success', 'Replay queued.')
-      await refreshOrchestrationRuns(persistedToolId)
-    } catch {
-      notify('error', 'Unable to replay run.')
-    } finally {
-      setOrchestrationWorkingRunId(null)
-    }
-  }
-
-  async function handleCancelRun(runId: string): Promise<void> {
-    const persistedToolId = toolId || ''
-    if (!persistedToolId) return
-    setOrchestrationWorkingRunId(runId)
-    try {
-      await cancelWorkspaceToolOrchestrationRun(persistedToolId, runId, loadSession())
-      notify('success', 'Run cancelled.')
-      await refreshOrchestrationRuns(persistedToolId)
-    } catch {
-      notify('error', 'Unable to cancel run.')
-    } finally {
-      setOrchestrationWorkingRunId(null)
-    }
-  }
-
   function updateValve(id: string, patch: Partial<{ key: string; value: string }>): void {
     setValves((current) => current.map((valve) => (valve.id === id ? { ...valve, ...patch } : valve)))
   }
@@ -699,35 +539,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
       const next = current.filter((example) => example.id !== id)
       return next.length > 0 ? next : [{ id: 'example_0', name: '', input: '', output: '' }]
     })
-  }
-
-  function addExecutionChainStep(): void {
-    const fallbackTool =
-      availableTools
-        .map((entry) => entry.id)
-        .find((entry) => entry !== toolId) || ''
-    setExecutionChainSteps((current) => [
-      ...current,
-      {
-        id: `chain_step_${Date.now()}`,
-        toolId: fallbackTool,
-        mode: 'sequential',
-        when: 'always',
-        condition: '',
-        outputKey: ''
-      }
-    ])
-  }
-
-  function updateExecutionChainStep(
-    id: string,
-    patch: Partial<OpenPortWorkspaceTool['executionChain']['steps'][number]>
-  ): void {
-    setExecutionChainSteps((current) => current.map((step) => (step.id === id ? { ...step, ...patch } : step)))
-  }
-
-  function removeExecutionChainStep(id: string): void {
-    setExecutionChainSteps((current) => current.filter((step) => step.id !== id))
   }
 
   function applyManifestTemplate(template: 'http' | 'policy' | 'retrieval'): void {
@@ -808,24 +619,10 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
       .map((field) => ({ key: field.key.trim(), type: field.type, required: field.required, defaultValue: field.defaultValue.trim() })),
     examples: examples
       .filter((example) => example.name || example.input || example.output)
-      .map((example) => ({ name: example.name, input: example.input, output: example.output })),
-    executionChain: {
-      enabled: executionChainEnabled,
-      steps: executionChainSteps
-        .filter((step) => step.toolId.trim())
-        .map((step) => ({
-          toolId: step.toolId,
-          mode: step.mode,
-          when: step.when,
-          condition: step.condition,
-          outputKey: step.outputKey
-        }))
-    }
+      .map((example) => ({ name: example.name, input: example.input, output: example.output }))
   }
   const linkedModels = models.filter((model) => linkedModelIds.includes(model.id))
   const builtinModels = models.filter((model) => builtinModelIds.includes(model.id))
-  const chainTargetTools = availableTools.filter((item) => item.id !== toolId)
-  const chainTargetNameById = new Map(availableTools.map((item) => [item.id, item.name]))
 
   return (
     <div className="workspace-editor-page">
@@ -909,26 +706,26 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
             valves={valves}
           />
           <Field label="Name">
-            <input onChange={(event) => setName(event.target.value)} required value={name} />
+            <FieldInput onChange={(event) => setName(event.target.value)} required value={name} />
           </Field>
           <Field label="Description">
-            <input onChange={(event) => setDescription(event.target.value)} value={description} />
+            <FieldInput onChange={(event) => setDescription(event.target.value)} value={description} />
           </Field>
           <Field label="Integration">
-            <select onChange={(event) => setIntegrationId(event.target.value)} value={integrationId}>
+            <FieldSelect onChange={(event) => setIntegrationId(event.target.value)} value={integrationId}>
               <option value="">No integration</option>
               {integrations.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
                 ))}
-            </select>
+            </FieldSelect>
           </Field>
           <Field label="Scopes">
-            <input onChange={(event) => setScopes(event.target.value)} placeholder="chat, review" value={scopes} />
+            <FieldInput onChange={(event) => setScopes(event.target.value)} placeholder="chat, review" value={scopes} />
           </Field>
           <Field label="Tags">
-            <input onChange={(event) => setTags(event.target.value)} placeholder="policy, retrieval" value={tags} />
+            <FieldInput onChange={(event) => setTags(event.target.value)} placeholder="policy, retrieval" value={tags} />
           </Field>
           <label className="workspace-editor-checkbox">
             <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />
@@ -950,7 +747,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Toolkit preview</strong></ResourceCardHeading>
-              <span>Preview the structured tool payload before saving, similar to the separation upstream UI makes between toolkit metadata and editor state.</span>
+              <span>Preview the structured tool payload before saving.</span>
             </ResourceCardCopy>
             <pre className="workspace-module-prompt-preview workspace-module-prompt-preview--large">
               {JSON.stringify(toolkitPreview, null, 2)}
@@ -993,8 +790,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
                   integration: toolkitPreview.integration,
                   example: examples.find((example) => example.name || example.input || example.output) || null,
                   valves: toolkitPreview.valves,
-                  schema: toolkitPreview.schema,
-                  executionChain: toolkitPreview.executionChain
+                  schema: toolkitPreview.schema
                 },
                 null,
                 2
@@ -1004,14 +800,14 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Examples</strong></ResourceCardHeading>
-              <span>Document common tool invocations the way upstream UI keeps toolkit metadata and runnable guidance together.</span>
+              <span>Document common tool invocations alongside runnable guidance.</span>
             </ResourceCardCopy>
             <div className="workspace-valve-list">
               {examples.map((example) => (
                 <div key={example.id} className="workspace-valve-schema-row">
-                  <input onChange={(event) => updateExample(example.id, { name: event.target.value })} placeholder="name" value={example.name} />
-                  <input onChange={(event) => updateExample(example.id, { input: event.target.value })} placeholder="input" value={example.input} />
-                  <input onChange={(event) => updateExample(example.id, { output: event.target.value })} placeholder="output" value={example.output} />
+                  <FieldInput onChange={(event) => updateExample(example.id, { name: event.target.value })} placeholder="name" value={example.name} />
+                  <FieldInput onChange={(event) => updateExample(example.id, { input: event.target.value })} placeholder="input" value={example.input} />
+                  <FieldInput onChange={(event) => updateExample(example.id, { output: event.target.value })} placeholder="output" value={example.output} />
                   <TextButton danger onClick={() => removeExample(example.id)} type="button" variant="link">Remove</TextButton>
                 </div>
               ))}
@@ -1022,83 +818,8 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
           </section>
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
-              <ResourceCardHeading><strong>Execution chain</strong></ResourceCardHeading>
-              <span>Compose a multi-tool execution flow (sequential/parallel/fallback) for this toolkit.</span>
-            </ResourceCardCopy>
-            <label className="workspace-editor-checkbox">
-              <input
-                checked={executionChainEnabled}
-                onChange={(event) => setExecutionChainEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Enable chain orchestration</span>
-            </label>
-            {executionChainEnabled ? (
-              <>
-                <div className="workspace-module-chip-row">
-                  <Tag>{executionChainSteps.length} step(s)</Tag>
-                  <Tag>{chainTargetTools.length} available tool targets</Tag>
-                </div>
-                {chainTargetTools.length === 0 ? (
-                  <p className="workspace-module-empty">Create at least one additional tool to build a chain.</p>
-                ) : (
-                  <div className="workspace-valve-list">
-                    {executionChainSteps.map((step) => (
-                      <div key={step.id} className="workspace-valve-schema-row">
-                        <select
-                          onChange={(event) => updateExecutionChainStep(step.id, { toolId: event.target.value })}
-                          value={step.toolId}
-                        >
-                          <option value="">Select tool</option>
-                          {chainTargetTools.map((target) => (
-                            <option key={target.id} value={target.id}>
-                              {target.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          onChange={(event) => updateExecutionChainStep(step.id, { mode: event.target.value as OpenPortWorkspaceTool['executionChain']['steps'][number]['mode'] })}
-                          value={step.mode}
-                        >
-                          <option value="sequential">Sequential</option>
-                          <option value="parallel">Parallel</option>
-                          <option value="fallback">Fallback</option>
-                        </select>
-                        <select
-                          onChange={(event) => updateExecutionChainStep(step.id, { when: event.target.value as OpenPortWorkspaceTool['executionChain']['steps'][number]['when'] })}
-                          value={step.when}
-                        >
-                          <option value="always">Always</option>
-                          <option value="on_success">On success</option>
-                          <option value="on_error">On error</option>
-                        </select>
-                        <input
-                          onChange={(event) => updateExecutionChainStep(step.id, { condition: event.target.value })}
-                          placeholder="condition expression"
-                          value={step.condition}
-                        />
-                        <input
-                          onChange={(event) => updateExecutionChainStep(step.id, { outputKey: event.target.value })}
-                          placeholder="output key"
-                          value={step.outputKey}
-                        />
-                        <TextButton danger onClick={() => removeExecutionChainStep(step.id)} type="button" variant="link">Remove</TextButton>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="workspace-editor-actions">
-                  <CapsuleButton disabled={chainTargetTools.length === 0} onClick={addExecutionChainStep} type="button" variant="secondary">Add chain step</CapsuleButton>
-                </div>
-              </>
-            ) : (
-              <p className="workspace-module-empty">Chain orchestration disabled. This toolkit runs as a single tool.</p>
-            )}
-          </section>
-          <section className="workspace-editor-section">
-            <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Valves</strong></ResourceCardHeading>
-              <span>Manage runtime values and schema in a focused modal flow, similar to upstream UI toolkit settings.</span>
+              <span>Manage runtime values and schema in a focused modal flow.</span>
             </ResourceCardCopy>
             <div className="workspace-resource-detail-grid">
               <article className="workspace-resource-detail-card">
@@ -1119,7 +840,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
             <section className="workspace-editor-section">
               <ResourceCardCopy className="workspace-editor-section-heading">
                 <ResourceCardHeading><strong>Model bindings</strong></ResourceCardHeading>
-                <span>Attach this {isFunction ? 'function' : 'tool'} to models and mark builtin mounting, similar to toolkit orchestration in upstream UI.</span>
+                <span>Attach this {isFunction ? 'function' : 'tool'} to models and mark builtin mounting.</span>
               </ResourceCardCopy>
               <div className="workspace-module-chip-row">
                 <Tag>{linkedModels.length} linked models</Tag>
@@ -1160,7 +881,7 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
           ) : null}
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
-              <ResourceCardHeading><strong>Toolkit orchestration graph</strong></ResourceCardHeading>
+              <ResourceCardHeading><strong>Model binding graph</strong></ResourceCardHeading>
               <span>Operational view of where this toolkit is mounted across model routes.</span>
             </ResourceCardCopy>
             <div className="workspace-module-chip-row">
@@ -1168,24 +889,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
               <Tag>{linkedModels.length} linked</Tag>
               <Tag>{builtinModels.length} builtin</Tag>
               <Tag>{toolkitPreview.schema.length} valves schema</Tag>
-              <Tag>{toolkitPreview.executionChain.steps.length} chain steps</Tag>
-            </div>
-            <div className="workspace-valve-list">
-              {toolkitPreview.executionChain.enabled && toolkitPreview.executionChain.steps.length > 0 ? (
-                toolkitPreview.executionChain.steps.map((step, index) => (
-                  <div key={`chain-graph-${step.toolId}-${index}`} className="workspace-valve-schema-row">
-                    <strong>{name || 'current toolkit'}</strong>
-                    <span>&rarr;</span>
-                    <span>{chainTargetNameById.get(step.toolId) || step.toolId}</span>
-                    <Tag>{step.mode}</Tag>
-                    <Tag>{step.when}</Tag>
-                    <span>{step.condition || 'no condition'}</span>
-                    <span>{step.outputKey || 'no output key'}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="workspace-module-empty">No execution chain edges configured.</p>
-              )}
             </div>
             <div className="workspace-valve-list">
               {linkedModels.length === 0 ? (
@@ -1203,95 +906,6 @@ export function WorkspaceToolEditor({ resourceKind = 'tool', toolId }: Workspace
                 ))
               )}
             </div>
-          </section>
-          <section className="workspace-editor-section">
-            <ResourceCardCopy className="workspace-editor-section-heading">
-              <ResourceCardHeading><strong>Runtime orchestration control panel</strong></ResourceCardHeading>
-              <span>Run, replay, cancel and inspect step-level execution snapshots for this tool chain.</span>
-            </ResourceCardCopy>
-            {toolId ? (
-              <>
-                <Field label="Run input payload">
-                  <textarea
-                    onChange={(event) => setRunInputPayload(event.target.value)}
-                    placeholder='{"message":"hello"}'
-                    rows={4}
-                    value={runInputPayload}
-                  />
-                </Field>
-                <div className="workspace-editor-actions">
-                  <CapsuleButton
-                    disabled={orchestrationRunning}
-                    onClick={() => void handleRunOrchestration()}
-                    type="button"
-                    variant="secondary"
-                  >
-                    {orchestrationRunning ? 'Running…' : 'Run orchestration'}
-                  </CapsuleButton>
-                  <CapsuleButton
-                    disabled={orchestrationRunsLoading}
-                    onClick={() => {
-                      if (!toolId) return
-                      void refreshOrchestrationRuns(toolId)
-                    }}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Refresh runs
-                  </CapsuleButton>
-                </div>
-                {orchestrationRunsLoading ? <p className="workspace-module-empty">Loading runs…</p> : null}
-                {!orchestrationRunsLoading && orchestrationRuns.length === 0 ? (
-                  <p className="workspace-module-empty">No orchestration runs yet.</p>
-                ) : null}
-                <div className="workspace-valve-list">
-                  {orchestrationRuns.slice(0, 10).map((run) => (
-                    <div key={run.id} className="workspace-valve-schema-row">
-                      <strong>{run.trigger}</strong>
-                      <Tag>{run.status}</Tag>
-                      <span>{run.steps.filter((step) => step.status === 'success').length} success steps</span>
-                      <span>{run.steps.filter((step) => step.status === 'failed').length} failed steps</span>
-                      <span>{run.errorMessage || 'no error'}</span>
-                      <CapsuleButton
-                        disabled={orchestrationWorkingRunId === run.id}
-                        onClick={() => void handleReplayRun(run.id)}
-                        size="sm"
-                        type="button"
-                        variant="secondary"
-                      >
-                        Replay
-                      </CapsuleButton>
-                      {run.status === 'queued' || run.status === 'running' ? (
-                        <CapsuleButton
-                          disabled={orchestrationWorkingRunId === run.id}
-                          onClick={() => void handleCancelRun(run.id)}
-                          size="sm"
-                          type="button"
-                          variant="secondary"
-                        >
-                          Cancel
-                        </CapsuleButton>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-                <div className="workspace-valve-list">
-                  {orchestrationRuns[0]?.steps?.map((step) => (
-                    <div key={step.id} className="workspace-valve-schema-row">
-                      <strong>{step.toolName}</strong>
-                      <Tag>{step.status}</Tag>
-                      <Tag>{step.mode}</Tag>
-                      <Tag>{step.when}</Tag>
-                      <span>{step.branchPath}</span>
-                      <span>{step.condition || 'always'}</span>
-                      <span>{step.errorMessage || step.outputKey || 'no output key'}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="workspace-module-empty">Save this tool first to enable orchestration runtime controls.</p>
-            )}
           </section>
           <div className="workspace-editor-actions">
             <CapsuleButton disabled={saving} type="submit" variant="primary">{saving ? 'Saving…' : toolId ? 'Save tool' : 'Create tool'}</CapsuleButton>

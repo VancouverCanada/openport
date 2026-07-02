@@ -4,11 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createWorkspaceModel,
   deleteWorkspaceModel,
-  fetchProjectKnowledge,
   fetchWorkspaceModels,
   loadSession,
   updateWorkspaceModel,
-  type OpenPortProjectKnowledgeItem,
   type OpenPortWorkspaceModel
 } from '../lib/openport-api'
 import { downloadJsonFile, normalizeImportedItems, readJsonFile } from '../lib/workspace-resource-io'
@@ -16,9 +14,12 @@ import { notify } from '../lib/toast'
 import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
+import { WorkspacePagination } from './ui/workspace-pagination'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
-import { WorkspaceResourceAccessModal } from './workspace-resource-access-modal'
+import { WorkspaceEmptyState } from './ui/workspace-empty-state'
 import { WorkspaceModelMenu } from './workspace-model-menu'
 import { Tag } from './ui/tag'
 
@@ -26,36 +27,27 @@ export function WorkspaceModels() {
   const [items, setItems] = useState<OpenPortWorkspaceModel[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [providerFilter, setProviderFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [defaultFilter, setDefaultFilter] = useState('all')
-  const [capabilityFilter, setCapabilityFilter] = useState('all')
-  const [collectionFilter, setCollectionFilter] = useState('all')
-  const [sortBy, setSortBy] = useState<'updated' | 'name' | 'provider' | 'knowledge' | 'tools'>('updated')
+  const [viewFilter, setViewFilter] = useState<'all' | 'shared' | 'runtime' | 'managed'>('all')
+  const [sortBy, setSortBy] = useState<'updated' | 'name' | 'provider'>('updated')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [accessModelId, setAccessModelId] = useState<string | null>(null)
-  const [knowledgeItems, setKnowledgeItems] = useState<OpenPortProjectKnowledgeItem[]>([])
+  const [workingId, setWorkingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { canManageModule, canModuleAction } = useWorkspaceAuthority()
   const canManage = canManageModule('models')
   const canImport = canModuleAction('models', 'import')
   const canExport = canModuleAction('models', 'export')
   const canShare = canModuleAction('models', 'share')
+  const activeSession = loadSession()
 
   async function load(): Promise<void> {
     setLoading(true)
     try {
-      const [response, knowledgeResponse] = await Promise.all([
-        fetchWorkspaceModels(loadSession()),
-        fetchProjectKnowledge(loadSession()).catch(() => ({ items: [] }))
-      ])
+      const response = await fetchWorkspaceModels(loadSession())
       setItems(response.items)
-      setKnowledgeItems(knowledgeResponse.items)
     } catch {
       setItems([])
-      setKnowledgeItems([])
     } finally {
       setLoading(false)
     }
@@ -67,34 +59,44 @@ export function WorkspaceModels() {
 
   useEffect(() => {
     setPage(1)
-  }, [
-    query,
-    providerFilter,
-    statusFilter,
-    defaultFilter,
-    capabilityFilter,
-    collectionFilter,
-    sortBy,
-    sortDirection,
-    pageSize
-  ])
+  }, [query, viewFilter, sortBy, sortDirection, pageSize])
 
-  const providers = Array.from(new Set(items.map((item) => item.provider))).sort()
-  const collections = Array.from(
-    new Set(
-      knowledgeItems
-        .map((item) => item.collectionName?.trim())
-        .filter((value): value is string => Boolean(value))
-    )
-  ).sort()
-  const knowledgeById = new Map(knowledgeItems.map((item) => [item.id, item] as const))
+  function buildDuplicateRoute(route: string): string {
+    const normalized = route
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9/_-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+    return `${normalized || 'model'}-copy-${Date.now().toString().slice(-4)}`
+  }
+
+  function toTitleLabel(value: string): string {
+    return value
+      .split(/[\s_-]+/g)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+      .join(' ')
+  }
+
   const filteredItems = items.filter((item) => {
+    const source = item.source === 'runtime' ? 'runtime' : 'managed'
+    if (viewFilter === 'runtime' && source !== 'runtime') return false
+    if (viewFilter === 'managed' && source !== 'managed') return false
+    if (viewFilter === 'shared') {
+      const workspaceGrantOnly = item.accessGrants.every(
+        (grant) => grant.principalType === 'workspace' && grant.principalId === activeSession?.workspaceId
+      )
+      if (workspaceGrantOnly) return false
+    }
+
     if (query.trim()) {
       const normalizedQuery = query.trim().toLowerCase()
       const haystack = [
         item.name,
         item.route,
         item.provider,
+        source,
         item.description,
         ...item.tags,
         ...item.filterIds,
@@ -107,26 +109,12 @@ export function WorkspaceModels() {
         .toLowerCase()
       if (!haystack.includes(normalizedQuery)) return false
     }
-    if (providerFilter !== 'all' && item.provider !== providerFilter) return false
-    if (statusFilter !== 'all' && item.status !== statusFilter) return false
-    if (defaultFilter === 'default' && !item.isDefault) return false
-    if (defaultFilter === 'non-default' && item.isDefault) return false
-    if (capabilityFilter !== 'all' && !item.capabilities[capabilityFilter as keyof typeof item.capabilities]) return false
-    if (collectionFilter !== 'all') {
-      const matchesCollection = item.knowledgeItemIds.some((knowledgeItemId) => {
-        const knowledgeItem = knowledgeById.get(knowledgeItemId)
-        return knowledgeItem?.collectionName === collectionFilter
-      })
-      if (!matchesCollection) return false
-    }
     return true
   })
   const sortedItems = [...filteredItems].sort((left, right) => {
     const direction = sortDirection === 'asc' ? 1 : -1
     if (sortBy === 'name') return left.name.localeCompare(right.name) * direction
     if (sortBy === 'provider') return left.provider.localeCompare(right.provider) * direction
-    if (sortBy === 'knowledge') return (left.knowledgeItemIds.length - right.knowledgeItemIds.length) * direction
-    if (sortBy === 'tools') return ((left.toolIds.length + left.builtinToolIds.length) - (right.toolIds.length + right.builtinToolIds.length)) * direction
     return (new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime()) * direction
   })
   const totalPages = Math.max(1, Math.ceil(sortedItems.length / pageSize))
@@ -143,13 +131,38 @@ export function WorkspaceModels() {
     }
   }
 
-  async function handleMakeDefault(id: string): Promise<void> {
+  async function handleDuplicate(item: OpenPortWorkspaceModel): Promise<void> {
+    setWorkingId(item.id)
     try {
-      await updateWorkspaceModel(id, { isDefault: true }, loadSession())
-      notify('success', 'Default model updated.')
+      await createWorkspaceModel(
+        {
+          name: `${item.name} Copy`,
+          route: buildDuplicateRoute(item.route),
+          provider: item.provider,
+          source: 'managed',
+          description: item.description,
+          tags: item.tags,
+          status: item.status,
+          isDefault: false,
+          filterIds: item.filterIds,
+          defaultFilterIds: item.defaultFilterIds,
+          actionIds: item.actionIds,
+          defaultFeatureIds: item.defaultFeatureIds,
+          capabilities: item.capabilities,
+          knowledgeItemIds: item.knowledgeItemIds,
+          toolIds: item.toolIds,
+          builtinToolIds: item.builtinToolIds,
+          skillIds: item.skillIds ?? [],
+          promptSuggestions: item.promptSuggestions
+        },
+        loadSession()
+      )
+      notify('success', 'Model duplicated.')
       await load()
     } catch {
-      notify('error', 'Unable to update default model.')
+      notify('error', 'Unable to duplicate model.')
+    } finally {
+      setWorkingId(null)
     }
   }
 
@@ -163,6 +176,7 @@ export function WorkspaceModels() {
             name: item.name,
             route: item.route,
             provider: item.provider,
+            source: item.source === 'runtime' ? 'managed' : item.source,
             description: item.description,
             tags: item.tags,
             status: item.status,
@@ -194,15 +208,30 @@ export function WorkspaceModels() {
     downloadJsonFile(`openport-model-${item.route.toLowerCase().replace(/[^a-z0-9-]+/g, '-') || item.id}.json`, { items: [item] })
   }
 
+  async function handlePromote(item: OpenPortWorkspaceModel): Promise<void> {
+    setWorkingId(item.id)
+    try {
+      await updateWorkspaceModel(item.id, { source: 'managed' }, loadSession())
+      notify('success', 'Model saved as managed preset.')
+      await load()
+    } catch {
+      notify('error', 'Unable to save runtime model as managed preset.')
+    } finally {
+      setWorkingId(null)
+    }
+  }
+
+  async function handleShareToCommunity(item: OpenPortWorkspaceModel): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(item, null, 2))
+      notify('success', 'Model JSON copied.')
+    } catch {
+      notify('error', 'Unable to prepare model for community sharing.')
+    }
+  }
+
   return (
     <div className="workspace-resource-page">
-      <WorkspaceResourceAccessModal
-        module="models"
-        onClose={() => setAccessModelId(null)}
-        open={Boolean(accessModelId)}
-        resourceId={accessModelId || ''}
-        resourceLabel="Model"
-      />
       <PageHeader
         actions={
           <>
@@ -221,7 +250,7 @@ export function WorkspaceModels() {
           />
           </>
         }
-        description="Manage model routes, default availability, and workspace-level attachments."
+        description="Configure available models for your workspace."
         label="Workspace"
         title="Models"
       />
@@ -229,137 +258,94 @@ export function WorkspaceModels() {
       <section className="workspace-resource-section">
         <div className="workspace-resource-filters">
           <Field label="Search">
-            <input onChange={(event) => setQuery(event.target.value)} placeholder="Route, provider, tag, filter" value={query} />
+            <FieldInput onChange={(event) => setQuery(event.target.value)} placeholder="Route, provider, tag, filter" value={query} />
           </Field>
-          <Field label="Provider">
-            <select onChange={(event) => setProviderFilter(event.target.value)} value={providerFilter}>
-              <option value="all">All providers</option>
-              {providers.map((provider) => (
-                <option key={provider} value={provider}>
-                  {provider}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Status">
-            <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </Field>
-          <Field label="Default strategy">
-            <select onChange={(event) => setDefaultFilter(event.target.value)} value={defaultFilter}>
-              <option value="all">All models</option>
-              <option value="default">Default only</option>
-              <option value="non-default">Non-default only</option>
-            </select>
-          </Field>
-          <Field label="Capability">
-            <select onChange={(event) => setCapabilityFilter(event.target.value)} value={capabilityFilter}>
-              <option value="all">All capabilities</option>
-              <option value="vision">Vision</option>
-              <option value="webSearch">Web search</option>
-              <option value="imageGeneration">Image generation</option>
-              <option value="codeInterpreter">Code interpreter</option>
-            </select>
-          </Field>
-          <Field label="Knowledge collection">
-            <select onChange={(event) => setCollectionFilter(event.target.value)} value={collectionFilter}>
-              <option value="all">All collections</option>
-              {collections.map((collection) => (
-                <option key={collection} value={collection}>
-                  {collection}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Sort by">
-            <select onChange={(event) => setSortBy(event.target.value as typeof sortBy)} value={sortBy}>
-              <option value="updated">Updated</option>
-              <option value="name">Name</option>
-              <option value="provider">Provider</option>
-              <option value="knowledge">Knowledge links</option>
-              <option value="tools">Tool links</option>
-            </select>
-          </Field>
-          <Field label="Direction">
-            <select onChange={(event) => setSortDirection(event.target.value as typeof sortDirection)} value={sortDirection}>
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </Field>
-          <Field label="Page size">
-            <select onChange={(event) => setPageSize(Number(event.target.value) || 20)} value={String(pageSize)}>
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="40">40</option>
-            </select>
+          <Field label="View">
+            <FieldSelect onChange={(event) => setViewFilter(event.target.value as 'all' | 'shared' | 'runtime' | 'managed')} value={viewFilter}>
+              <option value="all">All</option>
+              <option value="shared">Shared</option>
+              <option value="runtime">Runtime models</option>
+              <option value="managed">Managed presets</option>
+            </FieldSelect>
           </Field>
         </div>
         {!loading ? (
-          <div className="workspace-module-chip-row">
-            <Tag>{sortedItems.length} total</Tag>
-            <Tag>Page {safePage} / {totalPages}</Tag>
-            <CapsuleButton disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button" variant="secondary">Previous</CapsuleButton>
-            <CapsuleButton disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button" variant="secondary">Next</CapsuleButton>
-          </div>
+          <WorkspacePagination
+            onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+            page={safePage}
+            total={sortedItems.length}
+            totalPages={totalPages}
+          />
         ) : null}
         {loading ? <p className="workspace-module-empty">Loading models…</p> : null}
-        {!loading && sortedItems.length === 0 ? <p className="workspace-module-empty">No models match this filter.</p> : null}
+        {!loading && sortedItems.length === 0 ? (
+          <WorkspaceEmptyState title="No models match this filter." />
+        ) : null}
         {!loading ? (
           <div className="workspace-resource-list">
-            {pagedItems.map((item) => (
-              <ResourceCard
-                key={item.id}
-                actions={
-                  <ResourceCardActions>
-                    <WorkspaceModelMenu
-                      canExport={canExport}
-                      canShare={canShare}
-                      canManage={canManage}
-                      item={item}
-                      onAccess={canShare ? () => setAccessModelId(item.id) : undefined}
-                      onDelete={() => void handleDelete(item.id)}
-                      onExport={() => handleExportItem(item)}
-                      onMakeDefault={() => void handleMakeDefault(item.id)}
-                    />
-                  </ResourceCardActions>
-                }
-              >
-                <ResourceCardCopy>
-                  <ResourceCardHeading>
-                    <strong>{item.name}</strong>
-                    <span className={`status-pill${item.status === 'disabled' ? ' is-disabled' : ''}`}>{item.status}</span>
-                    {item.isDefault ? <span className="status-pill">default</span> : null}
-                  </ResourceCardHeading>
-                  <p>{item.description || item.route}</p>
-                  <div className="workspace-module-chip-row">
-                    <Tag>{item.route}</Tag>
-                    <Tag>{item.provider}</Tag>
-                    {item.knowledgeItemIds.length > 0 ? <Tag>{item.knowledgeItemIds.length} knowledge</Tag> : null}
-                    {item.toolIds.length > 0 ? <Tag>{item.toolIds.length} tools</Tag> : null}
-                    {item.builtinToolIds.length > 0 ? <Tag>{item.builtinToolIds.length} builtin tools</Tag> : null}
-                    {item.skillIds.length > 0 ? <Tag>{item.skillIds.length} skills</Tag> : null}
-                    {item.actionIds.length > 0 ? <Tag>{item.actionIds.length} actions</Tag> : null}
-                    {item.defaultFilterIds.length > 0 ? <Tag>{item.defaultFilterIds.length} default filters</Tag> : null}
-                    {item.defaultFeatureIds.length > 0 ? <Tag>{item.defaultFeatureIds.length} default features</Tag> : null}
-                    {item.promptSuggestions.length > 0 ? <Tag>{item.promptSuggestions.length} suggestions</Tag> : null}
-                    {item.filterIds.map((filterId) => (
-                      <Tag key={filterId}>{filterId}</Tag>
-                    ))}
-                    {Object.entries(item.capabilities)
-                      .filter(([, enabled]) => enabled)
-                      .map(([capability]) => (
-                        <Tag key={capability}>{capability}</Tag>
+            {pagedItems.map((item) => {
+              const source = item.source === 'runtime' ? 'runtime' : 'managed'
+              const isRuntime = source === 'runtime'
+              const visibleTags = item.tags.filter((tag) => !(item.isDefault && tag.trim().toLowerCase() === 'default'))
+              return (
+                <ResourceCard
+                  key={item.id}
+                  actions={
+                    <ResourceCardActions>
+                      <WorkspaceModelMenu
+                        canExport={canExport}
+                        canShare={canShare}
+                        canManage={canManage && !isRuntime}
+                        canPromote={canManage}
+                        item={item}
+                        onDelete={isRuntime ? () => undefined : () => void handleDelete(item.id)}
+                        onDuplicate={isRuntime ? () => undefined : () => void handleDuplicate(item)}
+                        onExport={() => handleExportItem(item)}
+                        onPromote={isRuntime ? () => void handlePromote(item) : undefined}
+                        onShare={canShare ? () => void handleShareToCommunity(item) : undefined}
+                        working={workingId === item.id}
+                      />
+                    </ResourceCardActions>
+                  }
+                >
+                    <ResourceCardCopy>
+                      <ResourceCardHeading>
+                        <strong>{item.name}</strong>
+                        <Tag className="workspace-model-heading-tag" variant="solid">
+                          {source === 'runtime' ? 'Runtime model' : 'Managed preset'}
+                        </Tag>
+                        <Tag className="workspace-model-heading-tag" variant="solid">{toTitleLabel(item.status)}</Tag>
+                        {item.isDefault ? <Tag className="workspace-model-heading-tag" variant="solid">Default</Tag> : null}
+                      </ResourceCardHeading>
+                    <p>{item.description || item.route}</p>
+                    <div className="workspace-module-chip-row">
+                      <Tag>{item.route}</Tag>
+                      <Tag>{item.provider}</Tag>
+                      {item.knowledgeItemIds.length > 0 ? <Tag>{item.knowledgeItemIds.length} knowledge</Tag> : null}
+                      {item.toolIds.length > 0 ? <Tag>{item.toolIds.length} tools</Tag> : null}
+                      {item.builtinToolIds.length > 0 ? <Tag>{item.builtinToolIds.length} builtin tools</Tag> : null}
+                      {item.skillIds.length > 0 ? <Tag>{item.skillIds.length} skills</Tag> : null}
+                      {item.actionIds.length > 0 ? <Tag>{item.actionIds.length} actions</Tag> : null}
+                      {item.defaultFilterIds.length > 0 ? <Tag>{item.defaultFilterIds.length} default filters</Tag> : null}
+                      {item.defaultFeatureIds.length > 0 ? <Tag>{item.defaultFeatureIds.length} default features</Tag> : null}
+                      {item.promptSuggestions.length > 0 ? <Tag>{item.promptSuggestions.length} suggestions</Tag> : null}
+                      {item.filterIds.map((filterId) => (
+                        <Tag key={filterId}>{filterId}</Tag>
                       ))}
-                    {item.tags.map((tag) => (
-                      <Tag key={tag}>{tag}</Tag>
-                    ))}
-                  </div>
-                </ResourceCardCopy>
-              </ResourceCard>
-            ))}
+                      {Object.entries(item.capabilities)
+                        .filter(([, enabled]) => enabled)
+                        .map(([capability]) => (
+                          <Tag key={capability}>{capability}</Tag>
+                        ))}
+                      {visibleTags.map((tag) => (
+                        <Tag key={tag}>{tag}</Tag>
+                      ))}
+                    </div>
+                  </ResourceCardCopy>
+                </ResourceCard>
+              )
+            })}
           </div>
         ) : null}
       </section>

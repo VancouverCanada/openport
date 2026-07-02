@@ -17,6 +17,7 @@ import {
   getChatUiPreferencesEventName,
   loadChatUiPreferences,
   setSidebarSectionState,
+  updateMessageQueueEnabled,
   updateChatDefaults,
   type OpenPortChatUiPreferences
 } from '../lib/chat-ui-preferences'
@@ -52,7 +53,7 @@ const settingsTabs: SettingsTab[] = [
   { id: 'integrations', icon: 'solar:widget-5-outline', title: 'Integrations', keywords: ['integrations', 'tools', 'knowledge', 'prompts', 'workspace'] },
   { id: 'personalization', icon: 'solar:palette-outline', title: 'Personalization', keywords: ['personalization', 'sidebar', 'home', 'models', 'sections'] },
   { id: 'data', icon: 'solar:database-outline', title: 'Data', keywords: ['data', 'archive', 'export', 'sessions', 'history'] },
-  { id: 'about', icon: 'solar:info-circle-outline', title: 'About', keywords: ['about', 'upstream-ui', 'reference', 'releases'] }
+  { id: 'about', icon: 'solar:info-circle-outline', title: 'About', keywords: ['about', 'reference', 'releases'] }
 ]
 
 export function ChatSettingsModal({ initialSection, onClose, onOpenShortcuts, open, session }: ChatSettingsModalProps) {
@@ -346,6 +347,15 @@ export function ChatSettingsModal({ initialSection, onClose, onOpenShortcuts, op
                 </label>
 
                 <label className="chat-settings-field chat-settings-field-toggle">
+                  <span>Enable message queue</span>
+                  <input
+                    checked={uiPreferences.enableMessageQueue}
+                    onChange={(event) => setUiPreferences(updateMessageQueueEnabled(event.target.checked))}
+                    type="checkbox"
+                  />
+                </label>
+
+                <label className="chat-settings-field chat-settings-field-toggle">
                   <span>Collapse projects by default</span>
                   <input
                     checked={uiPreferences.collapsedSidebarSections.projects}
@@ -564,16 +574,7 @@ export function ChatSettingsModal({ initialSection, onClose, onOpenShortcuts, op
             <section className="chat-settings-section">
               <div className="chat-settings-copy">
                 <strong>OpenPort chat workspace</strong>
-                <span>Chat-first self-hosted UI shaped by the upstream UI application structure and interaction model.</span>
-              </div>
-
-              <div className="chat-settings-actions">
-                <TextButton external href="https://github.com/upstream-ui/upstream-ui#readme" rel="noreferrer" target="_blank" variant="menu">
-                  <span>upstream UI reference</span>
-                </TextButton>
-                <TextButton external href="https://github.com/upstream-ui/upstream-ui/releases" rel="noreferrer" target="_blank" variant="menu">
-                  <span>upstream UI releases</span>
-                </TextButton>
+                <span>Chat-first self-hosted UI for workspace models, knowledge, prompts, and tools.</span>
               </div>
             </section>
           ) : null}

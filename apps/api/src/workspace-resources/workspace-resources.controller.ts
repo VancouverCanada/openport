@@ -11,9 +11,6 @@ import { SubmitWorkspacePromptCommunityDto } from './dto/submit-workspace-prompt
 import { CreateWorkspaceToolDto } from './dto/create-workspace-tool.dto.js'
 import { UpdateWorkspaceToolDto } from './dto/update-workspace-tool.dto.js'
 import { ValidateWorkspaceToolDto } from './dto/validate-workspace-tool.dto.js'
-import { ImportWorkspaceToolPackageDto } from './dto/import-workspace-tool-package.dto.js'
-import { RunWorkspaceToolOrchestrationDto } from './dto/run-workspace-tool-orchestration.dto.js'
-import { ReplayWorkspaceToolOrchestrationRunDto } from './dto/replay-workspace-tool-orchestration-run.dto.js'
 import { CreateWorkspaceSkillDto } from './dto/create-workspace-skill.dto.js'
 import { UpdateWorkspaceSkillDto } from './dto/update-workspace-skill.dto.js'
 import { ShareWorkspaceResourceDto } from './dto/share-workspace-resource.dto.js'
@@ -166,58 +163,14 @@ export class WorkspaceResourcesController {
     return this.resources.validateTool(resolveActor(req.headers), dto)
   }
 
-  @Post('tools/package/import')
-  importToolPackage(@Req() req: FastifyRequest, @Body() dto: ImportWorkspaceToolPackageDto) {
-    return this.resources.importToolPackage(resolveActor(req.headers), dto)
-  }
-
   @Get('tools/:id')
   getTool(@Req() req: FastifyRequest, @Param('id') id: string) {
     return this.resources.getTool(resolveActor(req.headers), id)
   }
 
-  @Get('tools/:id/package')
-  exportToolPackage(@Req() req: FastifyRequest, @Param('id') id: string) {
-    return this.resources.exportToolPackage(resolveActor(req.headers), id)
-  }
-
   @Patch('tools/:id')
   updateTool(@Req() req: FastifyRequest, @Param('id') id: string, @Body() dto: UpdateWorkspaceToolDto) {
     return this.resources.updateTool(resolveActor(req.headers), id, dto)
-  }
-
-  @Post('tools/:id/orchestration/runs')
-  runToolOrchestration(
-    @Req() req: FastifyRequest,
-    @Param('id') id: string,
-    @Body() dto: RunWorkspaceToolOrchestrationDto
-  ) {
-    return this.resources.runToolOrchestration(resolveActor(req.headers), id, dto)
-  }
-
-  @Get('tools/:id/orchestration/runs')
-  listToolOrchestrationRuns(@Req() req: FastifyRequest, @Param('id') id: string) {
-    return this.resources.listToolOrchestrationRuns(resolveActor(req.headers), id)
-  }
-
-  @Get('tools/:id/orchestration/runs/:runId')
-  getToolOrchestrationRun(@Req() req: FastifyRequest, @Param('id') id: string, @Param('runId') runId: string) {
-    return this.resources.getToolOrchestrationRun(resolveActor(req.headers), id, runId)
-  }
-
-  @Post('tools/:id/orchestration/runs/:runId/replay')
-  replayToolOrchestrationRun(
-    @Req() req: FastifyRequest,
-    @Param('id') id: string,
-    @Param('runId') runId: string,
-    @Body() dto: ReplayWorkspaceToolOrchestrationRunDto
-  ) {
-    return this.resources.replayToolOrchestrationRun(resolveActor(req.headers), id, runId, dto)
-  }
-
-  @Post('tools/:id/orchestration/runs/:runId/cancel')
-  cancelToolOrchestrationRun(@Req() req: FastifyRequest, @Param('id') id: string, @Param('runId') runId: string) {
-    return this.resources.cancelToolOrchestrationRun(resolveActor(req.headers), id, runId)
   }
 
   @Delete('tools/:id')

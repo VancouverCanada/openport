@@ -279,6 +279,20 @@ export type OpenPortChatMessage = {
   content: string
   createdAt: string
   attachments?: OpenPortChatAttachment[]
+  streamState?: 'pending' | 'streaming' | 'done' | 'error'
+  thoughtSeconds?: number
+  reasoningContent?: string
+  statusHistory?: Array<{
+    done: boolean
+    action: string
+    description: string
+    hidden?: boolean
+    urls?: string[]
+    items?: Array<Record<string, unknown>>
+    query?: string
+    queries?: string[]
+    count?: number
+  }>
 }
 
 export type OpenPortChatAttachment = {
@@ -702,6 +716,7 @@ export type OpenPortNoteCollaborationState = {
 }
 
 export type OpenPortWorkspaceModelStatus = 'active' | 'disabled'
+export type OpenPortWorkspaceModelSource = 'runtime' | 'managed'
 
 export type OpenPortWorkspaceModelCapabilities = {
   vision: boolean
@@ -747,6 +762,7 @@ export type OpenPortWorkspaceModel = {
   name: string
   route: string
   provider: string
+  source?: OpenPortWorkspaceModelSource
   description: string
   tags: string[]
   status: OpenPortWorkspaceModelStatus
@@ -823,65 +839,6 @@ export type OpenPortWorkspaceToolExample = {
   output: string
 }
 
-export type OpenPortWorkspaceToolExecutionStepMode = 'sequential' | 'parallel' | 'fallback'
-
-export type OpenPortWorkspaceToolExecutionStepWhen = 'always' | 'on_success' | 'on_error'
-
-export type OpenPortWorkspaceToolExecutionStep = {
-  id: string
-  toolId: string
-  mode: OpenPortWorkspaceToolExecutionStepMode
-  when: OpenPortWorkspaceToolExecutionStepWhen
-  condition: string
-  outputKey: string
-}
-
-export type OpenPortWorkspaceToolExecutionChain = {
-  enabled: boolean
-  steps: OpenPortWorkspaceToolExecutionStep[]
-}
-
-export type OpenPortWorkspaceToolRunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
-
-export type OpenPortWorkspaceToolRunStepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
-
-export type OpenPortWorkspaceToolRunStep = {
-  id: string
-  chainStepId: string
-  toolId: string
-  toolName: string
-  mode: OpenPortWorkspaceToolExecutionStepMode
-  when: OpenPortWorkspaceToolExecutionStepWhen
-  condition: string
-  conditionMatched: boolean
-  branchPath: string
-  outputKey: string
-  status: OpenPortWorkspaceToolRunStepStatus
-  inputSnapshot: string
-  outputSnapshot: string
-  errorMessage: string | null
-  startedAt: string | null
-  finishedAt: string | null
-}
-
-export type OpenPortWorkspaceToolRun = {
-  id: string
-  workspaceId: string
-  toolId: string
-  trigger: 'manual' | 'replay' | 'api'
-  status: OpenPortWorkspaceToolRunStatus
-  debug: boolean
-  replayOfRunId: string | null
-  inputPayload: string
-  outputPayload: string
-  errorMessage: string | null
-  steps: OpenPortWorkspaceToolRunStep[]
-  startedAt: string | null
-  finishedAt: string | null
-  createdAt: string
-  updatedAt: string
-}
-
 export type OpenPortWorkspaceTool = {
   id: string
   workspaceId: string
@@ -895,7 +852,6 @@ export type OpenPortWorkspaceTool = {
   valves: Record<string, string>
   valveSchema: OpenPortWorkspaceToolValveSchemaField[]
   examples: OpenPortWorkspaceToolExample[]
-  executionChain: OpenPortWorkspaceToolExecutionChain
   accessGrants: OpenPortWorkspaceResourceGrant[]
   createdAt: string
   updatedAt: string
@@ -1037,31 +993,6 @@ export type OpenPortWorkspaceToolValidationResponse = {
   }
 }
 
-export type OpenPortWorkspaceToolPackage = {
-  metadata: {
-    schemaVersion: 1
-    source: 'openport-workspace-tool'
-    sourceToolId: string | null
-    sourceWorkspaceId: string
-    exportedAt: string
-    checksum: string
-  }
-  tool: {
-    name: string
-    description: string
-    integrationId: string | null
-    enabled: boolean
-    scopes: string[]
-    tags: string[]
-    manifest: string
-    valves: Record<string, string>
-    valveSchema: OpenPortWorkspaceToolValveSchemaField[]
-    examples: OpenPortWorkspaceToolExample[]
-    executionChain: OpenPortWorkspaceToolExecutionChain
-  }
-  validation: OpenPortWorkspaceToolValidationResponse
-}
-
 export type OpenPortWorkspaceSkill = {
   id: string
   workspaceId: string
@@ -1091,19 +1022,6 @@ export type OpenPortWorkspacePromptVersionsResponse = {
 
 export type OpenPortWorkspaceToolResponse = {
   item: OpenPortWorkspaceTool
-}
-
-export type OpenPortWorkspaceToolPackageResponse = {
-  package: OpenPortWorkspaceToolPackage
-}
-
-export type OpenPortWorkspaceToolPackageImportResponse = {
-  item: OpenPortWorkspaceTool
-  validation: OpenPortWorkspaceToolValidationResponse
-}
-
-export type OpenPortWorkspaceToolRunResponse = {
-  item: OpenPortWorkspaceToolRun
 }
 
 export type OpenPortWorkspaceConnectorResponse = {

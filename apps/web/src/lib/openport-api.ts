@@ -79,11 +79,6 @@ import type {
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceSkillResponse,
   OpenPortWorkspaceTool,
-  OpenPortWorkspaceToolRun,
-  OpenPortWorkspaceToolRunResponse,
-  OpenPortWorkspaceToolPackage,
-  OpenPortWorkspaceToolPackageImportResponse,
-  OpenPortWorkspaceToolPackageResponse,
   OpenPortWorkspaceToolValidationResponse,
   OpenPortWorkspaceToolValveSchemaField,
   OpenPortWorkspaceToolResponse,
@@ -99,6 +94,16 @@ import { getPublicApiBaseUrl } from './runtime-env'
 
 export type OpenPortSession = OpenPortClientSession
 export type WorkspaceResourceModule = 'models' | 'prompts' | 'tools' | 'skills'
+export type OpenPortChatTask = {
+  id: string
+  sessionId: string
+  createdAt: string
+  status: 'running'
+}
+export type OpenPortDeleteChatSessionsResponse = {
+  deletedIds: string[]
+  missingIds: string[]
+}
 export type UpdateChatSessionMetaInput = {
   title?: string
   archived?: boolean
@@ -161,10 +166,6 @@ export type {
   OpenPortWorkspaceResourcePrincipalType,
   OpenPortWorkspaceSkill,
   OpenPortWorkspaceTool,
-  OpenPortWorkspaceToolRun,
-  OpenPortWorkspaceToolPackage,
-  OpenPortWorkspaceToolPackageImportResponse,
-  OpenPortWorkspaceToolPackageResponse,
   OpenPortWorkspaceConnector,
   OpenPortWorkspaceConnectorCredential,
   OpenPortWorkspaceConnectorTask,
@@ -179,6 +180,27 @@ export type {
 
 const SESSION_KEY = 'openport.web.session'
 
+export class OpenPortApiError extends Error {
+  code?: string
+  retryable?: boolean
+  status?: number
+
+  constructor(
+    message: string,
+    options?: {
+      code?: string
+      retryable?: boolean
+      status?: number
+    }
+  ) {
+    super(message)
+    this.name = 'OpenPortApiError'
+    this.code = options?.code
+    this.retryable = options?.retryable
+    this.status = options?.status
+  }
+}
+
 function buildHeaders(session?: OpenPortSession | null): HeadersInit {
   return {
     'Content-Type': 'application/json',
@@ -187,6 +209,43 @@ function buildHeaders(session?: OpenPortSession | null): HeadersInit {
     'x-openport-workspace': session?.workspaceId || 'ws_user_demo',
     'x-openport-admin-user': session?.userId || 'admin_demo'
   }
+}
+
+async function readApiError(response: Response): Promise<OpenPortApiError> {
+  const text = await response.text().catch(() => '')
+  let message = text || `Request failed: ${response.status}`
+  let code: string | undefined
+  let retryable: boolean | undefined
+
+  if (text) {
+    try {
+      const parsed = JSON.parse(text) as {
+        message?: string | string[]
+        code?: string
+        retryable?: boolean
+      }
+      if (typeof parsed.code === 'string' && parsed.code.trim()) {
+        code = parsed.code
+      }
+      if (typeof parsed.retryable === 'boolean') {
+        retryable = parsed.retryable
+      }
+      if (typeof parsed.message === 'string' && parsed.message.trim()) {
+        message = parsed.message
+      } else if (Array.isArray(parsed.message)) {
+        const joined = parsed.message.filter((part): part is string => typeof part === 'string').join('; ').trim()
+        if (joined) message = joined
+      }
+    } catch {
+      // Keep raw text message.
+    }
+  }
+
+  return new OpenPortApiError(message, {
+    code,
+    retryable,
+    status: response.status
+  })
 }
 
 async function request<T>(path: string, init: RequestInit = {}, session?: OpenPortSession | null): Promise<T> {
@@ -204,8 +263,7 @@ async function request<T>(path: string, init: RequestInit = {}, session?: OpenPo
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || `Request failed: ${response.status}`)
+    throw await readApiError(response)
   }
 
   return response.json() as Promise<T>
@@ -570,22 +628,70 @@ export async function postChatMessage(
   sessionId: string,
   content: string,
   attachmentsOrSession: OpenPortChatMessage['attachments'] | OpenPortSession | null = [],
-  maybeSession?: OpenPortSession | null
+  maybeSession?: OpenPortSession | null,
+  options?: {
+    messageIds?: {
+      userMessageId?: string
+      assistantMessageId?: string
+    }
+  }
 ): Promise<OpenPortChatMessagesResponse> {
   const attachments = Array.isArray(attachmentsOrSession) ? attachmentsOrSession : []
   const session = Array.isArray(attachmentsOrSession) ? maybeSession : attachmentsOrSession
 
   return request<OpenPortChatMessagesResponse>(`/ai/sessions/${sessionId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, attachments })
+    body: JSON.stringify({
+      content,
+      attachments,
+      userMessageId: options?.messageIds?.userMessageId,
+      assistantMessageId: options?.messageIds?.assistantMessageId
+    })
   }, session)
 }
 
 type OpenPortChatStreamEvent =
-  | { event: 'status'; data: { done: boolean; action: string; description: string; urls?: string[]; query?: string } }
+  | {
+      event: 'status'
+      data: {
+        done: boolean
+        action: string
+        description: string
+        hidden?: boolean
+        urls?: string[]
+        items?: Array<Record<string, unknown>>
+        query?: string
+        queries?: string[]
+        count?: number
+      }
+    }
+  | {
+      event: 'chat:status'
+      data: {
+        done: boolean
+        action: string
+        description: string
+        hidden?: boolean
+        urls?: string[]
+        items?: Array<Record<string, unknown>>
+        query?: string
+        queries?: string[]
+        count?: number
+      }
+    }
   | { event: 'delta'; data: { delta: string } }
+  | { event: 'reasoning'; data: { content: string } }
+  | { event: 'chat:reasoning'; data: { content: string } }
+  | { event: 'chat:message:delta'; data: { content: string } }
+  | { event: 'message'; data: { content: string } }
+  | { event: 'chat:completion'; data: OpenPortChatMessagesResponse }
+  | { event: 'tasks'; data: { taskIds?: string[] } }
+  | { event: 'chat:tasks:cancel'; data: { taskIds?: string[] } }
+  | { event: 'active'; data: { active: boolean } }
+  | { event: 'chat:active'; data: { active: boolean } }
+  | { event: 'cancel'; data: { message?: string } }
   | { event: 'final'; data: OpenPortChatMessagesResponse }
-  | { event: 'error'; data: { message?: string } }
+  | { event: 'error'; data: { code?: string; message?: string; retryable?: boolean } }
 
 function parseSseChunk(raw: string): OpenPortChatStreamEvent | null {
   const lines = raw.split('\n')
@@ -618,23 +724,48 @@ export async function postChatMessageStream(
   options?: {
     signal?: AbortSignal
     onEvent?: (event: OpenPortChatStreamEvent) => void
+    messageIds?: {
+      userMessageId?: string
+      assistantMessageId?: string
+    }
   }
 ): Promise<OpenPortChatMessagesResponse> {
   const attachments = Array.isArray(attachmentsOrSession) ? attachmentsOrSession : []
   const session = Array.isArray(attachmentsOrSession) ? maybeSession : attachmentsOrSession
   const headers = new Headers(buildHeaders(session))
 
-  const response = await fetch(`${getPublicApiBaseUrl()}/ai/sessions/${sessionId}/messages?stream=1`, {
+  const taskResponse = await fetch(`${getPublicApiBaseUrl()}/ai/sessions/${sessionId}/messages/tasks`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ content, attachments }),
+    body: JSON.stringify({
+      content,
+      attachments,
+      userMessageId: options?.messageIds?.userMessageId,
+      assistantMessageId: options?.messageIds?.assistantMessageId
+    }),
+    cache: 'no-store',
+    signal: options?.signal
+  })
+
+  if (!taskResponse.ok) {
+    throw await readApiError(taskResponse)
+  }
+
+  const taskPayload = (await taskResponse.json().catch(() => ({}))) as { taskId?: string }
+  const taskId = typeof taskPayload.taskId === 'string' ? taskPayload.taskId : ''
+  if (!taskId) {
+    throw new Error('Task creation failed')
+  }
+
+  const response = await fetch(`${getPublicApiBaseUrl()}/ai/tasks/${taskId}/events`, {
+    method: 'GET',
+    headers,
     cache: 'no-store',
     signal: options?.signal
   })
 
   if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(text || `Request failed: ${response.status}`)
+    throw await readApiError(response)
   }
 
   if (!response.body) {
@@ -645,6 +776,8 @@ export async function postChatMessageStream(
   const decoder = new TextDecoder()
   let buffer = ''
   let finalPayload: OpenPortChatMessagesResponse | null = null
+  let cancelled = false
+  let sawTasksEvent = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -663,17 +796,66 @@ export async function postChatMessageStream(
       if (parsed.event === 'final' && parsed.data) {
         finalPayload = parsed.data
       }
+      if (parsed.event === 'cancel') {
+        cancelled = true
+      }
+      if (parsed.event === 'tasks') {
+        const taskIds = Array.isArray(parsed.data?.taskIds) ? parsed.data.taskIds : []
+        sawTasksEvent = sawTasksEvent || taskIds.length > 0
+      }
+      if (parsed.event === 'chat:tasks:cancel') {
+        cancelled = true
+      }
       if (parsed.event === 'error') {
-        throw new Error(parsed.data?.message || 'Stream failed')
+        throw new OpenPortApiError(parsed.data?.message || 'Unable to generate response.', {
+          code: parsed.data?.code,
+          retryable: parsed.data?.retryable
+        })
       }
     }
   }
 
   if (!finalPayload) {
+    if (cancelled || sawTasksEvent) {
+      throw new DOMException('Generation cancelled', 'AbortError')
+    }
     throw new Error('Stream ended without final payload')
   }
 
   return finalPayload
+}
+
+export async function cancelChatTask(
+  taskId: string,
+  session?: OpenPortSession | null
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/ai/tasks/${taskId}/cancel`, { method: 'POST' }, session)
+}
+
+export async function fetchChatTasks(session?: OpenPortSession | null): Promise<{ tasks: OpenPortChatTask[] }> {
+  return request<{ tasks: OpenPortChatTask[] }>('/ai/tasks', { method: 'GET' }, session)
+}
+
+export async function fetchChatTasksBySession(
+  sessionId: string,
+  session?: OpenPortSession | null
+): Promise<{ task_ids: string[] }> {
+  const result = await request<{ task_ids?: string[]; tasks?: OpenPortChatTask[] }>(
+    `/ai/tasks/chat/${sessionId}`,
+    { method: 'GET' },
+    session
+  )
+  if (Array.isArray(result.task_ids)) {
+    return { task_ids: result.task_ids.filter((taskId): taskId is string => typeof taskId === 'string') }
+  }
+  if (Array.isArray(result.tasks)) {
+    return {
+      task_ids: result.tasks
+        .map((task) => task.id)
+        .filter((taskId): taskId is string => typeof taskId === 'string')
+    }
+  }
+  return { task_ids: [] }
 }
 
 export async function updateChatSessionSettings(
@@ -731,6 +913,16 @@ export async function deleteChatSession(
   session?: OpenPortSession | null
 ): Promise<{ ok: true }> {
   return request<{ ok: true }>(`/ai/sessions/${sessionId}`, { method: 'DELETE' }, session)
+}
+
+export async function deleteChatSessions(
+  ids: string[],
+  session?: OpenPortSession | null
+): Promise<OpenPortDeleteChatSessionsResponse> {
+  return request<OpenPortDeleteChatSessionsResponse>('/ai/sessions/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  }, session)
 }
 
 export async function fetchNotes(
@@ -1284,8 +1476,18 @@ function normalizeStringArray(value: unknown): string[] {
 
 function normalizeWorkspaceModel(input: OpenPortWorkspaceModel): OpenPortWorkspaceModel {
   const model = input as Partial<OpenPortWorkspaceModel>
+  const source =
+    model.source === 'runtime' || model.source === 'managed'
+      ? model.source
+      : typeof model.id === 'string' &&
+          model.id.startsWith('model_ollama_') &&
+          typeof model.route === 'string' &&
+          model.route.startsWith('ollama/')
+        ? 'runtime'
+        : 'managed'
   return {
     ...input,
+    source,
     description: typeof model.description === 'string' ? model.description : '',
     tags: normalizeStringArray(model.tags),
     filterIds: normalizeStringArray(model.filterIds),
@@ -1584,8 +1786,8 @@ export async function fetchWorkspaceTool(
 }
 
 export async function createWorkspaceTool(
-  input: Partial<Pick<OpenPortWorkspaceTool, 'id' | 'tags' | 'examples' | 'executionChain'>> &
-    Omit<OpenPortWorkspaceTool, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt' | 'tags' | 'examples' | 'executionChain' | 'accessGrants'>,
+  input: Partial<Pick<OpenPortWorkspaceTool, 'id' | 'tags' | 'examples'>> &
+    Omit<OpenPortWorkspaceTool, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt' | 'tags' | 'examples' | 'accessGrants'>,
   session?: OpenPortSession | null
 ): Promise<OpenPortWorkspaceToolResponse> {
   return request<OpenPortWorkspaceToolResponse>('/workspace/tools', {
@@ -1634,7 +1836,6 @@ export async function validateWorkspaceTool(
       input?: string
       output?: string
     }>
-    executionChain?: OpenPortWorkspaceTool['executionChain']
   },
   session?: OpenPortSession | null
 ): Promise<OpenPortWorkspaceToolValidationResponse> {
@@ -1642,99 +1843,6 @@ export async function validateWorkspaceTool(
     method: 'POST',
     body: JSON.stringify(input)
   }, session)
-}
-
-export async function fetchWorkspaceToolPackage(
-  id: string,
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolPackageResponse> {
-  return request<OpenPortWorkspaceToolPackageResponse>(`/workspace/tools/${id}/package`, { method: 'GET' }, session)
-}
-
-export async function importWorkspaceToolPackage(
-  input: {
-    package: OpenPortWorkspaceToolPackage | Record<string, unknown>
-    targetToolId?: string
-    forceEnable?: boolean
-  },
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolPackageImportResponse> {
-  return request<OpenPortWorkspaceToolPackageImportResponse>('/workspace/tools/package/import', {
-    method: 'POST',
-    body: JSON.stringify(input)
-  }, session)
-}
-
-export async function runWorkspaceToolOrchestration(
-  id: string,
-  input: {
-    inputPayload?: string
-    debug?: boolean
-    stepLimit?: number
-  } = {},
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolRunResponse> {
-  return request<OpenPortWorkspaceToolRunResponse>(`/workspace/tools/${id}/orchestration/runs`, {
-    method: 'POST',
-    body: JSON.stringify(input)
-  }, session)
-}
-
-export async function fetchWorkspaceToolOrchestrationRuns(
-  id: string,
-  session?: OpenPortSession | null
-): Promise<OpenPortListResponse<OpenPortWorkspaceToolRun>> {
-  return request<OpenPortListResponse<OpenPortWorkspaceToolRun>>(
-    `/workspace/tools/${id}/orchestration/runs`,
-    { method: 'GET' },
-    session
-  )
-}
-
-export async function fetchWorkspaceToolOrchestrationRun(
-  id: string,
-  runId: string,
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolRunResponse> {
-  return request<OpenPortWorkspaceToolRunResponse>(
-    `/workspace/tools/${id}/orchestration/runs/${runId}`,
-    { method: 'GET' },
-    session
-  )
-}
-
-export async function replayWorkspaceToolOrchestrationRun(
-  id: string,
-  runId: string,
-  input: {
-    inputPayload?: string
-    debug?: boolean
-  } = {},
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolRunResponse> {
-  return request<OpenPortWorkspaceToolRunResponse>(
-    `/workspace/tools/${id}/orchestration/runs/${runId}/replay`,
-    {
-      method: 'POST',
-      body: JSON.stringify(input)
-    },
-    session
-  )
-}
-
-export async function cancelWorkspaceToolOrchestrationRun(
-  id: string,
-  runId: string,
-  session?: OpenPortSession | null
-): Promise<OpenPortWorkspaceToolRunResponse> {
-  return request<OpenPortWorkspaceToolRunResponse>(
-    `/workspace/tools/${id}/orchestration/runs/${runId}/cancel`,
-    {
-      method: 'POST',
-      body: JSON.stringify({})
-    },
-    session
-  )
 }
 
 export async function fetchWorkspaceConnectorCredentials(

@@ -20,6 +20,8 @@ import { downloadJsonFile, readJsonFile } from '../lib/workspace-resource-io'
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { WorkspacePromptHistoryMenu } from './workspace-prompt-history-menu'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
@@ -118,18 +120,7 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
         visibility
       }
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
-      const url = 'https://upstream-ui.com'
-      const tab = window.open(`${url}/prompts/create`, '_blank', 'noopener,noreferrer')
-      const handler = (event: MessageEvent) => {
-        if (event.origin !== url || !tab) return
-        if (event.data === 'loaded') {
-          tab.postMessage(JSON.stringify(payload), '*')
-          window.removeEventListener('message', handler)
-        }
-      }
-      window.addEventListener('message', handler)
-      window.setTimeout(() => window.removeEventListener('message', handler), 12000)
-      notify('success', 'Prompt payload copied. Community page opened in a new tab.')
+      notify('success', 'Prompt payload copied.')
     } catch {
       notify('error', 'Unable to prepare prompt for community sharing.')
     }
@@ -454,7 +445,7 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
             )}
           </>
         }
-        description="Build reusable prompt commands similar to upstream UI prompt resources."
+        description="Build reusable prompt commands for workspace use."
         label="Workspace"
         title={promptId ? 'Edit prompt' : 'Create prompt'}
       />
@@ -463,25 +454,25 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
       {!loading ? (
         <form className="workspace-editor-form" onSubmit={(event) => void handleSubmit(event)}>
           <Field label="Title">
-            <input onChange={(event) => setTitle(event.target.value)} required value={title} />
+            <FieldInput onChange={(event) => setTitle(event.target.value)} required value={title} />
           </Field>
           <Field label="Command">
-            <input onChange={(event) => setCommand(event.target.value)} required value={command} />
+            <FieldInput onChange={(event) => setCommand(event.target.value)} required value={command} />
           </Field>
           <Field label="Description">
-            <input onChange={(event) => setDescription(event.target.value)} value={description} />
+            <FieldInput onChange={(event) => setDescription(event.target.value)} value={description} />
           </Field>
           <Field label="Tags">
-            <input onChange={(event) => setTags(event.target.value)} placeholder="review, drafting" value={tags} />
+            <FieldInput onChange={(event) => setTags(event.target.value)} placeholder="review, drafting" value={tags} />
           </Field>
           <Field label="Visibility">
-            <select onChange={(event) => setVisibility(event.target.value as typeof visibility)} value={visibility}>
+            <FieldSelect onChange={(event) => setVisibility(event.target.value as typeof visibility)} value={visibility}>
               <option value="workspace">Workspace</option>
               <option value="private">Private</option>
-            </select>
+            </FieldSelect>
           </Field>
           <Field label="Version note">
-            <input
+            <FieldInput
               onChange={(event) => setCommitMessage(event.target.value)}
               placeholder="Summarized changes in this revision"
               value={commitMessage}
@@ -497,7 +488,7 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Community payload preview</strong></ResourceCardHeading>
-              <span>Preview the exact payload used for upstream UI-style sharing and handoff.</span>
+              <span>Preview the exact payload used for sharing and handoff.</span>
             </ResourceCardCopy>
             <pre className="workspace-module-prompt-preview workspace-module-prompt-preview--large">
               {JSON.stringify(
@@ -575,14 +566,14 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
               </div>
               <div className="workspace-resource-filters">
                 <Field label="Submission URL">
-                  <input
+                  <FieldInput
                     onChange={(event) => setCommunitySubmissionUrl(event.target.value)}
-                    placeholder="https://upstream-ui.com/prompts/..."
+                    placeholder="https://example.com/prompts/..."
                     value={communitySubmissionUrl}
                   />
                 </Field>
                 <Field label="Submission note">
-                  <input
+                  <FieldInput
                     onChange={(event) => setCommunitySubmissionNote(event.target.value)}
                     placeholder="Optional release note for this submission"
                     value={communitySubmissionNote}
@@ -613,17 +604,17 @@ export function WorkspacePromptEditor({ promptId }: WorkspacePromptEditorProps) 
             <section className="workspace-editor-section">
               <ResourceCardCopy className="workspace-editor-section-heading">
                 <ResourceCardHeading><strong>Version history</strong></ResourceCardHeading>
-                <span>Snapshots are persisted server-side on each save, similar to upstream UI prompt history.</span>
+                <span>Snapshots are persisted server-side on each save.</span>
               </ResourceCardCopy>
               <Field label="Compare with">
-                <select onChange={(event) => setCompareVersionId(event.target.value)} value={compareVersionId}>
+                <FieldSelect onChange={(event) => setCompareVersionId(event.target.value)} value={compareVersionId}>
                   <option value="current">Current draft</option>
                   {versions.map((version) => (
                     <option key={version.id} value={version.id}>
                       {version.versionLabel}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </Field>
               <PromptDiffPreview
                 currentContent={content}

@@ -22,6 +22,8 @@ import {
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -528,7 +530,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
             title="Select skills"
           />
           <Field label="Name">
-            <input onChange={(event) => setName(event.target.value)} required value={name} />
+            <FieldInput onChange={(event) => setName(event.target.value)} required value={name} />
           </Field>
           <Field
             label={
@@ -552,14 +554,14 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
               </span>
             }
           >
-            <input
+            <FieldInput
               onChange={(event) => setRoute(event.target.value)}
               placeholder={buildRecommendedRoute({ provider: provider || 'openport', name: name || 'model' })}
               value={route}
             />
           </Field>
           <Field label="Provider">
-            <input
+            <FieldInput
               list="workspace-model-provider-options"
               onChange={(event) => setProvider(event.target.value)}
               placeholder="openport / ollama / openai / ..."
@@ -575,14 +577,14 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
             <textarea onChange={(event) => setDescription(event.target.value)} rows={4} value={description} />
           </Field>
           <Field label="Tags">
-            <input onChange={(event) => setTags(event.target.value)} placeholder="review, local, default" value={tags} />
+            <FieldInput onChange={(event) => setTags(event.target.value)} placeholder="review, local, default" value={tags} />
           </Field>
           <div className="workspace-editor-grid">
             <Field label="Status">
-              <select onChange={(event) => setStatus(event.target.value as 'active' | 'disabled')} value={status}>
+              <FieldSelect onChange={(event) => setStatus(event.target.value as 'active' | 'disabled')} value={status}>
                 <option value="active">Active</option>
                 <option value="disabled">Disabled</option>
-              </select>
+              </FieldSelect>
             </Field>
             <label className="workspace-editor-checkbox">
               <input checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} type="checkbox" />
@@ -593,7 +595,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Filters</strong></ResourceCardHeading>
-              <span>Selector-style filter assignment aligned to upstream UI model editor flow.</span>
+              <span>Selector-style filter assignment for model selection.</span>
             </ResourceCardCopy>
             <div className="workspace-module-chip-row">
               {filterIds.map((token) => (
@@ -610,7 +612,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
               </div>
             ) : null}
             <Field label="Add filter token">
-              <input
+              <FieldInput
                 onChange={(event) => setFilterInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
@@ -647,7 +649,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
               </div>
             ) : null}
             <Field label="Add default filter token">
-              <input
+              <FieldInput
                 onChange={(event) => setDefaultFilterInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
@@ -667,7 +669,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Actions</strong></ResourceCardHeading>
-              <span>Attach reusable action hooks, with selection behavior matching upstream UI-style action selectors.</span>
+              <span>Attach reusable action hooks with predictable selection behavior.</span>
             </ResourceCardCopy>
             <div className="workspace-module-chip-row">
               {actionIds.map((token) => (
@@ -684,7 +686,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
               </div>
             ) : null}
             <Field label="Add action token">
-              <input
+              <FieldInput
                 onChange={(event) => setActionInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
@@ -721,7 +723,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
               </div>
             ) : null}
             <Field label="Add default feature token">
-              <input
+              <FieldInput
                 onChange={(event) => setDefaultFeatureInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
@@ -741,7 +743,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Capabilities</strong></ResourceCardHeading>
-              <span>Keep feature switches close to the model, similar to upstream UI&apos;s model editor.</span>
+              <span>Keep feature switches close to the model.</span>
             </ResourceCardCopy>
             <div className="workspace-editor-grid workspace-editor-grid--compact">
               {[
@@ -843,7 +845,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
           <section className="workspace-editor-section">
             <ResourceCardCopy className="workspace-editor-section-heading">
               <ResourceCardHeading><strong>Prompt suggestions</strong></ResourceCardHeading>
-              <span>Seed starter prompts for the chat empty state, following upstream UI&apos;s prompt suggestion pattern.</span>
+              <span>Seed starter prompts for the chat empty state.</span>
             </ResourceCardCopy>
             <div className="workspace-editor-suggestions">
               {promptSuggestions.length === 0 ? (
@@ -852,7 +854,7 @@ export function WorkspaceModelEditor({ modelId }: WorkspaceModelEditorProps) {
                 promptSuggestions.map((suggestion, index) => (
                   <div key={suggestion.id} className="workspace-editor-suggestion">
                     <Field label={`Suggestion ${index + 1} title`}>
-                      <input
+                      <FieldInput
                         onChange={(event) => updatePromptSuggestion(suggestion.id, 'title', event.target.value)}
                         placeholder="Review a draft"
                         value={suggestion.title}

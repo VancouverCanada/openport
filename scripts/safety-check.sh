@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "[1/4] Checking for accidental env files"
-if find . -type f \( -name ".env" -o -name ".env.*" \) | grep -q .; then
+if find . -type f \( -name ".env" -o -name ".env.*" \) ! -name ".env.example" | grep -q .; then
   echo "Found .env files. Remove them before release."
   exit 1
 fi
@@ -24,16 +24,16 @@ fi
 
 echo "[3/4] Checking for forbidden private markers"
 if grep -RInE "(figena|fidelock|service\\.[A-Za-z0-9-]+\\.local|DIRECT_DATABASE_URL=|DATABASE_URL=postgres)" \
-  src docs spec templates test conformance README.md CHANGELOG.md ROADMAP.md SUPPORT.md .github \
+  src spec templates test conformance README.md CHANGELOG.md ROADMAP.md SUPPORT.md .github \
   --exclude-dir=node_modules \
   --exclude-dir=dist; then
   echo "Potential private environment detail found."
   exit 1
 fi
 
-echo "[4/4] Basic markdown lint guard"
-if ! find docs -type f -name '*.md' | grep -q .; then
-  echo "No docs found under docs/."
+echo "[4/4] Public repository layout guard"
+if [ -d docs ] || [ -d research ]; then
+  echo "Private docs or research directory found in public repo."
   exit 1
 fi
 

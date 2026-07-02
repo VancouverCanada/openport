@@ -22,6 +22,8 @@ import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { downloadJsonFile } from '../lib/workspace-resource-io'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -390,13 +392,13 @@ export function WorkspaceKnowledgeDetail({
             </div>
             <ResourceCard stacked>
               <Field label="Move to collection">
-                <select onChange={(event) => setSelectedCollectionId(event.target.value)} value={selectedCollectionId}>
+                <FieldSelect onChange={(event) => setSelectedCollectionId(event.target.value)} value={selectedCollectionId}>
                   {collections.map((collection) => (
                     <option key={collection.id} value={collection.id}>
                       {collection.name}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </Field>
               <div className="workspace-editor-actions">
                 <CapsuleButton
@@ -419,14 +421,14 @@ export function WorkspaceKnowledgeDetail({
               </ResourceCardCopy>
               <div className="workspace-resource-filters">
                 <Field label="Source kind">
-                  <select
+                  <FieldSelect
                     onChange={(event) => setSourceKindFilter(event.target.value as typeof sourceKindFilter)}
                     value={sourceKindFilter}
                   >
                     <option value="all">All kinds</option>
                     <option value="asset">Assets</option>
                     <option value="text">Text</option>
-                  </select>
+                  </FieldSelect>
                 </Field>
               </div>
               <div className="workspace-resource-list">
@@ -463,7 +465,7 @@ export function WorkspaceKnowledgeDetail({
             <section className="workspace-resource-section">
               <ResourceCardCopy className="workspace-editor-section-heading">
                 <ResourceCardHeading><strong>Chunk preview</strong></ResourceCardHeading>
-                <span>Inspect the indexed slices that will actually flow into retrieval, similar to upstream UI knowledge chunks.</span>
+                <span>Inspect the indexed slices that will actually flow into retrieval.</span>
               </ResourceCardCopy>
               <div className="workspace-resource-list">
                 {filteredChunkPreview.slice(0, 8).length > 0 ? (
@@ -501,7 +503,7 @@ export function WorkspaceKnowledgeDetail({
             <ResourceCard stacked>
               <div className="workspace-resource-filters">
                 <Field label="Search this document">
-                  <input
+                  <FieldInput
                     onChange={(event) => setContentQuery(event.target.value)}
                     placeholder="Find matching phrases inside this item"
                     value={contentQuery}
