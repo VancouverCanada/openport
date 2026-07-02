@@ -1,5 +1,5 @@
-import { WorkspaceKnowledgeConnectors } from '../../../../components/workspace-knowledge-connectors'
+import { redirect } from 'next/navigation'
 
 export default function WorkspaceKnowledgeConnectorsPage() {
-  return <WorkspaceKnowledgeConnectors />
+  redirect('/workspace/knowledge')
 }

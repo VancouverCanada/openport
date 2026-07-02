@@ -1,5 +1,6 @@
 import { DashboardSummary } from '../../components/dashboard-summary'
 import { CapsuleButton } from '../../components/ui/capsule-button'
+import { PageHeader } from '../../components/ui/page-header'
 
 const metrics = [
   { label: 'Live integrations', value: '4', note: 'Connected adapters currently available to the local workspace.' },
@@ -28,11 +29,10 @@ const implementationTrack = [
 export default function DashboardPage() {
   return (
     <div className="dashboard-overview">
-      <section className="dashboard-hero-copy">
-        <div className="dashboard-kicker">Status</div>
-        <h1>Keep the stack in reach.</h1>
-        <p>Access, integrations, and AI operations stay inside one local control surface.</p>
-      </section>
+      <PageHeader
+        actions={<CapsuleButton className="dashboard-inline-action" href="/" variant="secondary">Open chat</CapsuleButton>}
+        title="Dashboard"
+      />
 
       <section className="dashboard-section">
         <div className="dashboard-section-heading">
@@ -40,7 +40,6 @@ export default function DashboardPage() {
             <span className="dashboard-section-label">Overview</span>
             <h2>Live signals</h2>
           </div>
-          <CapsuleButton className="dashboard-inline-action" href="/" variant="secondary">Open chat</CapsuleButton>
         </div>
 
         <div className="dashboard-data-list">

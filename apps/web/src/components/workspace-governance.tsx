@@ -23,6 +23,8 @@ import { canManageWorkspace } from '../lib/workspace-permissions'
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { ResourceCard, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -246,7 +248,7 @@ export function WorkspaceGovernance() {
             </ResourceCardHeading>
             <div className="workspace-resource-filters">
               <Field label="Workspace">
-                <select
+                <FieldSelect
                   disabled={loading || workspaces.length === 0}
                   onChange={(event) => handleSwitchWorkspace(event.target.value)}
                   value={activeWorkspaceId || ''}
@@ -256,17 +258,17 @@ export function WorkspaceGovernance() {
                       {workspace.name}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </Field>
             </div>
             {activeWorkspaceId ? <Tag>{activeWorkspaceId}</Tag> : null}
             {canManageAccess ? (
               <div className="workspace-resource-filters">
                 <Field label="Workspace name">
-                  <input onChange={(event) => setWorkspaceName(event.target.value)} value={workspaceName} />
+                  <FieldInput onChange={(event) => setWorkspaceName(event.target.value)} value={workspaceName} />
                 </Field>
                 <Field label="Workspace slug">
-                  <input onChange={(event) => setWorkspaceSlug(event.target.value)} value={workspaceSlug} />
+                  <FieldInput onChange={(event) => setWorkspaceSlug(event.target.value)} value={workspaceSlug} />
                 </Field>
               </div>
             ) : null}
@@ -311,10 +313,10 @@ export function WorkspaceGovernance() {
               </ResourceCardHeading>
               <div className="workspace-resource-filters">
                 <Field label="Name">
-                  <input onChange={(event) => setName(event.target.value)} placeholder="Operations" value={name} />
+                  <FieldInput onChange={(event) => setName(event.target.value)} placeholder="Operations" value={name} />
                 </Field>
                 <Field label="Slug (optional)">
-                  <input onChange={(event) => setSlug(event.target.value)} placeholder="operations" value={slug} />
+                  <FieldInput onChange={(event) => setSlug(event.target.value)} placeholder="operations" value={slug} />
                 </Field>
               </div>
               <CapsuleButton disabled={working} onClick={() => void handleCreateWorkspace()} type="button" variant="primary">

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import type { OpenPortKnowledgeChunkingOptions } from '../lib/openport-api'
 import { CapsuleButton } from './ui/capsule-button'
 import { ModalShell } from './ui/modal-shell'
-
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 type WorkspaceKnowledgeRebuildModalProps = {
   description: string
   onClose: () => void
@@ -55,7 +56,7 @@ export function WorkspaceKnowledgeRebuildModal({
         <p className="project-modal-hint">{description}</p>
         <label className="project-modal-field">
           <span>Strategy</span>
-          <select
+          <FieldSelect
             onChange={(event) =>
               setOptions((current) => ({
                 ...current,
@@ -68,11 +69,11 @@ export function WorkspaceKnowledgeRebuildModal({
             <option value="dense">Dense</option>
             <option value="sparse">Sparse</option>
             <option value="semantic">Semantic</option>
-          </select>
+          </FieldSelect>
         </label>
         <label className="project-modal-field">
           <span>Chunk size</span>
-          <input
+          <FieldInput
             min={120}
             onChange={(event) =>
               setOptions((current) => ({
@@ -86,7 +87,7 @@ export function WorkspaceKnowledgeRebuildModal({
         </label>
         <label className="project-modal-field">
           <span>Overlap</span>
-          <input
+          <FieldInput
             min={0}
             onChange={(event) =>
               setOptions((current) => ({
@@ -100,7 +101,7 @@ export function WorkspaceKnowledgeRebuildModal({
         </label>
         <label className="project-modal-field">
           <span>Max chunks</span>
-          <input
+          <FieldInput
             min={1}
             onChange={(event) =>
               setOptions((current) => ({

@@ -149,7 +149,7 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
 
   return (
     <main
-      className="workspace-app-shell"
+      className={`workspace-app-shell${isChatPathActive() ? ' is-chat' : ''}`}
       style={
         {
           '--openport-sidebar-width': `${sidebarWidth}px`
@@ -226,7 +226,7 @@ function WorkspaceAppShellInner({ children }: Readonly<{ children: ReactNode }>)
             onMouseDown={onSidebarResizeStart}
           />
         ) : null}
-        <section className="workspace-app-content">{children}</section>
+        <section className={`workspace-app-content${isChatPathActive() ? ' is-chat' : ''}`}>{children}</section>
       </div>
       <WorkspaceToastRegion />
       <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} open={showShortcuts} />

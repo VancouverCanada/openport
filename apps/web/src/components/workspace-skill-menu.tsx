@@ -5,10 +5,8 @@ import { WorkspaceResourceMenu, type WorkspaceResourceMenuItem } from './workspa
 
 type WorkspaceSkillMenuProps = {
   canExport: boolean
-  canShare: boolean
   canManage: boolean
   item: OpenPortWorkspaceSkill
-  onAccess?: () => void
   onDelete: () => void
   onDuplicate: () => void
   onExport: () => void
@@ -16,10 +14,8 @@ type WorkspaceSkillMenuProps = {
 
 export function WorkspaceSkillMenu({
   canExport,
-  canShare,
   canManage,
   item,
-  onAccess,
   onDelete,
   onDuplicate,
   onExport
@@ -28,11 +24,6 @@ export function WorkspaceSkillMenu({
     ...(canManage
       ? [
           { href: `/workspace/skills/${item.id}`, icon: 'solar:pen-outline', label: 'Edit' },
-          ...(canShare
-            ? [
-                ...(onAccess ? [{ icon: 'solar:shield-user-outline', label: 'Access', onClick: onAccess }] : [])
-              ]
-            : []),
           { icon: 'solar:copy-outline', label: 'Clone', onClick: onDuplicate },
           { danger: true, icon: 'solar:trash-bin-trash-outline', label: 'Delete', onClick: onDelete }
         ]

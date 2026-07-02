@@ -1,5 +1,5 @@
-import { WorkspaceKnowledge } from '../../../../components/workspace-knowledge'
+import { redirect } from 'next/navigation'
 
 export default function WorkspaceKnowledgeChunksPage() {
-  return <WorkspaceKnowledge initialView="chunks" />
+  redirect('/workspace/knowledge')
 }

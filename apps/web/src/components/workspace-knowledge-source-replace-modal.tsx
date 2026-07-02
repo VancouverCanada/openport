@@ -5,6 +5,7 @@ import { replaceProjectKnowledgeSource, loadSession, type OpenPortProjectKnowled
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { ModalShell } from './ui/modal-shell'
+import { FieldInput } from './ui/field-input'
 
 type WorkspaceKnowledgeSourceReplaceModalProps = {
   item: OpenPortProjectKnowledgeItem | null
@@ -67,7 +68,7 @@ export function WorkspaceKnowledgeSourceReplaceModal({
       <form className="workspace-knowledge-modal-form" onSubmit={(event) => void handleSubmit(event)}>
         <label className="project-modal-field">
           <span>Source label</span>
-          <input onChange={(event) => setLabel(event.target.value)} value={label} />
+          <FieldInput onChange={(event) => setLabel(event.target.value)} value={label} />
         </label>
         <label className="project-modal-field">
           <span>Replacement content</span>

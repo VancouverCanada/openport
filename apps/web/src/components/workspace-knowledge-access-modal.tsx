@@ -25,6 +25,8 @@ import { notify } from '../lib/toast'
 import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { ModalShell } from './ui/modal-shell'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -195,7 +197,7 @@ export function WorkspaceKnowledgeAccessModal({
         <section className="workspace-resource-section workspace-access-modal-section">
           <div className="workspace-resource-filters">
             <Field label="Principal type">
-              <select
+              <FieldSelect
                 onChange={(event) => setPrincipalType(event.target.value as OpenPortWorkspaceResourcePrincipalType)}
                 value={principalType}
               >
@@ -203,22 +205,22 @@ export function WorkspaceKnowledgeAccessModal({
                 <option value="group">Group</option>
                 <option value="workspace">Workspace</option>
                 <option value="public">Public</option>
-              </select>
+              </FieldSelect>
             </Field>
             {principalType === 'group' ? (
               <Field label="Group">
-                <select onChange={(event) => setPrincipalId(event.target.value)} value={principalId}>
+                <FieldSelect onChange={(event) => setPrincipalId(event.target.value)} value={principalId}>
                   <option value="">Select group</option>
                   {groups.map((group) => (
                     <option key={group.id} value={group.id}>
                       {group.name}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </Field>
             ) : principalType === 'workspace' || principalType === 'public' ? null : (
               <Field label="User ID">
-                <input
+                <FieldInput
                   onChange={(event) => setPrincipalId(event.target.value)}
                   placeholder="user_xxx"
                   value={principalId}
@@ -226,14 +228,14 @@ export function WorkspaceKnowledgeAccessModal({
               </Field>
             )}
             <Field label="Permission">
-              <select
+              <FieldSelect
                 onChange={(event) => setPermission(event.target.value as OpenPortWorkspaceResourcePermission)}
                 value={permission}
               >
                 <option value="read">Read</option>
                 <option value="write">Write</option>
                 <option value="admin">Admin</option>
-              </select>
+              </FieldSelect>
             </Field>
           </div>
           <CapsuleButton disabled={working} onClick={() => void handleShare()} type="button" variant="primary">

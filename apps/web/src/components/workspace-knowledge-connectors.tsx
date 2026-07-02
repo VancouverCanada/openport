@@ -24,6 +24,8 @@ import { notify } from '../lib/toast'
 import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { ModalShell } from './ui/modal-shell'
 import { PageHeader } from './ui/page-header'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
@@ -379,35 +381,35 @@ export function WorkspaceKnowledgeConnectors() {
       >
         <div className="workspace-tool-modal-section">
           <Field label="Name">
-            <input onChange={(event) => setConnectorName(event.target.value)} value={connectorName} />
+            <FieldInput onChange={(event) => setConnectorName(event.target.value)} value={connectorName} />
           </Field>
           <Field label="Adapter">
-            <select onChange={(event) => setConnectorAdapter(event.target.value as OpenPortWorkspaceConnectorAdapter)} value={connectorAdapter}>
+            <FieldSelect onChange={(event) => setConnectorAdapter(event.target.value as OpenPortWorkspaceConnectorAdapter)} value={connectorAdapter}>
               {connectorAdapterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </Field>
           <Field label="Description">
-            <input onChange={(event) => setConnectorDescription(event.target.value)} value={connectorDescription} />
+            <FieldInput onChange={(event) => setConnectorDescription(event.target.value)} value={connectorDescription} />
           </Field>
           <Field label="Credential">
-            <select onChange={(event) => setConnectorCredentialId(event.target.value)} value={connectorCredentialId}>
+            <FieldSelect onChange={(event) => setConnectorCredentialId(event.target.value)} value={connectorCredentialId}>
               <option value="">No credential</option>
               {credentials.map((credential) => (
                 <option key={credential.id} value={credential.id}>
                   {credential.name} ({credential.provider})
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </Field>
           <Field label="Tags">
-            <input onChange={(event) => setConnectorTags(event.target.value)} placeholder="prod, ingest" value={connectorTags} />
+            <FieldInput onChange={(event) => setConnectorTags(event.target.value)} placeholder="prod, ingest" value={connectorTags} />
           </Field>
           <Field label="Sync every (minutes)">
-            <input
+            <FieldInput
               min={5}
               onChange={(event) => setConnectorIntervalMinutes(Number(event.target.value) || 60)}
               type="number"
@@ -415,7 +417,7 @@ export function WorkspaceKnowledgeConnectors() {
             />
           </Field>
           <Field label="Retry backoff (seconds)">
-            <input
+            <FieldInput
               min={5}
               onChange={(event) => setConnectorRetryBackoff(Number(event.target.value) || 30)}
               type="number"
@@ -423,7 +425,7 @@ export function WorkspaceKnowledgeConnectors() {
             />
           </Field>
           <Field label="Max retries">
-            <input
+            <FieldInput
               min={0}
               onChange={(event) => setConnectorMaxRetries(Number(event.target.value) || 0)}
               type="number"
@@ -444,25 +446,25 @@ export function WorkspaceKnowledgeConnectors() {
           </label>
           <p className="workspace-module-empty">{adapterSourceHint(connectorAdapter)}</p>
           <Field label="Directory path">
-            <input onChange={(event) => setConnectorDirectoryPath(event.target.value)} value={connectorDirectoryPath} />
+            <FieldInput onChange={(event) => setConnectorDirectoryPath(event.target.value)} value={connectorDirectoryPath} />
           </Field>
           <Field label="URLs (one per line)">
             <textarea onChange={(event) => setConnectorUrls(event.target.value)} rows={3} value={connectorUrls} />
           </Field>
           <Field label="S3 bucket">
-            <input onChange={(event) => setConnectorBucket(event.target.value)} value={connectorBucket} />
+            <FieldInput onChange={(event) => setConnectorBucket(event.target.value)} value={connectorBucket} />
           </Field>
           <Field label="S3 prefix">
-            <input onChange={(event) => setConnectorPrefix(event.target.value)} value={connectorPrefix} />
+            <FieldInput onChange={(event) => setConnectorPrefix(event.target.value)} value={connectorPrefix} />
           </Field>
           <Field label="Repository">
-            <input onChange={(event) => setConnectorRepository(event.target.value)} value={connectorRepository} />
+            <FieldInput onChange={(event) => setConnectorRepository(event.target.value)} value={connectorRepository} />
           </Field>
           <Field label="Branch">
-            <input onChange={(event) => setConnectorBranch(event.target.value)} value={connectorBranch} />
+            <FieldInput onChange={(event) => setConnectorBranch(event.target.value)} value={connectorBranch} />
           </Field>
           <Field label="Notion database id">
-            <input onChange={(event) => setConnectorNotionDatabaseId(event.target.value)} value={connectorNotionDatabaseId} />
+            <FieldInput onChange={(event) => setConnectorNotionDatabaseId(event.target.value)} value={connectorNotionDatabaseId} />
           </Field>
           <Field label="RSS feeds (one per line)">
             <textarea onChange={(event) => setConnectorRssFeeds(event.target.value)} rows={3} value={connectorRssFeeds} />
@@ -490,23 +492,23 @@ export function WorkspaceKnowledgeConnectors() {
       >
         <div className="workspace-tool-modal-section">
           <Field label="Name">
-            <input onChange={(event) => setCredentialName(event.target.value)} value={credentialName} />
+            <FieldInput onChange={(event) => setCredentialName(event.target.value)} value={credentialName} />
           </Field>
           <Field label="Provider">
-            <select onChange={(event) => setCredentialProvider(event.target.value as OpenPortWorkspaceConnectorAdapter)} value={credentialProvider}>
+            <FieldSelect onChange={(event) => setCredentialProvider(event.target.value as OpenPortWorkspaceConnectorAdapter)} value={credentialProvider}>
               {connectorAdapterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </Field>
           <Field label="Description">
-            <input onChange={(event) => setCredentialDescription(event.target.value)} value={credentialDescription} />
+            <FieldInput onChange={(event) => setCredentialDescription(event.target.value)} value={credentialDescription} />
           </Field>
           {credentialFields.map((field, index) => (
             <Field key={`${field.key}-${index}`} label={field.label}>
-              <input
+              <FieldInput
                 onChange={(event) =>
                   setCredentialFields((current) =>
                     current.map((entry, entryIndex) =>

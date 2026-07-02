@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import type { OpenPortKnowledgeChunkingOptions } from '../lib/openport-api'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { ModalShell } from './ui/modal-shell'
 import { Tag } from './ui/tag'
 
@@ -102,21 +104,21 @@ export function WorkspaceKnowledgeSourceLifecycleModal({
           </div>
           <div className="workspace-resource-filters">
             <Field label="Strategy">
-              <select onChange={(event) => setStrategy(event.target.value as OpenPortKnowledgeChunkingOptions['strategy'])} value={strategy}>
+              <FieldSelect onChange={(event) => setStrategy(event.target.value as OpenPortKnowledgeChunkingOptions['strategy'])} value={strategy}>
                 <option value="balanced">Balanced</option>
                 <option value="dense">Dense</option>
                 <option value="sparse">Sparse</option>
                 <option value="semantic">Semantic</option>
-              </select>
+              </FieldSelect>
             </Field>
             <Field label="Chunk size">
-              <input max={2400} min={120} onChange={(event) => setChunkSize(Number(event.target.value) || 600)} type="number" value={chunkSize} />
+              <FieldInput max={2400} min={120} onChange={(event) => setChunkSize(Number(event.target.value) || 600)} type="number" value={chunkSize} />
             </Field>
             <Field label="Overlap">
-              <input max={1200} min={0} onChange={(event) => setOverlap(Number(event.target.value) || 0)} type="number" value={overlap} />
+              <FieldInput max={1200} min={0} onChange={(event) => setOverlap(Number(event.target.value) || 0)} type="number" value={overlap} />
             </Field>
             <Field label="Max chunks">
-              <input max={300} min={1} onChange={(event) => setMaxChunks(Number(event.target.value) || 1)} type="number" value={maxChunks} />
+              <FieldInput max={300} min={1} onChange={(event) => setMaxChunks(Number(event.target.value) || 1)} type="number" value={maxChunks} />
             </Field>
           </div>
           <div className="workspace-inline-actions">
@@ -144,7 +146,7 @@ export function WorkspaceKnowledgeSourceLifecycleModal({
             <span>Replace the source payload for all linked documents in one operation.</span>
           </div>
           <Field label="Source label">
-            <input onChange={(event) => setReplaceLabel(event.target.value)} value={replaceLabel} />
+            <FieldInput onChange={(event) => setReplaceLabel(event.target.value)} value={replaceLabel} />
           </Field>
           <Field label="Replacement content">
             <textarea onChange={(event) => setReplaceContent(event.target.value)} placeholder="Paste replacement source text…" rows={8} value={replaceContent} />

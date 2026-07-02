@@ -4,6 +4,7 @@ import { Iconify } from './iconify'
 import { IconButton } from './ui/icon-button'
 import { TextButton } from './ui/text-button'
 import type { WorkspaceSearchSuggestion } from '../lib/workspace-search'
+import { FieldInput } from './ui/field-input'
 
 type WorkspaceSearchInputProps = {
   value: string
@@ -28,7 +29,7 @@ export function WorkspaceSearchInput({
     <div className="workspace-search-input-stack">
       <label className="workspace-search-input">
         <Iconify icon="solar:magnifer-outline" size={18} />
-        <input
+        <FieldInput
           aria-label="Search"
           autoFocus
           onChange={(event) => onChange(event.target.value)}

@@ -11,6 +11,7 @@ import {
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
 import { PageHeader } from './ui/page-header'
 
 type WorkspaceKnowledgeCollectionEditorProps = {
@@ -78,7 +79,7 @@ export function WorkspaceKnowledgeCollectionEditor({ collectionId }: WorkspaceKn
       {!loading ? (
         <form className="workspace-editor-form" onSubmit={(event) => void handleSubmit(event)}>
           <Field label="Name">
-            <input onChange={(event) => setName(event.target.value)} required value={name} />
+            <FieldInput onChange={(event) => setName(event.target.value)} required value={name} />
           </Field>
           <Field label="Description">
             <textarea onChange={(event) => setDescription(event.target.value)} rows={6} value={description} />

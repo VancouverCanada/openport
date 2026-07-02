@@ -2,13 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchCurrentUser, loadSession } from '../lib/openport-api'
 import { getWorkspacePermissions, primaryWorkspaceTabs } from '../lib/workspace-permissions'
 
 export function WorkspaceModuleNav() {
   const pathname = usePathname()
   const [visibleTabs, setVisibleTabs] = useState<typeof primaryWorkspaceTabs>([])
+  const activeTabHref = useMemo(() => {
+    const matches = visibleTabs.filter((tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`))
+    if (matches.length === 0) return null
+    return matches.sort((left, right) => right.href.length - left.href.length)[0].href
+  }, [pathname, visibleTabs])
 
   useEffect(() => {
     const session = loadSession()
@@ -30,7 +35,7 @@ export function WorkspaceModuleNav() {
   return (
     <nav className="workspace-module-nav" aria-label="Workspace sections">
       {visibleTabs.map((tab) => {
-        const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`)
+        const isActive = activeTabHref === tab.href
 
         return (
           <Link

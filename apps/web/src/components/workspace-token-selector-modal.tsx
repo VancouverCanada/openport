@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
 import { ModalShell } from './ui/modal-shell'
 import { Tag } from './ui/tag'
 
@@ -79,10 +80,10 @@ export function WorkspaceTokenSelectorModal({
           ))}
         </div>
         <Field label="Search suggestions">
-          <input onChange={(event) => setQuery(event.target.value)} placeholder="Search token" value={query} />
+          <FieldInput onChange={(event) => setQuery(event.target.value)} placeholder="Search token" value={query} />
         </Field>
         <Field label="Add custom token">
-          <input
+          <FieldInput
             onChange={(event) => setCustomToken(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { ModalShell } from './ui/modal-shell'
 import { Tag } from './ui/tag'
 
@@ -106,15 +108,15 @@ export function WorkspaceResourceSelectorModal({
         </div>
         <div className="workspace-resource-filters">
           <Field label="Search resources">
-            <input onChange={(event) => setQuery(event.target.value)} placeholder="Name, metadata" value={query} />
+            <FieldInput onChange={(event) => setQuery(event.target.value)} placeholder="Name, metadata" value={query} />
           </Field>
           <Field label="Minimum permission">
-            <select onChange={(event) => setPermissionFilter(event.target.value as PermissionFilter)} value={permissionFilter}>
+            <FieldSelect onChange={(event) => setPermissionFilter(event.target.value as PermissionFilter)} value={permissionFilter}>
               <option value="all">All</option>
               <option value="read">Read+</option>
               <option value="write">Write+</option>
               <option value="admin">Admin only</option>
-            </select>
+            </FieldSelect>
           </Field>
         </div>
         <div className="workspace-resource-list">

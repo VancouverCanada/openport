@@ -5,6 +5,7 @@ import { maintainProjectKnowledgeSourceBatch, loadSession, type OpenPortProjectK
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { ModalShell } from './ui/modal-shell'
+import { FieldInput } from './ui/field-input'
 
 type WorkspaceKnowledgeSourceBatchReplaceModalProps = {
   affectedDocumentCount: number
@@ -70,7 +71,7 @@ export function WorkspaceKnowledgeSourceBatchReplaceModal({
         </p>
         <label className="project-modal-field">
           <span>Source label</span>
-          <input onChange={(event) => setLabel(event.target.value)} value={label} />
+          <FieldInput onChange={(event) => setLabel(event.target.value)} value={label} />
         </label>
         <label className="project-modal-field">
           <span>Replacement content</span>

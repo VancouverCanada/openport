@@ -19,6 +19,7 @@ import {
 import { Iconify } from '../iconify'
 import { CapsuleButton } from '../ui/capsule-button'
 import { IconButton } from '../ui/icon-button'
+import { PageHeader } from '../ui/page-header'
 
 function formatRelativeDate(timestamp: string): string {
   const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -74,18 +75,15 @@ export function NotesWorkspace() {
 
   return (
     <div className="notes-workspace">
-      <section className="notes-workspace-header">
-        <div className="notes-workspace-title">
-          <span className="dashboard-kicker">Notes</span>
-          <h1>Keep context in one place.</h1>
-          <p>Searchable notes, grouped by recency, with editor detail and assistant actions in the same workspace.</p>
-        </div>
-
-        <CapsuleButton className="notes-primary-action" onClick={onCreateNote} type="button" variant="primary">
-          <Iconify icon="solar:add-circle-outline" size={17} />
-          <span>New note</span>
-        </CapsuleButton>
-      </section>
+      <PageHeader
+        actions={
+          <CapsuleButton className="notes-primary-action" onClick={onCreateNote} type="button" variant="primary">
+            <Iconify icon="solar:add-circle-outline" size={17} />
+            <span>New note</span>
+          </CapsuleButton>
+        }
+        title="Notes"
+      />
 
       <section className="notes-toolbar">
         <label className="notes-search">

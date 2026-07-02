@@ -353,7 +353,6 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       <section className="note-editor-main">
         <div className="note-editor-header">
           <div className="note-editor-header-copy">
-            <span className="dashboard-kicker">Notes</span>
             <input
               aria-label="Note title"
               className="note-editor-title"

@@ -11,6 +11,8 @@ import {
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 
 async function fileToBase64(file: File): Promise<string> {
@@ -121,10 +123,10 @@ export function WorkspaceKnowledgeCreate() {
           </label>
         </div>
         <Field label="Name">
-          <input onChange={(event) => setName(event.target.value)} placeholder="Knowledge base name" value={name} />
+          <FieldInput onChange={(event) => setName(event.target.value)} placeholder="Knowledge base name" value={name} />
         </Field>
         <Field label="Collection">
-          <select onChange={(event) => setCollectionId(event.target.value)} value={collectionId}>
+          <FieldSelect onChange={(event) => setCollectionId(event.target.value)} value={collectionId}>
             <option value="collection_general">General</option>
             {collections
               .filter((collection) => collection.id !== 'collection_general')
@@ -134,11 +136,11 @@ export function WorkspaceKnowledgeCreate() {
                 </option>
               ))}
             <option value="custom">Create from name…</option>
-          </select>
+          </FieldSelect>
         </Field>
         {collectionId === 'custom' ? (
           <Field label="New collection name">
-            <input onChange={(event) => setCollectionName(event.target.value)} placeholder="Policies" value={collectionName} />
+            <FieldInput onChange={(event) => setCollectionName(event.target.value)} placeholder="Policies" value={collectionName} />
           </Field>
         ) : null}
         {mode === 'upload' ? (

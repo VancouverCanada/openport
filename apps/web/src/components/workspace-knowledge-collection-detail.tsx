@@ -18,6 +18,8 @@ import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { downloadJsonFile } from '../lib/workspace-resource-io'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { Tag } from './ui/tag'
@@ -347,26 +349,26 @@ export function WorkspaceKnowledgeCollectionDetail({
             ) : null}
             <div className="workspace-resource-filters">
               <Field label={collectionView === 'documents' ? 'Search documents' : collectionView === 'sources' ? 'Search sources' : 'Search chunks'}>
-                <input
+                <FieldInput
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={collectionView === 'documents' ? 'Name, preview, source' : collectionView === 'sources' ? 'Label, kind, source' : 'Name, preview, source'}
                   value={query}
                 />
               </Field>
               <Field label="Retrieval">
-                <select onChange={(event) => setRetrievalFilter(event.target.value as typeof retrievalFilter)} value={retrievalFilter}>
+                <FieldSelect onChange={(event) => setRetrievalFilter(event.target.value as typeof retrievalFilter)} value={retrievalFilter}>
                   <option value="all">All states</option>
                   <option value="indexed">Indexed</option>
                   <option value="binary">Binary</option>
-                </select>
+                </FieldSelect>
               </Field>
               <Field label="Source">
-                <select onChange={(event) => setSourceFilter(event.target.value as typeof sourceFilter)} value={sourceFilter}>
+                <FieldSelect onChange={(event) => setSourceFilter(event.target.value as typeof sourceFilter)} value={sourceFilter}>
                   <option value="all">All sources</option>
                   <option value="upload">Upload</option>
                   <option value="text">Text</option>
                   <option value="append">Append</option>
-                </select>
+                </FieldSelect>
               </Field>
             </div>
             {collectionView === 'documents' ? (
@@ -441,7 +443,7 @@ export function WorkspaceKnowledgeCollectionDetail({
               </ResourceCardCopy>
               <ResourceCard stacked>
                 <Field label="Move items to">
-                  <select onChange={(event) => setMoveTargetId(event.target.value)} value={moveTargetId}>
+                  <FieldSelect onChange={(event) => setMoveTargetId(event.target.value)} value={moveTargetId}>
                     {collections
                       .filter((item) => item.id !== collection.id)
                       .map((item) => (
@@ -449,7 +451,7 @@ export function WorkspaceKnowledgeCollectionDetail({
                           {item.name}
                         </option>
                       ))}
-                  </select>
+                  </FieldSelect>
                 </Field>
                 <div className="workspace-editor-actions">
                   <TextButton

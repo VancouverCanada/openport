@@ -5,7 +5,8 @@ import { CapsuleButton } from './ui/capsule-button'
 import { ModalShell } from './ui/modal-shell'
 import { ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 import { TextButton } from './ui/text-button'
-
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 type WorkspaceToolValvesModalProps = {
   onAddSchemaField: () => void
   onAddValve: () => void
@@ -63,12 +64,12 @@ export function WorkspaceToolValvesModal({
         <div className="workspace-valve-list">
           {valves.map((valve) => (
             <div key={valve.id} className="workspace-valve-row">
-              <input
+              <FieldInput
                 onChange={(event) => onUpdateValve(valve.id, { key: event.target.value })}
                 placeholder="key"
                 value={valve.key}
               />
-              <input
+              <FieldInput
                 onChange={(event) => onUpdateValve(valve.id, { value: event.target.value })}
                 placeholder="value"
                 value={valve.value}
@@ -90,17 +91,17 @@ export function WorkspaceToolValvesModal({
         <div className="workspace-valve-list">
           {valveSchema.map((field) => (
             <div key={field.id} className="workspace-valve-schema-row">
-              <input
+              <FieldInput
                 onChange={(event) => onUpdateSchemaField(field.id, { key: event.target.value })}
                 placeholder="key"
                 value={field.key}
               />
-              <input
+              <FieldInput
                 onChange={(event) => onUpdateSchemaField(field.id, { label: event.target.value })}
                 placeholder="label"
                 value={field.label}
               />
-              <select
+              <FieldSelect
                 onChange={(event) =>
                   onUpdateSchemaField(field.id, {
                     type: event.target.value as OpenPortWorkspaceToolValveSchemaField['type']
@@ -112,8 +113,8 @@ export function WorkspaceToolValvesModal({
                 <option value="number">Number</option>
                 <option value="boolean">Boolean</option>
                 <option value="json">JSON</option>
-              </select>
-              <input
+              </FieldSelect>
+              <FieldInput
                 onChange={(event) => onUpdateSchemaField(field.id, { defaultValue: event.target.value })}
                 placeholder="default"
                 value={field.defaultValue}
@@ -126,7 +127,7 @@ export function WorkspaceToolValvesModal({
                 />
                 <span>Required</span>
               </label>
-              <input
+              <FieldInput
                 onChange={(event) => onUpdateSchemaField(field.id, { description: event.target.value })}
                 placeholder="description"
                 value={field.description}

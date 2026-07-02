@@ -5,6 +5,7 @@ import { fetchOllamaConfig, syncOllamaModels, updateOllamaConfig, verifyOllamaCo
 import { notify } from '../lib/toast'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
 import { PageHeader } from './ui/page-header'
 import { ResourceCard, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
 
@@ -127,7 +128,7 @@ export function SettingsConnections() {
                   const state = verifyStates[index] || { status: 'idle' }
                   return (
                     <div className="workspace-resource-row" key={`ollama-url-${index}`}>
-                      <input
+                      <FieldInput
                         disabled={loading || working}
                         onChange={(event) =>
                           setUrlsDraft((current) => current.map((entry, idx) => (idx === index ? event.target.value : entry)))

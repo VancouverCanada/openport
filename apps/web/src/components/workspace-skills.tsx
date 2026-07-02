@@ -13,9 +13,12 @@ import { notify } from '../lib/toast'
 import { useWorkspaceAuthority } from '../lib/use-workspace-authority'
 import { CapsuleButton } from './ui/capsule-button'
 import { Field } from './ui/field'
+import { FieldInput } from './ui/field-input'
+import { FieldSelect } from './ui/field-select'
 import { PageHeader } from './ui/page-header'
+import { WorkspacePagination } from './ui/workspace-pagination'
 import { ResourceCard, ResourceCardActions, ResourceCardCopy, ResourceCardHeading } from './ui/resource-card'
-import { WorkspaceResourceAccessModal } from './workspace-resource-access-modal'
+import { WorkspaceEmptyState } from './ui/workspace-empty-state'
 import { WorkspaceSkillMenu } from './workspace-skill-menu'
 import { Tag } from './ui/tag'
 
@@ -23,18 +26,17 @@ export function WorkspaceSkills() {
   const [items, setItems] = useState<OpenPortWorkspaceSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const [viewFilter, setViewFilter] = useState<'all' | 'shared'>('all')
   const [sortBy, setSortBy] = useState<'updated' | 'name' | 'models' | 'tools'>('updated')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [accessSkillId, setAccessSkillId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { canManageModule, canModuleAction } = useWorkspaceAuthority()
   const canManage = canManageModule('skills')
   const canImport = canModuleAction('skills', 'import')
   const canExport = canModuleAction('skills', 'export')
-  const canShare = canModuleAction('skills', 'share')
+  const activeSession = loadSession()
 
   async function load(): Promise<void> {
     setLoading(true)
@@ -54,11 +56,15 @@ export function WorkspaceSkills() {
 
   useEffect(() => {
     setPage(1)
-  }, [query, enabledFilter, sortBy, sortDirection, pageSize])
+  }, [query, viewFilter, sortBy, sortDirection, pageSize])
 
   const filteredItems = items.filter((item) => {
-    if (enabledFilter === 'enabled' && !item.enabled) return false
-    if (enabledFilter === 'disabled' && item.enabled) return false
+    if (viewFilter === 'shared') {
+      const workspaceGrantOnly = item.accessGrants.every(
+        (grant) => grant.principalType === 'workspace' && grant.principalId === activeSession?.workspaceId
+      )
+      if (workspaceGrantOnly) return false
+    }
     if (!query.trim()) return true
     const normalizedQuery = query.trim().toLowerCase()
     return [
@@ -145,13 +151,6 @@ export function WorkspaceSkills() {
 
   return (
     <div className="workspace-resource-page">
-      <WorkspaceResourceAccessModal
-        module="skills"
-        onClose={() => setAccessSkillId(null)}
-        open={Boolean(accessSkillId)}
-        resourceId={accessSkillId || ''}
-        resourceLabel="Skill"
-      />
       <PageHeader
         actions={
           <>
@@ -170,7 +169,7 @@ export function WorkspaceSkills() {
           />
           </>
         }
-        description="Package reusable skill instructions and capability modules for operators, tools, and model workflows."
+        description="Manage reusable workspace skills."
         label="Workspace"
         title="Skills"
       />
@@ -178,47 +177,28 @@ export function WorkspaceSkills() {
       <section className="workspace-resource-section">
         <div className="workspace-resource-filters">
           <Field label="Search">
-            <input onChange={(event) => setQuery(event.target.value)} placeholder="Name, description, tag" value={query} />
+            <FieldInput onChange={(event) => setQuery(event.target.value)} placeholder="Name, description, tag" value={query} />
           </Field>
-          <Field label="State">
-            <select onChange={(event) => setEnabledFilter(event.target.value as typeof enabledFilter)} value={enabledFilter}>
+          <Field label="View">
+            <FieldSelect onChange={(event) => setViewFilter(event.target.value as 'all' | 'shared')} value={viewFilter}>
               <option value="all">All</option>
-              <option value="enabled">Enabled</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </Field>
-          <Field label="Sort by">
-            <select onChange={(event) => setSortBy(event.target.value as typeof sortBy)} value={sortBy}>
-              <option value="updated">Updated</option>
-              <option value="name">Name</option>
-              <option value="models">Linked models</option>
-              <option value="tools">Linked tools</option>
-            </select>
-          </Field>
-          <Field label="Direction">
-            <select onChange={(event) => setSortDirection(event.target.value as typeof sortDirection)} value={sortDirection}>
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </Field>
-          <Field label="Page size">
-            <select onChange={(event) => setPageSize(Number(event.target.value) || 20)} value={String(pageSize)}>
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="40">40</option>
-            </select>
+              <option value="shared">Shared</option>
+            </FieldSelect>
           </Field>
         </div>
         {!loading ? (
-          <div className="workspace-module-chip-row">
-            <Tag>{sortedItems.length} total</Tag>
-            <Tag>Page {safePage} / {totalPages}</Tag>
-            <CapsuleButton disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button" variant="secondary">Previous</CapsuleButton>
-            <CapsuleButton disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button" variant="secondary">Next</CapsuleButton>
-          </div>
+          <WorkspacePagination
+            onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+            page={safePage}
+            total={sortedItems.length}
+            totalPages={totalPages}
+          />
         ) : null}
         {loading ? <p className="workspace-module-empty">Loading skills…</p> : null}
-        {!loading && sortedItems.length === 0 ? <p className="workspace-module-empty">No skills match this filter.</p> : null}
+        {!loading && sortedItems.length === 0 ? (
+          <WorkspaceEmptyState title="No skills match this filter." />
+        ) : null}
         {!loading ? (
           <div className="workspace-resource-list">
             {pagedItems.map((item) => (
@@ -228,10 +208,8 @@ export function WorkspaceSkills() {
                   <ResourceCardActions>
                     <WorkspaceSkillMenu
                       canExport={canExport}
-                      canShare={canShare}
                       canManage={canManage}
                       item={item}
-                      onAccess={canShare ? () => setAccessSkillId(item.id) : undefined}
                       onDelete={() => void handleDelete(item.id)}
                       onDuplicate={() => void handleDuplicate(item)}
                       onExport={() => handleExportItem(item)}
