@@ -6,6 +6,7 @@ export type OpenPortChatUiPreferences = {
     pinnedModels: boolean
     projects: boolean
   }
+  enableMessageQueue: boolean
   chatDefaults: {
     functionCalling: boolean
     maxTokens: number
@@ -30,6 +31,7 @@ function getDefaultPreferences(): OpenPortChatUiPreferences {
       pinnedModels: false,
       projects: false
     },
+    enableMessageQueue: true,
     chatDefaults: {
       functionCalling: true,
       maxTokens: 2048,
@@ -59,6 +61,10 @@ export function loadChatUiPreferences(): OpenPortChatUiPreferences {
     return {
       ...getDefaultPreferences(),
       ...parsed,
+      enableMessageQueue:
+        typeof parsed.enableMessageQueue === 'boolean'
+          ? parsed.enableMessageQueue
+          : getDefaultPreferences().enableMessageQueue,
       pinnedModelRoutes: Array.isArray(parsed.pinnedModelRoutes)
         ? Array.from(new Set(parsed.pinnedModelRoutes.filter((value): value is string => typeof value === 'string')))
         : [],
@@ -145,6 +151,16 @@ export function updateChatDefaults(
       ...current.chatDefaults,
       ...input
     }
+  }
+  saveChatUiPreferences(next)
+  return next
+}
+
+export function updateMessageQueueEnabled(enabled: boolean): OpenPortChatUiPreferences {
+  const current = loadChatUiPreferences()
+  const next = {
+    ...current,
+    enableMessageQueue: enabled
   }
   saveChatUiPreferences(next)
   return next

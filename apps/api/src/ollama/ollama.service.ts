@@ -182,6 +182,7 @@ export class OllamaService {
         name,
         route,
         provider: 'ollama',
+        source: 'runtime',
         description: '',
         tags: ['local'],
         status: 'active',

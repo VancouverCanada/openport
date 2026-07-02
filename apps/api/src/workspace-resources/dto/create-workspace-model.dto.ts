@@ -16,6 +16,10 @@ export class CreateWorkspaceModelDto {
   provider?: string
 
   @IsOptional()
+  @IsIn(['runtime', 'managed'])
+  source?: 'runtime' | 'managed'
+
+  @IsOptional()
   @IsString()
   description?: string
 

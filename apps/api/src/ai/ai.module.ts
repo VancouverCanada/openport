@@ -4,12 +4,13 @@ import { ProjectsModule } from '../projects/projects.module.js'
 import { OllamaModule } from '../ollama/ollama.module.js'
 import { AiController } from './ai.controller.js'
 import { AiService } from './ai.service.js'
+import { ChatTaskStoreService } from './chat-task-store.service.js'
 import { StorageModule } from '../storage/storage.module.js'
 
 @Module({
   imports: [AuthModule, StorageModule, ProjectsModule, OllamaModule],
   controllers: [AiController],
-  providers: [AiService],
-  exports: [AiService]
+  providers: [AiService, ChatTaskStoreService],
+  exports: [AiService, ChatTaskStoreService]
 })
 export class AiModule {}

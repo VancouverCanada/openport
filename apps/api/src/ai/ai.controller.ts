@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { resolveActor } from '../common/request-context.js'
 import { AiService } from './ai.service.js'
 import { CreateChatSessionDto } from './dto/create-chat-session.dto.js'
+import { DeleteChatSessionsDto } from './dto/delete-chat-sessions.dto.js'
 import { ImportChatSessionsDto } from './dto/import-chat-sessions.dto.js'
 import { ListChatSessionsDto } from './dto/list-chat-sessions.dto.js'
 import { PostMessageDto } from './dto/post-message.dto.js'
@@ -78,6 +79,16 @@ export class AiController {
     return this.ai.updateMeta(actor.userId, id, dto)
   }
 
+  @Post('sessions/:id/messages/tasks')
+  async createMessageTask(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() dto: PostMessageDto
+  ): Promise<{ taskId: string }> {
+    const actor = resolveActor(req.headers)
+    return this.ai.createMessageTask(actor, id, dto)
+  }
+
   @Post('sessions/:id/messages')
   async postMessage(
     @Req() req: FastifyRequest,
@@ -95,9 +106,12 @@ export class AiController {
       return
     }
 
-    // SSE stream: token deltas + status updates, terminated by a final JSON payload.
-    const controller = new AbortController()
-    req.raw.on('close', () => controller.abort())
+    // Legacy compatibility endpoint.
+    // Keep `messages?stream=1`, but route it through the same task lifecycle used by task endpoints.
+    const task = await this.ai.createMessageTask(actor, id, dto)
+    req.raw.on('close', () => {
+      void this.ai.cancelChatTask(actor.userId, task.taskId, 'client_disconnect')
+    })
 
     reply
       .header('content-type', 'text/event-stream; charset=utf-8')
@@ -118,15 +132,125 @@ export class AiController {
       reply.raw.write(`data: ${json}\n\n`)
     }
 
-    try {
-      for await (const chunk of this.ai.postMessageStream(actor, id, dto, { signal: controller.signal })) {
-        writeEvent(chunk.event, chunk.data)
-      }
-    } catch (error) {
-      writeEvent('error', { message: error instanceof Error ? error.message : 'Stream failed' })
-    } finally {
-      reply.raw.end()
+    const snapshot = await this.ai.getTaskEventSnapshot(actor.userId, task.taskId)
+    if (!snapshot) {
+      reply.code(404)
+      void reply.send({ message: 'Task not found' })
+      return
     }
+
+    snapshot.events.forEach((event) => writeEvent(event.event, event.data))
+    if (snapshot.done) {
+      reply.raw.end()
+      return
+    }
+
+    let subscription: { unsubscribe: () => void } | null = null
+    subscription = await this.ai.subscribeTaskEvents(actor.userId, task.taskId, (event) => {
+      writeEvent(event.event, event.data)
+      if (event.event === 'chat:active' && (event.data as { active?: boolean } | null)?.active === false) {
+        subscription?.unsubscribe()
+        reply.raw.end()
+      }
+    })
+
+    if (!subscription) {
+      reply.raw.end()
+      return
+    }
+
+    req.raw.on('close', () => {
+      subscription?.unsubscribe()
+    })
+  }
+
+  @Post('tasks/:taskId/cancel')
+  async cancelTask(@Req() req: FastifyRequest, @Param('taskId') taskId: string): Promise<{ ok: boolean }> {
+    const actor = resolveActor(req.headers)
+    const ok = await this.ai.cancelChatTask(actor.userId, taskId, 'user_cancel')
+    return { ok }
+  }
+
+  @Post('tasks/stop/:taskId')
+  async stopTask(@Req() req: FastifyRequest, @Param('taskId') taskId: string): Promise<{ ok: boolean }> {
+    const actor = resolveActor(req.headers)
+    const ok = await this.ai.cancelChatTask(actor.userId, taskId, 'user_cancel')
+    return { ok }
+  }
+
+  @Get('tasks/:taskId/events')
+  async streamTaskEvents(
+    @Req() req: FastifyRequest,
+    @Res() reply: FastifyReply,
+    @Param('taskId') taskId: string
+  ): Promise<void> {
+    const actor = resolveActor(req.headers)
+    const snapshot = await this.ai.getTaskEventSnapshot(actor.userId, taskId)
+    if (!snapshot) {
+      reply.code(404)
+      void reply.send({ message: 'Task not found' })
+      return
+    }
+
+    reply
+      .header('content-type', 'text/event-stream; charset=utf-8')
+      .header('cache-control', 'no-cache, no-transform')
+      .header('connection', 'keep-alive')
+      .code(200)
+
+    try {
+      ;(reply.raw as any).flushHeaders?.()
+    } catch {
+      // ignore
+    }
+
+    const writeEvent = (event: string, data: unknown) => {
+      const json = JSON.stringify(data ?? null)
+      reply.raw.write(`event: ${event}\n`)
+      reply.raw.write(`data: ${json}\n\n`)
+    }
+
+    snapshot.events.forEach((event) => writeEvent(event.event, event.data))
+    if (snapshot.done) {
+      reply.raw.end()
+      return
+    }
+
+    let subscription: { unsubscribe: () => void } | null = null
+    subscription = await this.ai.subscribeTaskEvents(actor.userId, taskId, (event) => {
+      writeEvent(event.event, event.data)
+      if (event.event === 'chat:active' && (event.data as { active?: boolean } | null)?.active === false) {
+        subscription?.unsubscribe()
+        reply.raw.end()
+      }
+    })
+
+    if (!subscription) {
+      reply.raw.end()
+      return
+    }
+
+    req.raw.on('close', () => {
+      subscription.unsubscribe()
+    })
+  }
+
+  @Get('tasks')
+  async listTasks(
+    @Req() req: FastifyRequest
+  ): Promise<{ tasks: Array<{ id: string; sessionId: string; createdAt: string; status: 'running' }> }> {
+    const actor = resolveActor(req.headers)
+    return { tasks: await this.ai.listChatTasks(actor.userId) }
+  }
+
+  @Get('tasks/chat/:id')
+  async listTasksByChat(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string
+  ): Promise<{ task_ids: string[] }> {
+    const actor = resolveActor(req.headers)
+    const tasks = await this.ai.listChatTasks(actor.userId, id)
+    return { task_ids: tasks.map((task) => task.id) }
   }
 
   @Delete('sessions')
@@ -139,5 +263,14 @@ export class AiController {
   deleteSession(@Req() req: FastifyRequest, @Param('id') id: string): Promise<Record<string, unknown>> {
     const actor = resolveActor(req.headers)
     return this.ai.deleteSession(actor.userId, id)
+  }
+
+  @Post('sessions/batch-delete')
+  deleteSessions(
+    @Req() req: FastifyRequest,
+    @Body() dto: DeleteChatSessionsDto
+  ): Promise<{ deletedIds: string[]; missingIds: string[] }> {
+    const actor = resolveActor(req.headers)
+    return this.ai.deleteSessions(actor.userId, dto.ids)
   }
 }

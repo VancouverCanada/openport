@@ -1,4 +1,19 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - openport-redis:/data
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -49,8 +64,11 @@ services:
       OPENPORT_DATABASE_URL: ${OPENPORT_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openport}
       OPENPORT_API_STATE_BACKEND: postgres
       OPENPORT_API_STATE_FILE: ${OPENPORT_API_STATE_FILE:-/app/.openport-product/data/api-state.json}
+      OPENPORT_REDIS_URL: ${OPENPORT_REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${API_HOST_PORT:-4100}:4000"
@@ -77,3 +95,4 @@ services:
 volumes:
   openport-postgres:
   openport-api-data:
+  openport-redis:

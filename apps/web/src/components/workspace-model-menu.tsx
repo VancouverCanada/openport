@@ -7,37 +7,42 @@ type WorkspaceModelMenuProps = {
   canExport: boolean
   canShare: boolean
   canManage: boolean
+  canPromote?: boolean
   item: OpenPortWorkspaceModel
-  onAccess?: () => void
   onDelete: () => void
+  onDuplicate: () => void
   onExport: () => void
-  onMakeDefault: () => void
+  onPromote?: () => void
+  onShare?: () => void
+  working?: boolean
 }
 
 export function WorkspaceModelMenu({
   canExport,
   canShare,
   canManage,
+  canPromote = false,
   item,
-  onAccess,
   onDelete,
+  onDuplicate,
   onExport,
-  onMakeDefault
+  onPromote,
+  onShare,
+  working = false
 }: WorkspaceModelMenuProps) {
+  const source = item.source === 'runtime' ? 'runtime' : 'managed'
+  const isRuntime = source === 'runtime'
   const items: WorkspaceResourceMenuItem[] = [
-    ...(canManage
+    ...(canManage && !isRuntime
       ? [
-          ...(!item.isDefault
-            ? [{ icon: 'solar:star-outline', label: 'Make default', onClick: onMakeDefault }]
-            : []),
           { href: `/workspace/models/${item.id}`, icon: 'solar:pen-outline', label: 'Edit' },
-          ...(canShare
-            ? [
-                ...(onAccess ? [{ icon: 'solar:shield-user-outline', label: 'Access', onClick: onAccess }] : [])
-              ]
-            : []),
+          ...(canShare && onShare ? [{ icon: 'solar:share-outline', label: 'Share', onClick: onShare }] : []),
+          { disabled: working, icon: 'solar:copy-outline', label: 'Clone', onClick: onDuplicate },
           { danger: true, icon: 'solar:trash-bin-trash-outline', label: 'Delete', onClick: onDelete }
         ]
+      : []),
+    ...(canPromote && isRuntime && onPromote
+      ? [{ disabled: working, icon: 'solar:add-circle-outline', label: 'Save as managed', onClick: onPromote }]
       : []),
     ...(canExport ? [{ icon: 'solar:download-minimalistic-outline', label: 'Export', onClick: onExport }] : [])
   ]

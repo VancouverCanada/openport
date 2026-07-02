@@ -33,6 +33,14 @@ export class PostMessageDto {
   content!: string
 
   @IsOptional()
+  @IsString()
+  userMessageId?: string
+
+  @IsOptional()
+  @IsString()
+  assistantMessageId?: string
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ChatAttachmentDto)
