@@ -1,0 +1,83 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.2",
+  "name": "OpenPort Adaptive Least-Privilege Durable Capability Lease Profile v0.2",
+  "extends": "openport-adaptive-least-privilege-v0.1",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Opt-in public reference profile for single-host durable capability-lease consumption, transactional audit obligations, idempotent recovery, and process-isolated SQLite state.",
+  "claimBoundary": "This profile validates selected single-host behavior of an optional public research adapter. It does not describe or certify Accentrust production architecture, multi-host replication, network partitions, filesystem loss, database correctness, model robustness, or prompt-injection immunity.",
+  "runtimeBoundary": {
+    "adapter": "SQLite WAL with synchronous=FULL and BEGIN IMMEDIATE",
+    "nodeRequirement": "Node.js 22.5 or later for the optional built-in node:sqlite adapter",
+    "defaultRuntimeUnchanged": true,
+    "scope": "single host, one SQLite writer protocol, deterministic injected failure points"
+  },
+  "requiredEndpoints": [
+    { "method": "POST", "path": "/api/agent/v1/capability-leases" },
+    { "method": "GET", "path": "/api/agent/v1/capability-leases/{id}" },
+    { "method": "POST", "path": "/api/agent/v1/capability-leases/{id}/revoke" },
+    { "method": "POST", "path": "/api/agent/v1/actions" }
+  ],
+  "checks": [
+    {
+      "id": "lease.durable.atomic_outbox",
+      "level": "MUST",
+      "description": "A consuming authorization MUST atomically commit the call/cost decrement, a minimized audit obligation, and an optional lease-scoped idempotency record.",
+      "evidence": [
+        "clean action leaves one committed consumption and one delivered outbox record",
+        "fault after lease update but before outbox insertion rolls the transaction back",
+        "fault after outbox insertion but before commit rolls the transaction back"
+      ]
+    },
+    {
+      "id": "lease.durable.uncertain_commit_replay",
+      "level": "MUST",
+      "description": "When commit succeeds but the response is lost, retry with the same explicit idempotency key and the same request fingerprint MUST return the committed lease snapshot without a second decrement; key reuse with a different fingerprint MUST fail closed.",
+      "evidence": [
+        "post-commit injected failure leaves one consumption, one outbox row, and one idempotency row",
+        "equivalent retry preserves the committed lease version and budget",
+        "same-lease key reuse with a changed request fingerprint returns agent.idempotency_mismatch without another consumption or audit obligation"
+      ]
+    },
+    {
+      "id": "lease.durable.audit_recovery",
+      "level": "MUST",
+      "description": "Audit delivery MUST use a stable event identifier and an idempotent sink so failure before outbox acknowledgement does not duplicate evidence.",
+      "evidence": [
+        "fault before delivered marking recovers to one audit event",
+        "fault after marking but before commit recovers to one audit event",
+        "outbox pending count converges to zero"
+      ]
+    },
+    {
+      "id": "lease.durable.restart_state",
+      "level": "MUST",
+      "description": "Lease state and revocation MUST survive reconstruction of the public reference runtime around the same durable adapter.",
+      "evidence": [
+        "active lease is readable after adapter reopen",
+        "committed revocation remains effective after a second reopen"
+      ]
+    },
+    {
+      "id": "lease.durable.concurrent_budget",
+      "level": "MUST",
+      "description": "Concurrent distinct proposals against one remaining call MUST yield exactly one consumption, while same-key proposals MUST reuse one lease-scoped idempotency record.",
+      "evidence": [
+        "32 distinct proposals yield one success and 31 call-budget denials",
+        "16 same-key proposals yield one budget decrement and one durable audit event",
+        "same-key replay requires an equal hashed request fingerprint",
+        "the same key under a second lease produces an independent consumption"
+      ]
+    },
+    {
+      "id": "lease.durable.privacy_minimization",
+      "level": "MUST",
+      "description": "The durable outbox and idempotency tables MUST store request digests and bounded decision metadata rather than raw tasks, requests, policies, credentials, or private topology.",
+      "evidence": [
+        "request and idempotency identifiers and replay-equivalence fingerprints are hashed before persistence",
+        "durable audit events carry explicit raw-content omission flags"
+      ]
+    }
+  ]
+}

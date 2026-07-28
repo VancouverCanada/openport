@@ -1,4 +1,5 @@
-import type { AgentApp, AgentAutoExecute, AgentDraft, AgentExecution, AgentKey, AgentPolicy, ContextRiskSnapshot, DraftStatus, IntentCertificate, StepUpSession, StepUpToken } from './types.js'
+import type { AgentApp, AgentAutoExecute, AgentCapabilityLease, AgentDraft, AgentExecution, AgentKey, AgentPolicy, AgentRouteDecision, ContextRiskSnapshot, DraftStatus, IntentCertificate, StepUpSession, StepUpToken } from './types.js'
+import type { CapabilityLeaseConsumptionInput, CapabilityLeaseConsumptionResult } from './capability-lease-store.js'
 import { isExpired, nowIso, randomId } from './utils.js'
 
 type PreflightRecord = {
@@ -21,15 +22,19 @@ export class InMemoryStore {
   readonly keysByHash = new Map<string, AgentKey>()
   readonly drafts = new Map<string, AgentDraft>()
   readonly executions = new Map<string, AgentExecution>()
+  private readonly executionFingerprints = new Map<string, string>()
   readonly stepUpSessions = new Map<string, StepUpSession>()
   readonly stepUpTokens = new Map<string, StepUpToken>()
   readonly preflights = new Map<string, PreflightRecord>()
   readonly intentCertificates = new Map<string, IntentCertificate>()
   readonly contextRiskSnapshots = new Map<string, ContextRiskSnapshot>()
+  readonly routeDecisions = new Map<string, AgentRouteDecision>()
+  readonly capabilityLeases = new Map<string, AgentCapabilityLease>()
 
   private readonly preflightTtlMs = 10 * 60 * 1000
   private readonly intentTtlMs = 10 * 60 * 1000
   private readonly contextRiskTtlMs = 10 * 60 * 1000
+  private readonly routeDecisionTtlMs = 2 * 60 * 1000
   private readonly currentContextRiskBySession = new Map<string, string>()
 
   listApps(): AgentApp[] {
@@ -50,12 +55,10 @@ export class InMemoryStore {
       this.keysByHash.delete(key.token_hash)
     }
 
-    for (const [draftId, draft] of this.drafts.entries()) {
-      if (draft.app_id !== appId) continue
-      this.drafts.delete(draftId)
-      for (const [execId, execution] of this.executions.entries()) {
-        if (execution.draft_id === draftId) this.executions.delete(execId)
-      }
+    this.deleteActionsForApp(appId)
+
+    for (const [leaseId, lease] of this.capabilityLeases.entries()) {
+      if (lease.app_id === appId) this.capabilityLeases.delete(leaseId)
     }
 
     return true
@@ -274,6 +277,75 @@ export class InMemoryStore {
     return snapshotId ? this.getContextRiskSnapshot(snapshotId) : null
   }
 
+  saveRouteDecision(input: Omit<AgentRouteDecision, 'id' | 'created_at' | 'expires_at'> & { id?: string; ttl_ms?: number }): AgentRouteDecision {
+    const now = Date.now()
+    const ttl = Number.isFinite(Number(input.ttl_ms)) ? Math.max(10_000, Math.min(Math.trunc(Number(input.ttl_ms)), this.routeDecisionTtlMs)) : this.routeDecisionTtlMs
+    const decision: AgentRouteDecision = {
+      ...input,
+      id: input.id || randomId('rte'),
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + ttl).toISOString()
+    }
+    this.routeDecisions.set(decision.id, decision)
+    return decision
+  }
+
+  getRouteDecision(routeId: string): AgentRouteDecision | null {
+    const decision = this.routeDecisions.get(routeId) || null
+    if (!decision) return null
+    if (isExpired(decision.expires_at)) {
+      this.routeDecisions.delete(routeId)
+      return null
+    }
+    return decision
+  }
+
+  saveCapabilityLease(input: Omit<AgentCapabilityLease, 'id' | 'created_at' | 'version'> & { id?: string }): AgentCapabilityLease {
+    const lease: AgentCapabilityLease = {
+      ...input,
+      id: input.id || randomId('lse'),
+      version: 1,
+      created_at: nowIso()
+    }
+    this.capabilityLeases.set(lease.id, lease)
+    return lease
+  }
+
+  getCapabilityLease(leaseId: string): AgentCapabilityLease | null {
+    return this.capabilityLeases.get(leaseId) || null
+  }
+
+  revokeCapabilityLease(leaseId: string, revokedAt = nowIso()): AgentCapabilityLease | null {
+    const current = this.capabilityLeases.get(leaseId)
+    if (!current) return null
+    const next: AgentCapabilityLease = {
+      ...current,
+      revoked_at: current.revoked_at || revokedAt,
+      version: current.version + 1
+    }
+    this.capabilityLeases.set(leaseId, next)
+    return next
+  }
+
+  consumeCapabilityLease(leaseId: string, input: CapabilityLeaseConsumptionInput): CapabilityLeaseConsumptionResult {
+    const current = this.capabilityLeases.get(leaseId) || null
+    if (!current) return { ok: false, reason: 'not_found', lease: null }
+    if (current.revoked_at) return { ok: false, reason: 'revoked', lease: current }
+    const now = input.now || new Date()
+    if (Date.parse(current.expires_at) <= now.getTime()) return { ok: false, reason: 'expired', lease: current }
+    if (current.remaining_calls < 1) return { ok: false, reason: 'call_budget', lease: current }
+    if (current.remaining_cost_units < input.costUnits) return { ok: false, reason: 'cost_budget', lease: current }
+
+    const next: AgentCapabilityLease = {
+      ...current,
+      remaining_calls: current.remaining_calls - 1,
+      remaining_cost_units: current.remaining_cost_units - input.costUnits,
+      version: current.version + 1
+    }
+    this.capabilityLeases.set(leaseId, next)
+    return { ok: true, lease: next, replayed: false }
+  }
+
   private contextRiskSessionKey(input: { app_id: string; key_id: string; actor_user_id: string; session_id: string }): string {
     return `${input.app_id}:${input.key_id}:${input.actor_user_id}:${input.session_id}`
   }
@@ -301,14 +373,31 @@ export class InMemoryStore {
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }
 
-  saveExecution(input: Omit<AgentExecution, 'id' | 'created_at'>): AgentExecution {
+  findDraftByIdempotency(appId: string, idempotencyKey: string): AgentDraft | null {
+    const rows = [...this.drafts.values()]
+      .filter((draft) => draft.app_id === appId && draft.idempotency_key === idempotencyKey)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    return rows[0] || null
+  }
+
+  saveExecution(
+    input: Omit<AgentExecution, 'id' | 'created_at'>,
+    requestFingerprint?: string | null
+  ): AgentExecution {
     const execution: AgentExecution = {
       ...input,
       id: randomId('exe'),
       created_at: nowIso()
     }
     this.executions.set(execution.id, execution)
+    if (requestFingerprint) {
+      this.executionFingerprints.set(execution.id, requestFingerprint)
+    }
     return execution
+  }
+
+  getExecutionRequestFingerprint(executionId: string): string | null {
+    return this.executionFingerprints.get(executionId) || null
   }
 
   getLatestExecutionForDraft(draftId: string): AgentExecution | null {
@@ -320,9 +409,21 @@ export class InMemoryStore {
 
   findExecutionByIdempotency(appId: string, idempotencyKey: string): AgentExecution | null {
     const rows = [...this.executions.values()]
-      .filter((e) => e.app_id === appId && e.idempotency_key === idempotencyKey)
+      .filter((e) => e.app_id === appId && e.idempotency_key === idempotencyKey && e.status === 'success')
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
     return rows[0] || null
+  }
+
+  deleteActionsForApp(appId: string): void {
+    for (const [draftId, draft] of this.drafts.entries()) {
+      if (draft.app_id !== appId) continue
+      this.drafts.delete(draftId)
+      for (const [executionId, execution] of this.executions.entries()) {
+        if (execution.draft_id !== draftId) continue
+        this.executions.delete(executionId)
+        this.executionFingerprints.delete(executionId)
+      }
+    }
   }
 
   saveStepUpSession(input: { user_id: string; code: string; expires_at: string }): StepUpSession {
@@ -370,12 +471,16 @@ export class InMemoryStore {
     removedPreflights: number
     removedIntentCertificates: number
     removedContextRiskSnapshots: number
+    removedRouteDecisions: number
+    removedCapabilityLeases: number
     removedStepUpSessions: number
     removedStepUpTokens: number
   } {
     let removedPreflights = 0
     let removedIntentCertificates = 0
     let removedContextRiskSnapshots = 0
+    let removedRouteDecisions = 0
+    let removedCapabilityLeases = 0
     let removedStepUpSessions = 0
     let removedStepUpTokens = 0
 
@@ -399,6 +504,18 @@ export class InMemoryStore {
       removedContextRiskSnapshots += 1
     }
 
+    for (const [id, record] of this.routeDecisions.entries()) {
+      if (!isExpired(record.expires_at)) continue
+      this.routeDecisions.delete(id)
+      removedRouteDecisions += 1
+    }
+
+    for (const [id, record] of this.capabilityLeases.entries()) {
+      if (!record.revoked_at && !isExpired(record.expires_at)) continue
+      this.capabilityLeases.delete(id)
+      removedCapabilityLeases += 1
+    }
+
     for (const [id, record] of this.stepUpSessions.entries()) {
       if (!isExpired(record.expires_at)) continue
       this.stepUpSessions.delete(id)
@@ -415,6 +532,8 @@ export class InMemoryStore {
       removedPreflights,
       removedIntentCertificates,
       removedContextRiskSnapshots,
+      removedRouteDecisions,
+      removedCapabilityLeases,
       removedStepUpSessions,
       removedStepUpTokens
     }

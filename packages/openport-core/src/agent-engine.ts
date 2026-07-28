@@ -1,5 +1,9 @@
 import { AuditService } from './audit.js'
+import type { ActionExecutionCoordinator } from './action-execution-coordinator.js'
+import type { AgentActionStateStore } from './agent-action-state-store.js'
+import { CapabilityLeaseEngine, capabilityLeaseAuditDetails, capabilityProposalFromPayload, publicCapabilityLease, type CapabilityLeaseDecision } from './capability-lease.js'
 import { ContextRiskEngine, contextRiskAuditDetails, publicContextRiskSnapshot } from './context-risk.js'
+import { SingleHostDurableActionExecutor, type DurableEffectContext } from './durable-action-executor.js'
 import { ErrorCodes } from './error-codes.js'
 import { OpenPortError } from './errors.js'
 import { IntentEngine, intentAuditDetails } from './intent-engine.js'
@@ -41,30 +45,35 @@ export class AgentEngine {
     private readonly tools: AgentToolRegistry,
     private readonly audit: AuditService,
     private readonly intent: IntentEngine,
-    private readonly contextRisk: ContextRiskEngine
+    private readonly contextRisk: ContextRiskEngine,
+    private readonly capabilityLease: CapabilityLeaseEngine,
+    private readonly actionExecutionCoordinator: ActionExecutionCoordinator,
+    private readonly actionState: AgentActionStateStore = store,
+    private readonly durableActionExecutor: SingleHostDurableActionExecutor | null = null
   ) {}
 
-  async manifest(ctx: AgentRequestContext, opts: { intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string } = {}): Promise<{ app: Record<string, unknown>; tools: unknown[]; intentCertificate?: Record<string, unknown>; contextRiskSnapshot?: Record<string, unknown> }> {
+  async manifest(ctx: AgentRequestContext, opts: { intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string; capabilityLeaseId?: string } = {}): Promise<{ app: Record<string, unknown>; tools: unknown[]; intentCertificate?: Record<string, unknown>; contextRiskSnapshot?: Record<string, unknown>; capabilityLease?: Record<string, unknown> }> {
     const certificate = this.intent.getCertificateForContext(ctx, opts.intentCertificateId)
     const staticTools = this.tools.listManifestTools(ctx)
     const intentTools = this.intent.filterManifest(certificate, staticTools)
     const contextFiltered = await this.contextRisk.filterManifest(ctx, intentTools, opts)
-    const tools = contextFiltered.tools
-    if (certificate) {
+    const leaseFiltered = this.capabilityLease.filterManifest(ctx, opts.capabilityLeaseId, contextFiltered.tools)
+    const tools = leaseFiltered.tools
+    if (certificate || leaseFiltered.lease) {
       await this.audit.log({
         appId: ctx.app.id,
         keyId: ctx.key.id,
         actorUserId: ctx.actorUserId,
         performedByUserId: ctx.actorUserId,
-        action: 'agent.intent.manifest',
+        action: certificate ? 'agent.intent.manifest' : 'agent.capability_lease.manifest',
         status: 'success',
         ip: ctx.ip,
         userAgent: ctx.userAgent,
-        details: intentAuditDetails(certificate, {
+        details: capabilityLeaseAuditDetails(leaseFiltered.lease, intentAuditDetails(certificate, {
           staticToolCount: staticTools.length,
           visibleToolCount: tools.length,
           contextRiskSnapshotId: contextFiltered.snapshot?.snapshot_id || null
-        })
+        }))
       })
     }
     return {
@@ -76,12 +85,23 @@ export class AgentEngine {
       },
       tools,
       ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
-      ...(contextFiltered.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextFiltered.snapshot) } : {})
+      ...(contextFiltered.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextFiltered.snapshot) } : {}),
+      ...(leaseFiltered.lease ? { capabilityLease: publicCapabilityLease(leaseFiltered.lease) } : {})
     }
   }
 
-  async listLedgers(ctx: AgentRequestContext): Promise<{ items: unknown[] }> {
+  async listLedgers(ctx: AgentRequestContext, opts: { capabilityLeaseId?: string } = {}): Promise<{ items: unknown[]; capabilityLease?: Record<string, unknown> }> {
     ensureScope(ctx, ['ledger.read'])
+    const leaseDecision = await this.capabilityLease.authorizeAndConsume(ctx, opts.capabilityLeaseId, {
+      toolName: 'ledger.list',
+      resourceIds: [],
+      fields: [],
+      rows: 0,
+      effectAmount: 0,
+      mode: 'read',
+      costUnits: 1,
+      consume: true
+    })
     const ledgers = await this.domain.listLedgers(ctx.actorUserId)
 
     const filtered = ledgers.filter((ledger) => {
@@ -92,9 +112,16 @@ export class AgentEngine {
     })
 
     const policy = getDataPolicy(ctx)
-    const final = policy.allowedLedgerIds
+    let final = policy.allowedLedgerIds
       ? filtered.filter((ledger) => policy.allowedLedgerIds?.includes(ledger.id))
       : filtered
+    if (leaseDecision) {
+      const resources = new Set(leaseDecision.lease.allowed_resource_ids)
+      const fields = new Set(leaseDecision.lease.allowed_fields)
+      final = final
+        .filter((ledger) => resources.has(ledger.id))
+        .map((ledger) => Object.fromEntries(Object.entries(ledger).filter(([field]) => fields.has(field))) as typeof ledger)
+    }
 
     await this.audit.log({
       appId: ctx.app.id,
@@ -105,13 +132,16 @@ export class AgentEngine {
       status: 'success',
       ip: ctx.ip,
       userAgent: ctx.userAgent,
-      details: { resultCount: final.length }
+      details: capabilityLeaseAuditDetails(leaseDecision?.lease || null, { resultCount: final.length })
     })
 
-    return { items: final }
+    return {
+      items: final,
+      ...(leaseDecision ? { capabilityLease: publicCapabilityLease(leaseDecision.lease) } : {})
+    }
   }
 
-  async listTransactions(ctx: AgentRequestContext, query: { ledgerId: string; startDate?: string; endDate?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listTransactions(ctx: AgentRequestContext, query: { ledgerId: string; startDate?: string; endDate?: string; page?: number; pageSize?: number; capabilityLeaseId?: string }): Promise<Record<string, unknown>> {
     ensureScope(ctx, ['transaction.read'])
     const ledgerId = query.ledgerId?.trim()
     if (!ledgerId) {
@@ -126,6 +156,17 @@ export class AgentEngine {
 
     ensureWorkspaceBoundary(ctx, { ledgerOrgId: ledger.organization_id, orgId: null })
     ensureLedgerAllowed(ctx, ledgerId)
+
+    const leaseDecision = await this.capabilityLease.authorizeAndConsume(ctx, query.capabilityLeaseId, {
+      toolName: 'transaction.list',
+      resourceIds: [ledgerId],
+      fields: [],
+      rows: query.pageSize || 20,
+      effectAmount: 0,
+      mode: 'read',
+      costUnits: 1,
+      consume: true
+    })
 
     const range = resolveDateRange(ctx, { startDate: query.startDate, endDate: query.endDate })
     const dataPolicy = getDataPolicy(ctx)
@@ -142,7 +183,9 @@ export class AgentEngine {
     const items = result.items.map((txn) => {
       const presented = this.tools.presentTransaction(txn as unknown as Record<string, unknown>, ctx)
       redactedFields.push(...presented.redactedFields)
-      return presented.item
+      if (!leaseDecision) return presented.item
+      const allowed = new Set(leaseDecision.lease.allowed_fields)
+      return Object.fromEntries(Object.entries(presented.item).filter(([field]) => allowed.has(field)))
     })
 
     await this.audit.log({
@@ -154,7 +197,7 @@ export class AgentEngine {
       status: 'success',
       ip: ctx.ip,
       userAgent: ctx.userAgent,
-      details: {
+      details: capabilityLeaseAuditDetails(leaseDecision?.lease || null, {
         ledgerId,
         startDate: range.startDate || null,
         endDate: range.endDate || null,
@@ -163,7 +206,7 @@ export class AgentEngine {
         resultCount: items.length,
         redactedFields: [...new Set(redactedFields)],
         policy: dataPolicy
-      }
+      })
     })
 
     return {
@@ -171,11 +214,12 @@ export class AgentEngine {
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
-      hasMore: result.hasMore
+      hasMore: result.hasMore,
+      ...(leaseDecision ? { capabilityLease: publicCapabilityLease(leaseDecision.lease) } : {})
     }
   }
 
-  async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown>; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string }): Promise<Record<string, unknown>> {
+  async preflight(ctx: AgentRequestContext, input: { action: string; payload: Record<string, unknown>; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string; capabilityLeaseId?: string }): Promise<Record<string, unknown>> {
     const tool = this.tools.getActionTool(input.action)
     if (!tool) {
       throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_UNKNOWN, 'Unknown action')
@@ -230,6 +274,17 @@ export class AgentEngine {
       })
     }
 
+    const leaseDecision = await this.capabilityLease.authorizeAndConsume(
+      ctx,
+      input.capabilityLeaseId,
+      capabilityProposalFromPayload({
+        toolName: tool.name,
+        payload: input.payload,
+        mode: 'preflight',
+        consume: false
+      })
+    )
+
     const impact = tool.computeImpact
       ? await tool.computeImpact(ctx, input.payload, { domain: this.domain })
       : { summary: tool.risk === 'high' ? 'High impact action' : 'Low impact action' }
@@ -259,13 +314,13 @@ export class AgentEngine {
       status: 'success',
       ip: ctx.ip,
       userAgent: ctx.userAgent,
-      details: contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
+      details: capabilityLeaseAuditDetails(leaseDecision?.lease || null, contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
         actionType: tool.name,
         risk: tool.risk,
         impact,
         contextMode: contextDecision.mode,
         intentDecision: intentDecision?.decision || null
-      }))
+      })))
     })
 
     return {
@@ -279,11 +334,12 @@ export class AgentEngine {
       preflightId: preflight.id,
       contextMode: contextDecision.mode,
       ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
-      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
+      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {}),
+      ...(leaseDecision ? { capabilityLease: publicCapabilityLease(leaseDecision.lease) } : {})
     }
   }
 
-  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string; stateWitnessHash?: string; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string }): Promise<Record<string, unknown>> {
+  async createAction(ctx: AgentRequestContext, input: { action: string; payload?: Record<string, unknown>; preflightId?: string; execute?: boolean; forceDraft?: boolean; requestId?: string; idempotencyKey?: string; justification?: string; preflightHash?: string; stateWitnessHash?: string; intentCertificateId?: string; contextRiskSnapshotId?: string; sessionId?: string; capabilityLeaseId?: string }): Promise<Record<string, unknown>> {
     let actionName = input.action
     let payload = input.payload
     let preflightHash = input.preflightHash
@@ -364,10 +420,20 @@ export class AgentEngine {
 
     const auto = normalizeAutoExecute(ctx.app.auto_execute)
     const wantsExecute = input.execute === true && input.forceDraft !== true
+    let leaseDecision: CapabilityLeaseDecision | null = null
 
-    if (wantsExecute && input.idempotencyKey) {
-      const existing = this.store.findExecutionByIdempotency(ctx.app.id, input.idempotencyKey)
+    if (wantsExecute && input.idempotencyKey && !this.durableActionExecutor) {
+      const existing = this.actionState.findExecutionByIdempotency(ctx.app.id, input.idempotencyKey)
       if (existing) {
+        const requestFingerprint = sha256JcsHex({ actionType: tool.name, payload })
+        const existingFingerprint = this.actionState.getExecutionRequestFingerprint(existing.id)
+        if (existingFingerprint && existingFingerprint !== requestFingerprint) {
+          throw new OpenPortError(
+            409,
+            ErrorCodes.AGENT_IDEMPOTENCY_MISMATCH,
+            'Idempotency key is already bound to a different action payload'
+          )
+        }
         await this.audit.log({
           appId: ctx.app.id,
           keyId: ctx.key.id,
@@ -457,7 +523,22 @@ export class AgentEngine {
       canAutoExecute = !autoExecuteDeniedCode
     }
 
-    const draft = this.store.saveDraft({
+    if (input.capabilityLeaseId) {
+      leaseDecision = await this.capabilityLease.authorizeAndConsume(
+        ctx,
+        input.capabilityLeaseId,
+        capabilityProposalFromPayload({
+          toolName: tool.name,
+          payload,
+          mode: wantsExecute ? 'execute' : 'draft',
+          consume: true,
+          requestId: input.requestId || null,
+          idempotencyKey: input.idempotencyKey || null
+        })
+      )
+    }
+
+    const draft = this.actionState.saveDraft({
       app_id: ctx.app.id,
       key_id: ctx.key.id,
       actor_user_id: ctx.actorUserId,
@@ -496,6 +577,16 @@ export class AgentEngine {
             decision: intentDecision?.decision || null,
             reason: intentDecision?.reason || null
           }
+        } : {}),
+        ...(leaseDecision ? {
+          capabilityLease: {
+            leaseId: leaseDecision.lease.id,
+            version: leaseDecision.lease.version,
+            policyVersion: leaseDecision.lease.policy_version,
+            sessionId: leaseDecision.lease.session_id,
+            effectModeCeiling: leaseDecision.lease.effect_mode_ceiling,
+            consumed: leaseDecision.consumed
+          }
         } : {})
       },
       confirmed_by_user_id: null,
@@ -514,14 +605,14 @@ export class AgentEngine {
       ip: ctx.ip,
       userAgent: ctx.userAgent,
       draftId: draft.id,
-      details: contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
+      details: capabilityLeaseAuditDetails(leaseDecision?.lease || null, contextRiskAuditDetails(contextDecision.snapshot, intentAuditDetails(certificate, {
         actionType: tool.name,
         risk: tool.risk,
         contextMode: contextDecision.mode,
         autoExecuteRequested: wantsExecute,
         autoExecuteDeniedCode,
         intentDecision: intentDecision?.decision || null
-      }))
+      })))
     })
 
     if (!canAutoExecute) {
@@ -531,7 +622,8 @@ export class AgentEngine {
         autoExecuteDeniedCode,
         review_path: '/agent-admin/v1/drafts',
         ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
-        ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
+        ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {}),
+        ...(leaseDecision ? { capabilityLease: publicCapabilityLease(leaseDecision.lease) } : {})
       }
     }
 
@@ -542,17 +634,18 @@ export class AgentEngine {
       draft: { id: draft.id, status: execution.draftStatus },
       execution: execution.execution,
       ...(certificate ? { intentCertificate: this.toPublicIntent(certificate) } : {}),
-      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {})
+      ...(contextDecision.snapshot ? { contextRiskSnapshot: publicContextRiskSnapshot(contextDecision.snapshot) } : {}),
+      ...(leaseDecision ? { capabilityLease: publicCapabilityLease(leaseDecision.lease) } : {})
     }
   }
 
   async getDraft(ctx: AgentRequestContext, draftId: string): Promise<Record<string, unknown>> {
-    const draft = this.store.getDraft(draftId)
+    const draft = this.actionState.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
       throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
 
-    const latestExecution = this.store.getLatestExecutionForDraft(draft.id)
+    const latestExecution = this.actionState.getLatestExecutionForDraft(draft.id)
     return {
       draft: this.toPublicDraft(draft),
       execution: latestExecution
@@ -560,7 +653,7 @@ export class AgentEngine {
   }
 
   async executeDraft(ctx: AgentRequestContext, draftId: string, opts: { confirmedByUserId: string | null }): Promise<{ draftStatus: string; execution: Record<string, unknown> }> {
-    const draft = this.store.getDraft(draftId)
+    const draft = this.actionState.getDraft(draftId)
     if (!draft || draft.app_id !== ctx.app.id) {
       throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     }
@@ -575,6 +668,23 @@ export class AgentEngine {
     }
 
     ensureScope(ctx, tool.requiredScopes)
+
+    const capabilityPolicy = (draft.policy_snapshot && typeof draft.policy_snapshot === 'object')
+      ? (draft.policy_snapshot as { capabilityLease?: { leaseId?: unknown } }).capabilityLease
+      : null
+    const executeLeaseDecision = capabilityPolicy?.leaseId
+      ? await this.capabilityLease.authorizeAndConsume(
+        ctx,
+        String(capabilityPolicy.leaseId),
+        capabilityProposalFromPayload({
+          toolName: tool.name,
+          payload: draft.payload,
+          mode: 'execute',
+          consume: false,
+          draftId: draft.id
+        })
+      )
+      : null
 
     const contextPolicy = (draft.policy_snapshot && typeof draft.policy_snapshot === 'object')
       ? (draft.policy_snapshot as { context?: { sessionId?: unknown; snapshotId?: unknown } }).context
@@ -610,9 +720,22 @@ export class AgentEngine {
       })
     }
 
-    if (draft.idempotency_key) {
-      const replay = this.store.findExecutionByIdempotency(ctx.app.id, draft.idempotency_key)
+    const requestFingerprint = sha256JcsHex({
+      actionType: draft.action_type,
+      payload: draft.payload
+    })
+
+    if (draft.idempotency_key && !this.durableActionExecutor) {
+      const replay = this.actionState.findExecutionByIdempotency(ctx.app.id, draft.idempotency_key)
       if (replay) {
+        const existingFingerprint = this.actionState.getExecutionRequestFingerprint(replay.id)
+        if (existingFingerprint && existingFingerprint !== requestFingerprint) {
+          throw new OpenPortError(
+            409,
+            ErrorCodes.AGENT_IDEMPOTENCY_MISMATCH,
+            'Idempotency key is already bound to a different action payload'
+          )
+        }
         return {
           draftStatus: draft.status,
           execution: {
@@ -654,73 +777,258 @@ export class AgentEngine {
       }
     }
 
-    try {
-      const result = await tool.execute(ctx, draft.payload, { domain: this.domain }, { confirmedByUserId: opts.confirmedByUserId })
-      const execution = this.store.saveExecution({
-        draft_id: draft.id,
-        app_id: draft.app_id,
-        idempotency_key: draft.idempotency_key,
-        status: 'success',
-        result,
-        error: null
-      })
+    type ExecutionOutcome =
+      | { ok: true; draftStatus: string; execution: Record<string, unknown> }
+      | { ok: false; error: unknown }
 
-      this.store.updateDraft(draft.id, {
-        status: 'confirmed',
-        confirmed_by_user_id: opts.confirmedByUserId,
-        confirmed_at: opts.confirmedByUserId ? new Date().toISOString() : draft.confirmed_at || new Date().toISOString(),
-        canceled_at: null
-      })
+    const executeOnce = async (effectContext?: DurableEffectContext): Promise<ExecutionOutcome> => {
+      try {
+        if (effectContext && draft.idempotency_key) {
+          const existing = this.actionState.findExecutionByIdempotency(ctx.app.id, draft.idempotency_key)
+          if (existing) {
+            const existingFingerprint = this.actionState.getExecutionRequestFingerprint(existing.id)
+            if (existingFingerprint && existingFingerprint !== requestFingerprint) {
+              throw new OpenPortError(
+                409,
+                ErrorCodes.AGENT_IDEMPOTENCY_MISMATCH,
+                'Idempotency key is already bound to a different action payload'
+              )
+            }
+            this.actionState.updateDraft(draft.id, {
+              status: 'confirmed',
+              confirmed_by_user_id: opts.confirmedByUserId,
+              confirmed_at: draft.confirmed_at || new Date().toISOString(),
+              canceled_at: null
+            })
+            return {
+              ok: true,
+              draftStatus: 'confirmed',
+              execution: { ...existing, replayed: true }
+            }
+          }
+        }
 
-      await this.audit.log({
-        appId: ctx.app.id,
-        keyId: ctx.key.id,
-        actorUserId: ctx.actorUserId,
-        performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
-        action: 'agent.action.execute',
-        status: 'success',
-        ip: ctx.ip,
-        userAgent: ctx.userAgent,
-        draftId: draft.id,
-        executionId: execution.id,
-        details: { actionType: tool.name }
-      })
+        const result = await tool.execute(
+          ctx,
+          draft.payload,
+          { domain: this.domain },
+          { confirmedByUserId: opts.confirmedByUserId, effectContext }
+        )
+        const execution = this.actionState.saveExecution({
+          draft_id: draft.id,
+          app_id: draft.app_id,
+          idempotency_key: draft.idempotency_key,
+          status: 'success',
+          result,
+          error: null
+        }, requestFingerprint)
 
-      return {
-        draftStatus: 'confirmed',
-        execution
+        this.actionState.updateDraft(draft.id, {
+          status: 'confirmed',
+          confirmed_by_user_id: opts.confirmedByUserId,
+          confirmed_at: opts.confirmedByUserId ? new Date().toISOString() : draft.confirmed_at || new Date().toISOString(),
+          canceled_at: null
+        })
+
+        await this.audit.log({
+          appId: ctx.app.id,
+          keyId: ctx.key.id,
+          actorUserId: ctx.actorUserId,
+          performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
+          action: 'agent.action.execute',
+          status: 'success',
+          ip: ctx.ip,
+          userAgent: ctx.userAgent,
+          draftId: draft.id,
+          executionId: execution.id,
+          details: capabilityLeaseAuditDetails(executeLeaseDecision?.lease || null, { actionType: tool.name })
+        })
+
+        return {
+          ok: true,
+          draftStatus: 'confirmed',
+          execution
+        }
+      } catch (error) {
+        const known = error instanceof OpenPortError
+        const message = known ? error.message : 'Execution failed'
+        const code = known ? error.code : ErrorCodes.AGENT_EXECUTION_FAILED
+        const execution = this.actionState.saveExecution({
+          draft_id: draft.id,
+          app_id: draft.app_id,
+          idempotency_key: draft.idempotency_key,
+          status: 'failed',
+          result: null,
+          error: message
+        }, requestFingerprint)
+
+        this.actionState.updateDraft(draft.id, { status: 'failed' })
+
+        await this.audit.log({
+          appId: ctx.app.id,
+          keyId: ctx.key.id,
+          actorUserId: ctx.actorUserId,
+          performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
+          action: 'agent.action.execute',
+          status: 'failed',
+          code,
+          ip: ctx.ip,
+          userAgent: ctx.userAgent,
+          draftId: draft.id,
+          executionId: execution.id,
+          details: capabilityLeaseAuditDetails(executeLeaseDecision?.lease || null, { actionType: tool.name })
+        })
+
+        return { ok: false, error }
       }
-    } catch (error) {
-      const known = error instanceof OpenPortError
-      const message = known ? error.message : 'Execution failed'
-      const code = known ? error.code : ErrorCodes.AGENT_EXECUTION_FAILED
-      const execution = this.store.saveExecution({
-        draft_id: draft.id,
-        app_id: draft.app_id,
-        idempotency_key: draft.idempotency_key,
-        status: 'failed',
-        result: null,
-        error: message
-      })
+    }
 
-      this.store.updateDraft(draft.id, { status: 'failed' })
+    let coordinated: { value: ExecutionOutcome; replayed: boolean; coordination: 'none' | 'process_local' | 'single_host_durable' }
+    if (draft.idempotency_key && this.durableActionExecutor) {
+      const durableInput = {
+        scopeKey: ctx.app.id + ':' + draft.idempotency_key,
+        requestFingerprint,
+        actionType: tool.name,
+        opaqueEffectEnvelope: JSON.stringify({ version: 1, actionType: tool.name, requestFingerprint })
+      }
+      const durable = await this.durableActionExecutor.execute(
+        durableInput,
+        async (effectContext) => {
+          const outcome = await executeOnce(effectContext)
+          if (!outcome.ok) throw outcome.error
+          return outcome
+        },
+        {
+          receiptComparableResult: (outcome) => outcome.ok
+            ? outcome.execution.result
+            : null
+        }
+      )
+      let value = durable.value
+      if (!value) {
+        let receiptReconciled = false
+        let receiptAuthentication: { algorithm: 'Ed25519'; keyId: string } | null = null
+        let existing = this.actionState.findExecutionByIdempotency(ctx.app.id, draft.idempotency_key)
+        let existingFingerprint = existing
+          ? this.actionState.getExecutionRequestFingerprint(existing.id)
+          : null
+        if (existing && existingFingerprint && existingFingerprint !== requestFingerprint) {
+          throw new OpenPortError(
+            409,
+            ErrorCodes.AGENT_IDEMPOTENCY_MISMATCH,
+            'Idempotency key is already bound to a different action payload'
+          )
+        }
+        if (!existing) {
+          const reconciliation = await this.durableActionExecutor.reconcileSucceededEffect(
+            durableInput,
+            durable.obligation
+          )
+          if (reconciliation) {
+            existing = this.actionState.saveExecution({
+              draft_id: draft.id,
+              app_id: draft.app_id,
+              idempotency_key: draft.idempotency_key,
+              status: 'success',
+              result: reconciliation.result,
+              error: null
+            }, requestFingerprint)
+            existingFingerprint = this.actionState.getExecutionRequestFingerprint(existing.id)
+            receiptReconciled = true
+            receiptAuthentication = reconciliation.authentication
+            await this.audit.log({
+              appId: ctx.app.id,
+              keyId: ctx.key.id,
+              actorUserId: ctx.actorUserId,
+              performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
+              action: 'agent.action.effect_receipt_reconciled',
+              status: 'success',
+              ip: ctx.ip,
+              userAgent: ctx.userAgent,
+              draftId: draft.id,
+              executionId: existing.id,
+              details: {
+                actionType: tool.name,
+                resultDigest: reconciliation.resultDigest,
+                receiptAuthenticated: receiptAuthentication !== null,
+                ...(receiptAuthentication ? { receiptKeyId: receiptAuthentication.keyId } : {})
+              }
+            })
+          }
+        }
+        if (!existing || (existingFingerprint && existingFingerprint !== requestFingerprint)) {
+          throw new OpenPortError(
+            409,
+            ErrorCodes.AGENT_PRECONDITION_FAILED,
+            'Durable action completed without a matching execution record',
+            { reason: 'durable_execution_record_missing', obligationId: durable.obligation.id }
+          )
+        }
+        this.actionState.updateDraft(draft.id, {
+          status: 'confirmed',
+          confirmed_by_user_id: opts.confirmedByUserId,
+          confirmed_at: draft.confirmed_at || new Date().toISOString(),
+          canceled_at: null
+        })
+        value = {
+          ok: true,
+          draftStatus: 'confirmed',
+          execution: {
+            ...existing,
+            replayed: true,
+            ...(receiptReconciled
+              ? {
+                  receipt_reconciled: true,
+                  receipt_authenticated: receiptAuthentication !== null,
+                  ...(receiptAuthentication ? { receipt_key_id: receiptAuthentication.keyId } : {})
+                }
+              : {})
+          }
+        }
+      }
+      coordinated = {
+        value,
+        replayed: durable.replayed || (value.ok && value.execution.replayed === true),
+        coordination: 'single_host_durable'
+      }
+    } else if (draft.idempotency_key) {
+      const local = await this.actionExecutionCoordinator.coordinate(
+        {
+          scopeKey: sha256JcsHex({ appId: ctx.app.id, idempotencyKey: draft.idempotency_key }),
+          requestFingerprint
+        },
+        executeOnce
+      )
+      coordinated = { ...local, coordination: 'process_local' }
+    } else {
+      coordinated = { value: await executeOnce(), replayed: false, coordination: 'none' }
+    }
 
+    if (!coordinated.value.ok) throw coordinated.value.error
+    if (coordinated.replayed) {
       await this.audit.log({
         appId: ctx.app.id,
         keyId: ctx.key.id,
         actorUserId: ctx.actorUserId,
         performedByUserId: opts.confirmedByUserId || ctx.actorUserId,
-        action: 'agent.action.execute',
-        status: 'failed',
-        code,
+        action: 'agent.action.idempotency_replay',
+        status: 'success',
+        code: ErrorCodes.AGENT_IDEMPOTENCY_REPLAY,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
         draftId: draft.id,
-        executionId: execution.id,
-        details: { actionType: tool.name }
+        executionId: String(coordinated.value.execution.id || ''),
+        details: { actionType: tool.name, coordination: coordinated.coordination }
       })
+      return {
+        draftStatus: coordinated.value.draftStatus,
+        execution: { ...coordinated.value.execution, replayed: true }
+      }
+    }
 
-      throw error
+    return {
+      draftStatus: coordinated.value.draftStatus,
+      execution: coordinated.value.execution
     }
   }
 

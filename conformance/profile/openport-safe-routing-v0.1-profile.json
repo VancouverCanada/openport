@@ -1,0 +1,70 @@
+{
+  "id": "openport-safe-routing-v0.1",
+  "name": "OpenPort Verifiable Safe Tool Routing Profile v0.1",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Executable reference profile for server-computed safe routing sets, ranker non-expansion, current-state revalidation, scoped route records, and privacy-minimized route evidence.",
+  "claimBoundary": "This profile validates the OpenPort reference routing contract. It does not certify model robustness, tool implementation safety, production hardening, or prompt-injection immunity.",
+  "requiredEndpoints": [
+    { "method": "POST", "path": "/api/agent/v1/intent" },
+    { "method": "POST", "path": "/api/agent/v1/context-risk" },
+    { "method": "POST", "path": "/api/agent/v1/routes" },
+    { "method": "POST", "path": "/api/agent/v1/routes/{id}/verify" }
+  ],
+  "checks": [
+    {
+      "id": "routing.safe_set.server_authority",
+      "level": "MUST",
+      "description": "The route service MUST intersect retrieved candidates with current server-side authorization, intent, context, and registered-tool state before accepting a proposal.",
+      "evidence": [
+        "eligible proposal accepted",
+        "intent-inconsistent delete/export candidates excluded",
+        "safe tool set is a subset of submitted candidates"
+      ]
+    },
+    {
+      "id": "routing.ranker.non_expansion",
+      "level": "MUST",
+      "description": "A proposed tool outside the current safe routing set MUST be rejected with agent.route_selection_outside_safe_set and MUST NOT create an accepted route decision.",
+      "evidence": [
+        "HTTP 403 response",
+        "stable outside-safe-set reason code",
+        "denied route audit",
+        "no accepted route record"
+      ]
+    },
+    {
+      "id": "routing.snapshot.current_state_revalidation",
+      "level": "MUST",
+      "description": "A route that becomes ineligible after current context or policy narrows MUST fail revalidation with agent.route_snapshot_stale.",
+      "evidence": [
+        "route accepted under initial trusted context",
+        "server-held context subsequently escalated",
+        "HTTP 409 revalidation response",
+        "stable stale-route reason code"
+      ]
+    },
+    {
+      "id": "routing.record.principal_isolation",
+      "level": "MUST",
+      "description": "Route records MUST be scoped to app, key, and actor; cross-key reuse MUST be indistinguishable from a missing route.",
+      "evidence": [
+        "HTTP 404 response under a different key",
+        "stable agent.route_not_found code",
+        "no route details disclosed"
+      ]
+    },
+    {
+      "id": "routing.audit.privacy_minimization",
+      "level": "MUST",
+      "description": "Route audit MUST retain structurally complete include/exclude evidence without storing raw request text or raw unknown candidate identifiers.",
+      "evidence": [
+        "one hashed evidence item per candidate",
+        "nonempty reason set per candidate",
+        "rawRequestStored=false",
+        "rawExcludedCandidateNamesStored=false"
+      ]
+    }
+  ]
+}

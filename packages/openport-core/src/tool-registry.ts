@@ -66,6 +66,7 @@ function selectTransaction(row: Record<string, unknown>, allowSensitiveFields: b
 export class AgentToolRegistry {
   private readonly readTools: AgentManifestTool[]
   private readonly actionTools: AgentActionTool[]
+  private readonly manifestByName = new Map<string, AgentManifestTool>()
   private readonly actionByName = new Map<string, AgentActionTool>()
 
   constructor(private readonly domain: DomainAdapter) {
@@ -134,7 +135,7 @@ export class AgentToolRegistry {
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { transaction: { type: 'object' } } },
-        execute: async (ctx, payload) => {
+        execute: async (ctx, payload, _deps, opts) => {
           const ledgerId = String(payload.ledgerId || payload.ledger_id || '').trim()
           if (!ledgerId) {
             throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'ledgerId required')
@@ -144,7 +145,7 @@ export class AgentToolRegistry {
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)
           ensureWorkspaceBoundary(ctx, { ledgerOrgId: toLedgerOrgId(ledgers, ledgerId), orgId: null })
 
-          const transaction = await this.domain.createTransaction(ctx.actorUserId, payload)
+          const transaction = await this.domain.createTransaction(ctx.actorUserId, payload, opts.effectContext)
           return { transaction }
         }
       },
@@ -165,7 +166,7 @@ export class AgentToolRegistry {
         http: { method: 'POST', path: '/api/agent/v1/actions' },
         inputSchema: { type: 'object', required: ['payload'], properties: { payload: { type: 'object' } } },
         outputSchema: { type: 'object', properties: { transaction: { type: 'object' } } },
-        execute: async (ctx, payload) => {
+        execute: async (ctx, payload, _deps, opts) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
@@ -180,7 +181,7 @@ export class AgentToolRegistry {
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)
           ensureWorkspaceBoundary(ctx, { ledgerOrgId: toLedgerOrgId(ledgers, existing.ledger_id), orgId: null })
 
-          const transaction = await this.domain.updateTransaction(ctx.actorUserId, transactionId, payload)
+          const transaction = await this.domain.updateTransaction(ctx.actorUserId, transactionId, payload, opts.effectContext)
           return { transaction }
         },
         computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
@@ -220,7 +221,7 @@ export class AgentToolRegistry {
             }
           }
         },
-        execute: async (ctx, payload) => {
+        execute: async (ctx, payload, _deps, opts) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
@@ -234,7 +235,7 @@ export class AgentToolRegistry {
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)
           ensureWorkspaceBoundary(ctx, { ledgerOrgId: toLedgerOrgId(ledgers, existing.ledger_id), orgId: null })
 
-          const deleted = await this.domain.softDeleteTransaction(ctx.actorUserId, transactionId)
+          const deleted = await this.domain.softDeleteTransaction(ctx.actorUserId, transactionId, opts.effectContext)
           return { deleted }
         },
         computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
@@ -273,7 +274,7 @@ export class AgentToolRegistry {
             }
           }
         },
-        execute: async (ctx, payload) => {
+        execute: async (ctx, payload, _deps, opts) => {
           const transactionId = resolveTransactionId(payload)
           if (!transactionId) {
             throw new OpenPortError(400, ErrorCodes.AGENT_ACTION_INVALID, 'transactionId required')
@@ -288,7 +289,7 @@ export class AgentToolRegistry {
           const ledgers = await this.domain.listLedgers(ctx.actorUserId)
           ensureWorkspaceBoundary(ctx, { ledgerOrgId: toLedgerOrgId(ledgers, existing.ledger_id), orgId: null })
 
-          const deleted = await this.domain.hardDeleteTransaction(ctx.actorUserId, transactionId)
+          const deleted = await this.domain.hardDeleteTransaction(ctx.actorUserId, transactionId, opts.effectContext)
           return { deleted }
         },
         computeStateWitness: async (ctx, payload) => buildTransactionStateWitness(ctx, payload, this.domain)
@@ -386,6 +387,10 @@ export class AgentToolRegistry {
       }
     ]
 
+    for (const tool of [...this.readTools, ...this.actionTools]) {
+      this.manifestByName.set(tool.name, tool)
+    }
+
     for (const tool of this.actionTools) {
       this.actionByName.set(tool.name, tool)
     }
@@ -415,6 +420,10 @@ export class AgentToolRegistry {
 
   getActionTool(name: string): AgentActionTool | null {
     return this.actionByName.get(name.trim()) || null
+  }
+
+  getManifestTool(name: string): AgentManifestTool | null {
+    return this.manifestByName.get(name.trim()) || null
   }
 
   presentTransaction(row: Record<string, unknown>, ctx: AgentRequestContext): { item: Record<string, unknown>; redactedFields: string[] } {

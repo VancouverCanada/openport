@@ -1,0 +1,64 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.5",
+  "name": "OpenPort Single-Host Durable HTTP Action Lifecycle Profile v0.5",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Executable public reference profile connecting the Fastify action route to durable draft/execution records, durable action obligations, stable receiver identifiers, and crash-reconciliation semantics.",
+  "claimBoundary": "This is a single-host SQLite/WAL reference profile with a synthetic receiver. Ambiguous-delivery retry is conditional on durable receiver-side deduplication of the stable effect identifier. The profile persists action payloads, does not persist all runtime subsystems, and does not establish cross-store atomicity, general exactly-once execution, arbitrary-handler correctness, multi-host safety, distributed consensus, production readiness, or private Accentrust architecture.",
+  "requiredInterfaces": [
+    "AgentActionStateStore",
+    "SqliteAgentActionStateStore",
+    "SingleHostDurableActionExecutor",
+    "SqliteDurableActionStore.claimAction",
+    "DomainEffectContext.effectId",
+    "POST /api/agent/v1/actions"
+  ],
+  "checks": [
+    {
+      "id": "durable_http.draft_fingerprint_binding",
+      "level": "MUST",
+      "description": "One application-scoped idempotency key MUST bind one persisted action fingerprint; equivalent submissions MUST reuse the draft and changed payload reuse MUST fail closed."
+    },
+    {
+      "id": "durable_http.success_only_replay",
+      "level": "MUST",
+      "description": "Only a successful persisted execution MAY satisfy an idempotency replay; failed attempts MUST remain retryable or reviewable according to the obligation state."
+    },
+    {
+      "id": "durable_http.runtime_reconstruction",
+      "level": "MUST",
+      "description": "Persisted draft, execution, and obligation state MUST survive reconstruction of their adapters and the public HTTP runtime."
+    },
+    {
+      "id": "durable_http.stable_effect_context",
+      "level": "MUST",
+      "description": "A durable action attempt MUST pass the obligation's stable effect identifier to the domain receiver."
+    },
+    {
+      "id": "durable_http.ambiguous_delivery_boundary",
+      "level": "MUST",
+      "description": "Ambiguous delivery MUST enter manual review by default; automatic retry MAY be enabled only under an explicit stable-identifier receiver contract."
+    },
+    {
+      "id": "durable_http.postcommit_reconciliation",
+      "level": "MUST",
+      "description": "If a successful execution record committed before response loss, retry MUST reconcile that success and complete the obligation without invoking the receiver again."
+    },
+    {
+      "id": "durable_http.concurrent_same_key",
+      "level": "MUST",
+      "description": "Concurrent equivalent same-key requests MUST converge to one durable draft, one successful execution, and one stable-identifier receiver effect under the declared receiver contract."
+    },
+    {
+      "id": "durable_http.non_idempotent_negative_control",
+      "level": "MUST",
+      "description": "The conformance evidence MUST retain a negative control showing that unsafe retry against a non-idempotent receiver can duplicate effects."
+    },
+    {
+      "id": "durable_http.persisted_payload_protection",
+      "level": "MUST",
+      "description": "Deployments MUST apply access control, encryption, retention, and deletion controls appropriate to persisted action payloads and policy snapshots."
+    }
+  ]
+}

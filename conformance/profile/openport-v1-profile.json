@@ -2,8 +2,7 @@
   "id": "openport-v1-core",
   "name": "OpenPort v1 Core Conformance Profile",
   "stewards": [
-    "Accentrust Inc.",
-    "Sebastian Zhu"
+    "Accentrust Inc."
   ],
   "requiredEndpoints": [
     { "method": "POST", "path": "/api/agent/v1/intent" },
@@ -41,6 +40,18 @@
     {
       "id": "openport-abuse-resistance-v0.1",
       "description": "Abuse-resistance profile covering revoked-token replay, cross-tenant input misuse, high-risk action misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete requests."
+    },
+    {
+      "id": "openport-safe-routing-v0.1",
+      "description": "Verifiable safe-routing profile covering server-computed eligibility, ranker non-expansion, current-state revalidation, app/key/actor route isolation, and privacy-minimized route evidence."
+    },
+    {
+      "id": "openport-adaptive-least-privilege-v0.1",
+      "description": "Adaptive least-privilege profile covering capability intersection, monotone child attenuation, current-state revalidation, atomic budget consumption, principal isolation, and privacy-minimized lease evidence."
+    },
+    {
+      "id": "openport-adaptive-least-privilege-v0.2",
+      "description": "Optional single-host durable lease profile covering transactional outbox persistence, uncertain-commit replay, idempotent audit recovery, runtime reconstruction, and SQLite-backed concurrent budget conservation."
     }
   ]
 }

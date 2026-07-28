@@ -26,8 +26,30 @@ function isZodLikeError(error: unknown): error is { issues: Array<{ code: string
   })
 }
 
+function isOpenPortLikeError(error: unknown): error is OpenPortError {
+  if (error instanceof OpenPortError) return true
+  if (!error || typeof error !== 'object') return false
+  const row = error as {
+    name?: unknown
+    statusCode?: unknown
+    code?: unknown
+    message?: unknown
+    details?: unknown
+  }
+  return row.name === 'OpenPortError' &&
+    Number.isInteger(row.statusCode) &&
+    Number(row.statusCode) >= 400 &&
+    Number(row.statusCode) <= 599 &&
+    typeof row.code === 'string' &&
+    /^[a-z][a-z0-9_.-]{1,199}$/.test(row.code) &&
+    typeof row.message === 'string' &&
+    (row.details === undefined || (
+      row.details !== null && typeof row.details === 'object' && !Array.isArray(row.details)
+    ))
+}
+
 export function toErrorResponse(error: unknown): { statusCode: number; payload: { ok: false; code: string; message: string; details?: Record<string, unknown> } } {
-  if (error instanceof OpenPortError) {
+  if (isOpenPortLikeError(error)) {
     return {
       statusCode: error.statusCode,
       payload: {

@@ -1,0 +1,68 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.1",
+  "name": "OpenPort Adaptive Least-Privilege Capability Lease Profile v0.1",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Executable reference profile for bounded, short-lived, principal-bound capability leases with monotone child attenuation, current-state revalidation, atomic budget consumption, and privacy-minimized audit evidence.",
+  "claimBoundary": "This profile validates the OpenPort reference capability-lease contract. It does not disclose or certify private production policy, customer configuration, infrastructure topology, model robustness, or prompt-injection immunity.",
+  "requiredEndpoints": [
+    { "method": "POST", "path": "/api/agent/v1/capability-leases" },
+    { "method": "GET", "path": "/api/agent/v1/capability-leases/{id}" },
+    { "method": "POST", "path": "/api/agent/v1/capability-leases/{id}/revoke" }
+  ],
+  "checks": [
+    {
+      "id": "lease.compilation.intersection",
+      "level": "MUST",
+      "description": "A lease MUST be compiled by intersecting current static authorization with applicable intent, context, route, and parent-lease bounds; an omitted or broader request MUST NOT expand authority.",
+      "evidence": [
+        "manifest filtered to leased tools and resources",
+        "response fields projected to the allowed field set",
+        "tool, resource, field, row, amount, and mode violations denied"
+      ]
+    },
+    {
+      "id": "lease.attenuation.monotone",
+      "level": "MUST",
+      "description": "A child lease MUST be no broader than its parent across tools, resources, fields, rows, effect amount, effect mode, calls, cost, and expiry.",
+      "evidence": [
+        "broader child request rejected or narrowed",
+        "child expiry no later than parent expiry",
+        "parent invalidation blocks child use"
+      ]
+    },
+    {
+      "id": "lease.state.current_revalidation",
+      "level": "MUST",
+      "description": "Every security-relevant use MUST revalidate current principal binding, expiry, revocation, static policy version, and applicable upstream state before an effect is committed.",
+      "evidence": [
+        "revoked lease denied before execution",
+        "static policy change returns agent.lease_policy_stale",
+        "context change returns agent.lease_policy_stale",
+        "cross-key lookup is indistinguishable from a missing lease"
+      ]
+    },
+    {
+      "id": "lease.budget.atomic_consumption",
+      "level": "MUST",
+      "description": "Call and cost budgets MUST be checked and consumed atomically; validation-only preflight MUST NOT consume budget, and idempotent replay MUST NOT double-spend it.",
+      "evidence": [
+        "sixteen concurrent requests against a one-call lease yield exactly one success",
+        "remaining requests return agent.lease_call_budget",
+        "preflight validation leaves the budget unchanged",
+        "accepted draft consumes exactly once"
+      ]
+    },
+    {
+      "id": "lease.audit.privacy_minimization",
+      "level": "MUST",
+      "description": "Lease audit evidence MUST be structurally complete while omitting raw task text, private policy expressions, customer data, and internal architecture identifiers.",
+      "evidence": [
+        "hashed policy and upstream bindings",
+        "dimension counts and stable reason codes",
+        "no raw task, policy, credential, or topology material"
+      ]
+    }
+  ]
+}

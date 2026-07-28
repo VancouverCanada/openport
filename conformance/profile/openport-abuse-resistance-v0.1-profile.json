@@ -2,8 +2,7 @@
   "id": "openport-abuse-resistance-v0.1",
   "name": "OpenPort Abuse-Resistance Profile v0.1",
   "stewards": [
-    "Accentrust Inc.",
-    "Sebastian Zhu"
+    "Accentrust Inc."
   ],
   "summary": "Misuse-path regression profile for checking that OpenPort constrains agent side effects when tokens, payloads, retries, malformed inputs, adapter failures, or untrusted instruction-like requests are unsafe.",
   "threatModel": {

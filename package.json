@@ -56,6 +56,13 @@
     "conformance:remote": "node scripts/run-conformance.mjs --remote",
     "conformance:security": "npm run build:core && vitest run test/security-conformance-v02.test.ts",
     "conformance:abuse-resistance": "npm run build:core && vitest run test/abuse-resistance.test.ts",
+    "conformance:routing": "npm run build:core && vitest run test/route-runtime.test.ts",
+    "conformance:leases": "npm run build:core && vitest run test/capability-lease-runtime.test.ts",
+    "conformance:leases:durable": "npm run build:core && vitest run test/capability-lease-durable-runtime.test.ts",
+    "conformance:leases:action": "npm run build:core && vitest run test/action-execution-coordinator.test.ts",
+    "conformance:leases:durable-action": "npm run build:core && vitest run test/durable-action-obligation.test.ts",
+    "conformance:leases:http-durable": "npm run build:core && vitest run test/sqlite-agent-action-state-store.test.ts test/durable-http-action-runtime.test.ts",
+    "conformance:leases:all": "npm run build:core && vitest run test/capability-lease-runtime.test.ts test/capability-lease-durable-runtime.test.ts test/action-execution-coordinator.test.ts test/durable-action-obligation.test.ts test/sqlite-agent-action-state-store.test.ts test/durable-http-action-runtime.test.ts",
     "safety": "bash scripts/safety-check.sh",
     "gate": "bash scripts/release-gate.sh",
     "release:prepare": "bash scripts/prepare-release.sh"
@@ -71,7 +78,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "canonicalize": "^2.1.0",
-    "fastify": "^5.2.1",
+    "fastify": "^5.10.0",
     "pg": "^8.18.0",
     "zod": "^3.24.2"
   },
@@ -79,9 +86,19 @@
     "@apidevtools/swagger-parser": "^12.1.0",
     "@types/node": "^22.13.8",
     "@types/pg": "^8.16.0",
-    "tsx": "^4.19.3",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.2",
-    "vitest": "^3.0.8",
-    "yaml": "^2.8.2"
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
+  },
+  "overrides": {
+    "ajv": "^8.20.0",
+    "esbuild": "^0.28.1",
+    "fast-uri": "^3.1.3",
+    "js-yaml": "^4.3.0",
+    "picomatch": "^4.0.5",
+    "postcss": "^8.5.19",
+    "rollup": "^4.62.2",
+    "vite": "^7.3.6"
   }
 }

@@ -1,0 +1,75 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.7",
+  "name": "OpenPort Authenticated Effect-Receipt Reconciliation Profile v0.7",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Optional public reference profile that authenticates a receiver-originated effect receipt with Ed25519 over RFC 8785 canonical bytes before conditionally reconstructing a missing successful HTTP execution record.",
+  "claimBoundary": "This profile verifies a public receipt binding with server-pinned Ed25519 public keys. It does not prove the cryptographic primitives, distribute or protect keys, define certificates or online revocation, establish freshness or compromise recovery, make separate stores atomic, guarantee general exactly-once effects, provide multi-host or Byzantine safety, validate arbitrary handlers, establish production readiness, or describe private Accentrust architecture.",
+  "standards": [
+    "RFC 8032: Edwards-Curve Digital Signature Algorithm (EdDSA)",
+    "RFC 8785: JSON Canonicalization Scheme (JCS)"
+  ],
+  "requiredInterfaces": [
+    "SingleHostDurableActionExecutor.reconcileSucceededEffect",
+    "SingleHostDurableActionExecutorOptions.effectReceiptAuthentication",
+    "DurableEffectReceipt.authentication",
+    "DurableEffectReceiptLookup",
+    "DomainEffectContext.obligationId",
+    "DomainEffectContext.effectId",
+    "AgentActionStateStore.saveExecution",
+    "POST /api/agent/v1/actions"
+  ],
+  "checks": [
+    {
+      "id": "authenticated_receipt.explicit_activation",
+      "level": "MUST",
+      "description": "Authenticated reconciliation MUST activate only from a nonempty server-configured trust set; callers, model output, and receipt metadata MUST NOT add keys to that set."
+    },
+    {
+      "id": "authenticated_receipt.ed25519_spki_keys",
+      "level": "MUST",
+      "description": "The trust set MUST contain a bounded number of bounded identifiers mapped only to Ed25519 SubjectPublicKeyInfo public-key PEM values; private-key or non-Ed25519 material MUST be rejected at configuration time."
+    },
+    {
+      "id": "authenticated_receipt.canonical_signed_binding",
+      "level": "MUST",
+      "description": "The verifier MUST reconstruct and RFC 8785-canonicalize the version, purpose, key identifier, obligation identifier, effect identifier, request fingerprint, action type, and result digest before Ed25519 verification."
+    },
+    {
+      "id": "authenticated_receipt.strict_signature_encoding",
+      "level": "MUST",
+      "description": "The authentication envelope MUST use algorithm Ed25519 and an unpadded canonical base64url encoding of exactly 64 signature bytes."
+    },
+    {
+      "id": "authenticated_receipt.complete_relevance_check",
+      "level": "MUST",
+      "description": "A valid signature MUST NOT substitute for relevance: obligation, effect, request, action, receipt digest, recomputed result digest, and terminal obligation digest MUST still match exactly."
+    },
+    {
+      "id": "authenticated_receipt.fail_closed_authentication",
+      "level": "MUST",
+      "description": "Missing authentication, unsupported algorithms, malformed or invalid signatures, and unknown or removed keys MUST return durable_effect_receipt_authentication_failed without reconstructing success or invoking the effect handler."
+    },
+    {
+      "id": "authenticated_receipt.cross_effect_replay",
+      "level": "MUST",
+      "description": "A validly signed receipt bound to another obligation or effect MUST return durable_effect_receipt_invalid and MUST NOT reconstruct the target execution."
+    },
+    {
+      "id": "authenticated_receipt.rotation",
+      "level": "MUST",
+      "description": "An explicit overlapping trust set MAY accept old and new signing keys during rotation; removing the old key MUST cause old-key receipts to fail closed without network key discovery."
+    },
+    {
+      "id": "authenticated_receipt.audit_visibility",
+      "level": "MUST",
+      "description": "Successful reconstruction MUST report whether the receipt was authenticated and, when authenticated, the accepted public key identifier in the response and reconciliation audit metadata."
+    },
+    {
+      "id": "authenticated_receipt.v06_compatibility",
+      "level": "MAY",
+      "description": "When no trust set is configured, an implementation MAY retain the v0.6 trusted-lookup behavior but MUST identify any resulting reconstruction as unauthenticated."
+    }
+  ]
+}

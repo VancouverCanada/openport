@@ -1,0 +1,65 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.6",
+  "name": "OpenPort Conditional Effect-Receipt Reconciliation Profile v0.6",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Optional public reference profile for reconstructing a missing successful HTTP execution record from a trusted, independently queryable, digest-bound receiver receipt without reapplying the effect.",
+  "claimBoundary": "This is conditional single-host reconciliation across separately transactional SQLite/WAL stores, not a distributed transaction. The trusted receipt lookup must be configured server-side and authenticated according to deployment policy. The profile does not establish cryptographic receiver identity, cross-store atomicity, general exactly-once execution, arbitrary-handler correctness, filesystem-loss recovery, multi-host safety, Byzantine resistance, production readiness, or private Accentrust architecture.",
+  "requiredInterfaces": [
+    "SingleHostDurableActionExecutor.reconcileSucceededEffect",
+    "DurableEffectReceiptLookup",
+    "DomainEffectContext.effectId",
+    "DomainEffectContext.requestFingerprint",
+    "DomainEffectContext.actionType",
+    "AgentActionStateStore.saveExecution",
+    "POST /api/agent/v1/actions"
+  ],
+  "checks": [
+    {
+      "id": "effect_receipt.server_side_trust_boundary",
+      "level": "MUST",
+      "description": "The receipt lookup MUST be selected and configured by the server; request callers and model output MUST NOT supply or replace receipt evidence."
+    },
+    {
+      "id": "effect_receipt.terminal_obligation_only",
+      "level": "MUST",
+      "description": "Reconstruction MUST be attempted only for an obligation already durably marked succeeded and only after the normal successful execution lookup returns no matching record."
+    },
+    {
+      "id": "effect_receipt.complete_binding",
+      "level": "MUST",
+      "description": "Scope-key digest, effect identifier, request fingerprint, action type, recomputed canonical result digest, receipt digest, and terminal obligation result digest MUST all match exactly."
+    },
+    {
+      "id": "effect_receipt.no_handler_reexecution",
+      "level": "MUST",
+      "description": "Verified reconstruction MUST write through the original idempotency-bound action-state transaction and MUST NOT invoke the domain-effect handler."
+    },
+    {
+      "id": "effect_receipt.fail_closed_absence",
+      "level": "MUST",
+      "description": "An unconfigured lookup or missing receipt MUST preserve durable_execution_record_missing and MUST NOT manufacture a successful execution."
+    },
+    {
+      "id": "effect_receipt.fail_closed_unavailability",
+      "level": "MUST",
+      "description": "Lookup failure MUST return durable_effect_receipt_unavailable without changing action, obligation, or receiver state."
+    },
+    {
+      "id": "effect_receipt.fail_closed_invalidity",
+      "level": "MUST",
+      "description": "Malformed, forged, stale, or mismatched receipt or obligation evidence MUST return durable_effect_receipt_invalid and MUST NOT write a successful execution."
+    },
+    {
+      "id": "effect_receipt.concurrent_convergence",
+      "level": "MUST",
+      "description": "Concurrent equivalent reconciliation attempts MUST converge to one successful execution record and MUST NOT add receiver effects."
+    },
+    {
+      "id": "effect_receipt.audit_visibility",
+      "level": "MUST",
+      "description": "A successful receipt-based reconstruction MUST emit a distinct reconciliation audit event correlated with the draft and reconstructed execution."
+    }
+  ]
+}

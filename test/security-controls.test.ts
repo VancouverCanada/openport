@@ -64,7 +64,7 @@ describe('security controls', () => {
         url: '/api/agent/v1/manifest',
         headers: {
           ...bearer(token),
-          'x-forwarded-for': '10.21.12.5'
+          'x-forwarded-for': '192.0.2.5'
         }
       })
 

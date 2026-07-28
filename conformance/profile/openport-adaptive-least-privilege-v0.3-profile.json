@@ -1,0 +1,43 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.3",
+  "name": "OpenPort Process-Local Action Execution Coordination Profile v0.3",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Executable reference profile for application-scoped, request-fingerprint-bound single-flight coordination of retry-equivalent action executions within one runtime process.",
+  "claimBoundary": "This profile closes an evaluated in-process check-before-effect race only. It is not crash-safe, durable, multi-host, exactly-once, or evidence about private Accentrust production architecture.",
+  "requiredInterfaces": [
+    "ActionExecutionCoordinator.coordinate",
+    "ProcessLocalActionExecutionCoordinator"
+  ],
+  "checks": [
+    {
+      "id": "action_execution.concurrent_equivalent_single_flight",
+      "level": "MUST",
+      "description": "Concurrent executions with one application-scoped idempotency key and one action fingerprint MUST share one in-flight execution in the process-local profile.",
+      "evidence": [
+        "sixteen concurrent equivalent calls invoke the protected callback once",
+        "fifteen callers are labeled as replays",
+        "all callers observe the same synthetic effect identifier"
+      ]
+    },
+    {
+      "id": "action_execution.concurrent_fingerprint_mismatch",
+      "level": "MUST",
+      "description": "Reuse of an in-flight scoped key with a different action fingerprint MUST fail closed.",
+      "evidence": [
+        "mismatched concurrent call returns agent.idempotency_mismatch",
+        "mismatched callback is not executed"
+      ]
+    },
+    {
+      "id": "action_execution.failed_claim_release",
+      "level": "MUST",
+      "description": "A failed in-flight callback MUST release its process-local claim so an explicit later retry can run under the same fingerprint.",
+      "evidence": [
+        "first callback failure is returned",
+        "later equivalent retry executes as a new leader"
+      ]
+    }
+  ]
+}

@@ -230,13 +230,22 @@ export type ListTransactionsInput = {
   pageSize?: number
 }
 
+export type DomainEffectContext = {
+  obligationId: string
+  effectId: string
+  requestFingerprint: string
+  actionType: string
+  attempt: number
+  reclaimed: boolean
+}
+
 export type DomainAdapter = {
   listLedgers: (actorUserId: string) => Promise<Ledger[]>
   listTransactions: (actorUserId: string, input: ListTransactionsInput) => Promise<{ items: Transaction[]; total: number; page: number; pageSize: number; hasMore: boolean }>
-  createTransaction: (actorUserId: string, payload: Record<string, unknown>) => Promise<Transaction>
-  updateTransaction: (actorUserId: string, transactionId: string, payload: Record<string, unknown>) => Promise<Transaction>
-  softDeleteTransaction: (actorUserId: string, transactionId: string) => Promise<{ id: string; deleted: true }>
-  hardDeleteTransaction: (actorUserId: string, transactionId: string) => Promise<{ id: string; deleted: true; hard: true }>
+  createTransaction: (actorUserId: string, payload: Record<string, unknown>, effectContext?: DomainEffectContext) => Promise<Transaction>
+  updateTransaction: (actorUserId: string, transactionId: string, payload: Record<string, unknown>, effectContext?: DomainEffectContext) => Promise<Transaction>
+  softDeleteTransaction: (actorUserId: string, transactionId: string, effectContext?: DomainEffectContext) => Promise<{ id: string; deleted: true }>
+  hardDeleteTransaction: (actorUserId: string, transactionId: string, effectContext?: DomainEffectContext) => Promise<{ id: string; deleted: true; hard: true }>
   getTransactionById: (actorUserId: string, transactionId: string) => Promise<Transaction | null>
   close?: () => Promise<void>
 }
@@ -257,11 +266,66 @@ export type AgentManifestTool = {
   outputSchema: Record<string, unknown>
 }
 
+export type RouteCandidateEvidence = {
+  candidate_hash: string
+  status: 'included' | 'excluded'
+  reasons: string[]
+}
+
+export type AgentRouteDecision = {
+  id: string
+  app_id: string
+  key_id: string
+  actor_user_id: string
+  request_id: string | null
+  known_candidate_names: string[]
+  candidate_evidence: RouteCandidateEvidence[]
+  safe_tool_names: string[]
+  safe_set_hash: string
+  selected_tool_name: string | null
+  selected_tool_envelope_hash: string | null
+  intent_certificate_id: string | null
+  context_risk_snapshot_id: string | null
+  session_id: string | null
+  status: 'ready' | 'selected' | 'clarify'
+  created_at: string
+  expires_at: string
+}
+
+export type CapabilityLeaseEffectMode = 'read' | 'draft' | 'preflight' | 'execute'
+
+export type AgentCapabilityLease = {
+  id: string
+  app_id: string
+  key_id: string
+  actor_user_id: string
+  session_id: string
+  parent_lease_id: string | null
+  intent_certificate_id: string | null
+  context_risk_snapshot_id: string | null
+  route_decision_id: string | null
+  policy_version: string
+  allowed_tool_names: string[]
+  allowed_resource_ids: string[]
+  allowed_fields: string[]
+  max_rows: number
+  max_effect_amount: number
+  effect_mode_ceiling: CapabilityLeaseEffectMode
+  total_cost_units: number
+  remaining_cost_units: number
+  total_calls: number
+  remaining_calls: number
+  version: number
+  created_at: string
+  expires_at: string
+  revoked_at: string | null
+}
+
 export type AgentActionTool = AgentManifestTool & {
   kind: 'action'
   computeImpact?: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }) => Promise<Record<string, unknown>>
   computeStateWitness?: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }) => Promise<Record<string, unknown> | null>
-  execute: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }, opts: { confirmedByUserId: string | null }) => Promise<Record<string, unknown>>
+  execute: (ctx: AgentRequestContext, payload: Record<string, unknown>, deps: { domain: DomainAdapter }, opts: { confirmedByUserId: string | null; effectContext?: DomainEffectContext }) => Promise<Record<string, unknown>>
 }
 
 export type StepUpSession = {

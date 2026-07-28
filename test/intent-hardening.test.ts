@@ -133,6 +133,8 @@ describe('intent hardening', () => {
       removedPreflights: 1,
       removedIntentCertificates: 2,
       removedContextRiskSnapshots: 0,
+      removedRouteDecisions: 0,
+      removedCapabilityLeases: 0,
       removedStepUpSessions: 1,
       removedStepUpTokens: 1
     })

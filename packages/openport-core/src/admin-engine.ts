@@ -2,6 +2,7 @@ import { AuditService } from './audit.js'
 import { ErrorCodes } from './error-codes.js'
 import { OpenPortError } from './errors.js'
 import { AgentEngine } from './agent-engine.js'
+import type { AgentActionStateStore } from './agent-action-state-store.js'
 import { InMemoryStore } from './store.js'
 import { AgentToolRegistry } from './tool-registry.js'
 import type { AgentApp, AgentAutoExecute, AgentPolicy, AgentRequestContext, DomainAdapter } from './types.js'
@@ -34,7 +35,8 @@ export class AdminEngine {
     private readonly domain: DomainAdapter,
     private readonly tools: AgentToolRegistry,
     private readonly agent: AgentEngine,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly actionState: AgentActionStateStore = store
   ) {}
 
   listApps(): { items: Array<AgentApp & { keys: unknown[] }> } {
@@ -212,13 +214,14 @@ export class AdminEngine {
     if (app.status !== 'revoked') {
       throw new OpenPortError(400, ErrorCodes.COMMON_VALIDATION, 'Only disabled integrations can be permanently deleted')
     }
-    const pendingDraftCount = this.store.listDrafts({ appId, status: 'draft' }).length
+    const pendingDraftCount = this.actionState.listDrafts({ appId, status: 'draft' }).length
     if (pendingDraftCount > 0) {
       throw new OpenPortError(400, ErrorCodes.COMMON_VALIDATION, 'Cannot permanently delete integration with pending drafts')
     }
 
     const ok = this.store.deleteApp(appId)
     if (!ok) throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app not found')
+    this.actionState.deleteActionsForApp(appId)
 
     void this.audit.log({
       appId: app.id,
@@ -351,7 +354,7 @@ export class AdminEngine {
   }
 
   listDrafts(query?: { appId?: string; status?: 'draft' | 'confirmed' | 'canceled' | 'failed' }): Record<string, unknown> {
-    const rows = this.store.listDrafts({ appId: query?.appId, status: query?.status })
+    const rows = this.actionState.listDrafts({ appId: query?.appId, status: query?.status })
     return {
       items: rows.map((row) => ({
         id: row.id,
@@ -364,23 +367,23 @@ export class AdminEngine {
         updated_at: row.updated_at,
         confirmed_at: row.confirmed_at,
         canceled_at: row.canceled_at,
-        execution: this.store.getLatestExecutionForDraft(row.id)
+        execution: this.actionState.getLatestExecutionForDraft(row.id)
       }))
     }
   }
 
   getDraft(draftId: string): Record<string, unknown> {
-    const draft = this.store.getDraft(draftId)
+    const draft = this.actionState.getDraft(draftId)
     if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
 
     return {
       draft,
-      execution: this.store.getLatestExecutionForDraft(draft.id)
+      execution: this.actionState.getLatestExecutionForDraft(draft.id)
     }
   }
 
   async approveDraft(userId: string, draftId: string, note?: string): Promise<Record<string, unknown>> {
-    const draft = this.store.getDraft(draftId)
+    const draft = this.actionState.getDraft(draftId)
     if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     if (draft.status !== 'draft') {
       throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
@@ -392,7 +395,7 @@ export class AdminEngine {
       throw new OpenPortError(404, ErrorCodes.AGENT_NOT_FOUND, 'Agent app or key missing')
     }
 
-    this.store.updateDraft(draft.id, {
+    this.actionState.updateDraft(draft.id, {
       status: 'confirmed',
       confirmed_by_user_id: userId,
       confirmed_at: nowIso()
@@ -423,13 +426,13 @@ export class AdminEngine {
   }
 
   rejectDraft(userId: string, draftId: string, note?: string): Record<string, unknown> {
-    const draft = this.store.getDraft(draftId)
+    const draft = this.actionState.getDraft(draftId)
     if (!draft) throw new OpenPortError(404, ErrorCodes.AGENT_DRAFT_NOT_FOUND, 'Draft not found')
     if (draft.status !== 'draft') {
       throw new OpenPortError(400, ErrorCodes.AGENT_DRAFT_ALREADY_FINAL, 'Draft is not pending')
     }
 
-    this.store.updateDraft(draft.id, {
+    this.actionState.updateDraft(draft.id, {
       status: 'canceled',
       canceled_at: nowIso()
     })
@@ -445,7 +448,7 @@ export class AdminEngine {
       details: { note: note || null }
     })
 
-    return { ok: true, draft: this.store.getDraft(draft.id) }
+    return { ok: true, draft: this.actionState.getDraft(draft.id) }
   }
 
   listAudit(): Record<string, unknown> {

@@ -2,8 +2,7 @@
   "id": "openport-security-v0.2",
   "name": "OpenPort Security Conformance Profile v0.2",
   "stewards": [
-    "Accentrust Inc.",
-    "Sebastian Zhu"
+    "Accentrust Inc."
   ],
   "summary": "Executable security profile for high-value OpenPort runtime invariants that were previously treated as partial or future validation targets.",
   "requiredEndpoints": [

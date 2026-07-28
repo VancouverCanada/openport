@@ -27,7 +27,8 @@ const listTransactionsSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
-  pageSize: z.coerce.number().int().positive().optional()
+  pageSize: z.coerce.number().int().positive().optional(),
+  capabilityLeaseId: z.string().optional()
 })
 
 const intentClassSchema = z.enum(['read', 'summarize', 'transform', 'create', 'update', 'delete', 'export', 'delegate', 'admin', 'unknown'])
@@ -47,7 +48,8 @@ const intentBodySchema = z.object({
 const manifestQuerySchema = z.object({
   intentCertificateId: z.string().optional(),
   contextRiskSnapshotId: z.string().optional(),
-  sessionId: z.string().optional()
+  sessionId: z.string().optional(),
+  capabilityLeaseId: z.string().optional()
 })
 
 const contextSourceLabelSchema = z.enum([
@@ -98,7 +100,8 @@ const actionBodySchema = z.object({
   stateWitnessHash: z.string().optional(),
   intentCertificateId: z.string().optional(),
   contextRiskSnapshotId: z.string().optional(),
-  sessionId: z.string().optional()
+  sessionId: z.string().optional(),
+  capabilityLeaseId: z.string().optional()
 }).superRefine((value, ctx) => {
   const hasPayload = value.payload !== undefined
   const hasPreflightId = Boolean(value.preflightId && value.preflightId.trim())
@@ -112,7 +115,43 @@ const preflightBodySchema = z.object({
   payload: z.record(z.unknown()),
   intentCertificateId: z.string().optional(),
   contextRiskSnapshotId: z.string().optional(),
-  sessionId: z.string().optional()
+  sessionId: z.string().optional(),
+  capabilityLeaseId: z.string().optional()
+})
+
+const routeBodySchema = z.object({
+  candidates: z.array(z.object({
+    name: z.string().min(1).max(200),
+    score: z.number().finite().optional()
+  })).min(1).max(100),
+  proposedToolName: z.string().min(1).max(200).optional(),
+  requestId: z.string().max(200).optional(),
+  intentCertificateId: z.string().optional(),
+  contextRiskSnapshotId: z.string().optional(),
+  sessionId: z.string().optional(),
+  expiresInSeconds: z.number().int().min(10).max(120).optional()
+})
+
+const routeVerifyBodySchema = z.object({
+  proposedToolName: z.string().min(1).max(200).optional()
+})
+
+const capabilityLeaseBodySchema = z.object({
+  sessionId: z.string().min(1).max(200),
+  allowedTools: z.array(z.string().min(1).max(200)).min(1).max(100),
+  allowedResourceIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+  allowedFields: z.array(z.string().min(1).max(100)).max(200).optional(),
+  maxRows: z.number().int().min(0).max(5000).optional(),
+  maxEffectAmount: z.number().min(0).max(1_000_000_000).optional(),
+  maxCostUnits: z.number().min(0).max(1000).optional(),
+  maxCalls: z.number().int().min(1).max(100).optional(),
+  effectModeCeiling: z.enum(['read', 'draft', 'preflight', 'execute']).optional(),
+  expiresInSeconds: z.number().int().min(10).max(3600).optional(),
+  parentLeaseId: z.string().optional(),
+  intentCertificateId: z.string().optional(),
+  contextRiskSnapshotId: z.string().optional(),
+  routeDecisionId: z.string().optional(),
+  requestId: z.string().max(200).optional()
 })
 
 export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): FastifyInstance {
@@ -158,10 +197,55 @@ export function buildApp(runtime: OpenPortRuntime = createOpenPortRuntime()): Fa
     })
   })
 
+  app.post('/api/agent/v1/capability-leases', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const parsed = capabilityLeaseBodySchema.parse(request.body)
+      const data = await runtime.capabilityLease.createLease(ctx, parsed)
+      return success('common.success', data)
+    })
+  })
+
+  app.get('/api/agent/v1/capability-leases/:id', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const params = z.object({ id: z.string().min(1) }).parse(request.params)
+      return success('common.success', runtime.capabilityLease.getPublicLease(ctx, params.id))
+    })
+  })
+
+  app.post('/api/agent/v1/capability-leases/:id/revoke', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const params = z.object({ id: z.string().min(1) }).parse(request.params)
+      return success('common.success', await runtime.capabilityLease.revokeLease(ctx, params.id))
+    })
+  })
+
+  app.post('/api/agent/v1/routes', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const parsed = routeBodySchema.parse(request.body)
+      const data = await runtime.route.createRoute(ctx, parsed)
+      return success('common.success', data)
+    })
+  })
+
+  app.post('/api/agent/v1/routes/:id/verify', async (request, reply) => {
+    return handle(reply, async () => {
+      const ctx = getAgentContext(request, runtime)
+      const params = z.object({ id: z.string().min(1) }).parse(request.params)
+      const parsed = routeVerifyBodySchema.parse(request.body || {})
+      const data = await runtime.route.verifyRoute(ctx, params.id, parsed.proposedToolName)
+      return success('common.success', data)
+    })
+  })
+
   app.get('/api/agent/v1/ledgers', async (request, reply) => {
     return handle(reply, async () => {
       const ctx = getAgentContext(request, runtime)
-      const data = await runtime.agent.listLedgers(ctx)
+      const query = z.object({ capabilityLeaseId: z.string().optional() }).parse(request.query)
+      const data = await runtime.agent.listLedgers(ctx, query)
       return success('common.success', data)
     })
   })

@@ -1,0 +1,54 @@
+{
+  "id": "openport-adaptive-least-privilege-v0.4",
+  "name": "OpenPort Single-Host Durable Action Obligation Profile v0.4",
+  "stewards": [
+    "Accentrust Inc."
+  ],
+  "summary": "Executable public reference profile for crash-recoverable single-host action obligations, stable effect identifiers, leased worker claims, stale-claim fencing, compensation states, and digest-chained transitions.",
+  "claimBoundary": "This profile is a single-host SQLite/WAL reference state machine. It requires an idempotent effect receiver for ambiguous-delivery recovery and does not establish general exactly-once execution, distributed consensus, multi-host safety, automatic compensation correctness, or private Accentrust production architecture.",
+  "requiredInterfaces": [
+    "SqliteDurableActionStore.submit",
+    "SqliteDurableActionStore.claimNextAction",
+    "SqliteDurableActionStore.completeAction",
+    "SqliteDurableActionStore.requestCompensation",
+    "SqliteDurableActionStore.claimNextCompensation",
+    "SqliteDurableActionStore.completeCompensation"
+  ],
+  "checks": [
+    {
+      "id": "durable_action.scoped_fingerprint_binding",
+      "level": "MUST",
+      "description": "A scope-key digest MUST bind one request fingerprint, action type, effect envelope digest, and compensation envelope digest; changed reuse MUST fail closed."
+    },
+    {
+      "id": "durable_action.atomic_submission",
+      "level": "MUST",
+      "description": "Submission and its first transition MUST commit or roll back as one SQLite transaction."
+    },
+    {
+      "id": "durable_action.leased_claim_recovery",
+      "level": "MUST",
+      "description": "Action or compensation completion at or after claim expiry MUST fail closed; expired work MAY then be reclaimed, while the previous claim token MUST remain fenced from completing the obligation."
+    },
+    {
+      "id": "durable_action.stable_effect_identifier",
+      "level": "MUST",
+      "description": "Every obligation MUST expose stable action and compensation identifiers for receiver-side idempotency across ambiguous retries."
+    },
+    {
+      "id": "durable_action.explicit_compensation_state",
+      "level": "MUST",
+      "description": "Compensation MUST be an explicit, separately claimed state transition and MUST NOT be inferred as successful after an unknown outcome."
+    },
+    {
+      "id": "durable_action.manual_review_terminal",
+      "level": "MUST",
+      "description": "Unknown or non-retryable outcomes without a safe automated recovery path MUST remain visible in manual_review."
+    },
+    {
+      "id": "durable_action.transition_digest_chain",
+      "level": "SHOULD",
+      "description": "State transitions SHOULD be linked by digests for local integrity diagnostics; this is not an externally anchored tamper-proof audit guarantee."
+    }
+  ]
+}
