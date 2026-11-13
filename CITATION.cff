@@ -1,0 +1,95 @@
+cff-version: 1.2.0
+message: "If you use OpenPort, please cite the OpenPort Protocol paper (preferred-citation below)."
+type: software
+title: "OpenPort Protocol (OPP)"
+authors:
+  - name: "Accentrust"
+  - given-names: "Genliang"
+    family-names: "Zhu"
+  - given-names: "Chu"
+    family-names: "Wang"
+  - given-names: "Ziyuan"
+    family-names: "Wang"
+  - given-names: "Zhida"
+    family-names: "Li"
+repository-code: "https://github.com/VancouverCanada/openport"
+license: AGPL-3.0-or-later
+preferred-citation:
+  type: generic
+  status: preprint
+  title: "OpenPort Protocol: A Security Governance Specification for AI Agent Tool Access"
+  authors:
+    - given-names: "Genliang"
+      family-names: "Zhu"
+      affiliation: "Accentrust; Georgia Institute of Technology"
+    - given-names: "Chu"
+      family-names: "Wang"
+      affiliation: "Accentrust; University of Illinois Urbana-Champaign"
+    - given-names: "Ziyuan"
+      family-names: "Wang"
+      affiliation: "Duke University"
+    - given-names: "Zhida"
+      family-names: "Li"
+      affiliation: "New York Institute of Technology-Vancouver"
+    - given-names: "Qiang"
+      family-names: "Li"
+      affiliation: "Georgia Institute of Technology"
+  year: 2026
+  month: 2
+  date-published: 2026-02-22
+  publisher:
+    name: "arXiv"
+  doi: "10.48550/arXiv.2602.20196"
+  url: "https://arxiv.org/abs/2602.20196"
+  repository-code: "https://github.com/VancouverCanada/openport"
+  identifiers:
+    - type: doi
+      value: "10.48550/arXiv.2602.20196"
+      description: "arXiv DOI"
+    - type: other
+      value: "arXiv:2602.20196"
+      description: "arXiv identifier (cs.CR, cs.AI)"
+    - type: url
+      value: "https://ssrn.com/abstract=6283538"
+      description: "SSRN record 6283538"
+    - type: url
+      value: "https://accentrust.com/research/publications/openport-protocol"
+      description: "Accentrust Research publication page"
+  license: CC-BY-4.0
+  keywords:
+    - "AI agents"
+    - "tool exposure"
+    - "authorization"
+    - "least privilege"
+    - "risk-gated writes"
+    - "drafts and approvals"
+    - "rate limiting"
+    - "auditability"
+    - "protocol specification"
+  abstract: >-
+    AI agents increasingly require direct, structured access to application
+    data and actions, but production deployments still struggle to express and
+    verify the governance properties that matter in practice: least-privilege
+    authorization, controlled write execution, predictable failure handling,
+    abuse resistance, and auditability. This paper introduces OpenPort Protocol
+    (OPP), a governance-first specification for exposing application tools
+    through a secure server-side gateway that is model- and runtime-neutral and
+    can bind to existing tool ecosystems. OpenPort defines
+    authorization-dependent discovery, stable response envelopes with
+    machine-actionable agent.* reason codes, and an authorization model
+    combining integration credentials, scoped permissions, and ABAC-style
+    policy constraints. For write operations, OpenPort specifies a risk-gated
+    lifecycle that defaults to draft creation and human review, supports
+    time-bounded auto-execution under explicit policy, and enforces high-risk
+    safeguards including preflight impact binding and idempotency. To address
+    time-of-check/time-of-use drift in delayed approval flows, OpenPort also
+    specifies an optional State Witness profile that revalidates
+    execution-time preconditions and fails closed on state mismatch.
+    Operationally, the protocol requires admission control (rate
+    limits/quotas) with stable 429 semantics and structured audit events
+    across allow/deny/fail paths so that client recovery and incident analysis
+    are deterministic. We present a reference runtime and an executable
+    governance toolchain (layered conformance profiles, negative security
+    tests, fuzz/abuse regression, and release-gate scans) and evaluate the core
+    profile at a pinned release tag using artifact-based, externally
+    reproducible validation.
