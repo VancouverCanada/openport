@@ -7,6 +7,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ## [Unreleased]
 
 ### Added
+- OpenPort Protocol paper (arXiv:2602.20196, DOI 10.48550/arXiv.2602.20196) in `paper/`, with `CITATION.cff`, BibTeX, and README links to arXiv, SSRN, and Accentrust Research.
 - Conformance kit with profile and runnable local/remote checker.
 - OpenPort Security Conformance Profile v0.2 with executable checks for state-witness revalidation, 100x idempotency replay, endpoint 429 no-side-effect behavior, and allow/deny/fail audit completeness.
 - OpenPort abuse-resistance profile with misuse-path checks for revoked-token replay, cross-tenant inputs, high-risk misuse, preflight payload swapping, expired auto-execute windows, retry storms, malformed input fuzzing, adapter exceptions, and untrusted instruction-like export/delete requests.

@@ -1,6 +1,25 @@
 # OpenPort
 
+[![arXiv](https://img.shields.io/badge/arXiv-2602.20196-b31b1b.svg)](https://arxiv.org/abs/2602.20196)
+[![DOI](https://img.shields.io/badge/DOI-10.48550%2FarXiv.2602.20196-blue.svg)](https://doi.org/10.48550/arXiv.2602.20196)
+[![SSRN](https://img.shields.io/badge/SSRN-6283538-1f4e79.svg)](https://ssrn.com/abstract=6283538)
+[![Paper PDF](https://img.shields.io/badge/paper-PDF-555555.svg)](paper/openport-protocol.pdf)
+[![Paper license: CC BY 4.0](https://img.shields.io/badge/paper%20license-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+
 OpenPort Protocol (OPP; short: OpenPort) is an open standard and reference toolkit for exposing web application data and actions to LLM agents without browser scraping.
+
+## Paper
+
+**OpenPort Protocol: A Security Governance Specification for AI Agent Tool Access**
+Genliang Zhu, Chu Wang, Ziyuan Wang, Zhida Li, Qiang Li. arXiv preprint, 2026.
+
+- PDF: [`paper/openport-protocol.pdf`](paper/openport-protocol.pdf)
+- arXiv: [2602.20196](https://arxiv.org/abs/2602.20196) (cs.CR, cs.AI)
+- DOI: [10.48550/arXiv.2602.20196](https://doi.org/10.48550/arXiv.2602.20196)
+- SSRN: [6283538](https://ssrn.com/abstract=6283538)
+- Accentrust Research: [accentrust.com/research](https://accentrust.com/research/publications/openport-protocol)
+
+The paper pins its evaluation to release tag [`v0.1.0`](https://github.com/VancouverCanada/openport/tree/v0.1.0).
 
 OpenPort is repository-isolated and does not require any direct connection to private product codebases.
 
@@ -56,6 +75,8 @@ Rationale: clear intent (open interface + data/action port), short, and broad en
 - `spec/openport-v1.openapi.yaml`
 - `CHANGELOG.md`
 - `AUTHORS.md`
+- `CITATION.cff`
+- `paper/`
 
 ## Product Apps
 
@@ -281,8 +302,28 @@ Prepare a release candidate with gate checks and exact release commands:
 npm run release:prepare -- v0.1.0
 ```
 
+## Citation
+
+If you use OpenPort, please cite the paper. GitHub's "Cite this repository" reads [`CITATION.cff`](CITATION.cff); BibTeX is also in [`paper/openport-protocol.bib`](paper/openport-protocol.bib).
+
+```bibtex
+@misc{zhu2026openport,
+  title         = {{OpenPort Protocol: A Security Governance Specification for AI Agent Tool Access}},
+  author        = {Zhu, Genliang and Wang, Chu and Wang, Ziyuan and Li, Zhida and Li, Qiang},
+  year          = {2026},
+  month         = feb,
+  eprint        = {2602.20196},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CR},
+  doi           = {10.48550/arXiv.2602.20196},
+  url           = {https://arxiv.org/abs/2602.20196}
+}
+```
+
 ## License
 
 OpenPort OSS is licensed under `AGPL-3.0-or-later` (see `LICENSE`).
+
+The paper in `paper/` is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 For name and logo usage, see `TRADEMARK_POLICY.md`.
